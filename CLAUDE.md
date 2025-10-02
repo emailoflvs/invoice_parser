@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is an AI-powered invoice parser that extracts supplier information and product line items from Ukrainian PDF invoices (накладні/акти/інвойси) and exports them to Excel format. The system uses Claude Sonnet 4 with PDF vision capabilities to parse complex, multi-page invoices with varying formats.
 
+Если не знаешь, как правильно выполнить задачу, скажи об этои и я помогу.
+
 ## Key Commands
 
 ### Running the Parser

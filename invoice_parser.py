@@ -16,6 +16,7 @@ from datetime import datetime
 def parse_invoice_complete(pdf_path: str) -> dict:
     """
     Парсит PDF инвойс и возвращает JSON с реквизитами и товарами
+    Использует два отдельных запроса: для header и для items
     """
     api_key = os.getenv('ANTHROPIC_API_KEY')
     if not api_key:
@@ -27,19 +28,24 @@ def parse_invoice_complete(pdf_path: str) -> dict:
     with open(pdf_path, 'rb') as f:
         pdf_data = f.read()
 
-    # Продвинутый системный промпт
-    with open('task-items-advanced.txt', 'r', encoding='utf-8') as f:
-        system_prompt = f.read()
+    pdf_base64 = base64.standard_b64encode(pdf_data).decode('utf-8')
 
-    # Отправляем запрос к Claude с PDF (с использованием streaming)
-    print(f"Отправка запроса к Claude API...")
+    # Загружаем промпты
+    with open('prompt-header.txt', 'r', encoding='utf-8') as f:
+        header_prompt = f.read()
 
-    response_text = ""
+    with open('prompt-iitems.txt', 'r', encoding='utf-8') as f:
+        items_prompt = f.read()
+
+    # === Первый запрос: получаем header ===
+    print(f"Извлечение реквизитов...")
+
+    header_response_text = ""
 
     with client.messages.stream(
         model="claude-sonnet-4-20250514",
-        max_tokens=32000,
-        system=system_prompt,
+        max_tokens=4000,
+        system=header_prompt,
         messages=[
             {
                 "role": "user",
@@ -49,12 +55,8 @@ def parse_invoice_complete(pdf_path: str) -> dict:
                         "source": {
                             "type": "base64",
                             "media_type": "application/pdf",
-                            "data": base64.standard_b64encode(pdf_data).decode('utf-8')
+                            "data": pdf_base64
                         }
-                    },
-                    {
-                        "type": "text",
-                        "text": "Изучи invoice.pdf: это может быть акт, накладная или инвойс. Извлеки реквизиты поставщика И таблицу товаров. ВАЖНО: извлеки ВСЕ товары, даже если их сотни."
                     }
                 ]
             }
@@ -62,28 +64,74 @@ def parse_invoice_complete(pdf_path: str) -> dict:
         timeout=600.0
     ) as stream:
         for text in stream.text_stream:
-            response_text += text
+            header_response_text += text
             print(".", end="", flush=True)
 
     print()
 
-    # Парсим JSON из ответа
+    # Парсим header
     try:
-        json_start = response_text.find('{')
-        json_end = response_text.rfind('}') + 1
-        json_str = response_text[json_start:json_end]
-        result = json.loads(json_str)
+        json_start = header_response_text.find('{')
+        json_end = header_response_text.rfind('}') + 1
+        json_str = header_response_text[json_start:json_end]
+        header_data = json.loads(json_str)
+        header = header_data.get('header', {})
+    except Exception as e:
+        print(f"⚠ Ошибка парсинга header: {e}", file=sys.stderr)
+        header = {}
+
+    # === Второй запрос: получаем items ===
+    print(f"Извлечение товаров...")
+
+    items_response_text = ""
+
+    with client.messages.stream(
+        model="claude-sonnet-4-20250514",
+        max_tokens=32000,
+        system=items_prompt,
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "document",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "application/pdf",
+                            "data": pdf_base64
+                        }
+                    }
+                ]
+            }
+        ],
+        timeout=600.0
+    ) as stream:
+        for text in stream.text_stream:
+            items_response_text += text
+            print(".", end="", flush=True)
+
+    print()
+
+    # Парсим items
+    try:
+        json_start = items_response_text.find('{')
+        json_end = items_response_text.rfind('}') + 1
+        json_str = items_response_text[json_start:json_end]
+        items_data = json.loads(json_str)
+        items = items_data.get('items', [])
 
         # Добавляем информацию о количестве товаров
-        count_info = response_text[json_end:].strip()
-        if count_info:
-            result['_info'] = count_info
+        count_info = items_response_text[json_end:].strip()
 
-        return result
+        return {
+            "header": header,
+            "items": items,
+            "_info": count_info if count_info else ""
+        }
     except Exception as e:
-        print(f"Ошибка парсинга JSON: {e}", file=sys.stderr)
-        print(f"Ответ: {response_text[:500]}...", file=sys.stderr)
-        return {"header": {}, "items": [], "error": str(e)}
+        print(f"Ошибка парсинга items: {e}", file=sys.stderr)
+        print(f"Ответ: {items_response_text[:500]}...", file=sys.stderr)
+        return {"header": header, "items": [], "error": str(e)}
 
 
 def export_to_excel_advanced(data: dict, excel_file: str, pdf_filename: str):
