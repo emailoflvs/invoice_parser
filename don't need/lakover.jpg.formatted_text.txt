@@ -1,0 +1,223 @@
+[TABLE_ROW_START]
+[CELL]УВАГА ! " З 18.11.2024 НОВІ РЕКВІЗИТИ "[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]Р / р А853003350000000260072204334 , Банк АТ РАЙФФАЙЗЕН " БАНК[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]" ,[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]м.Київ,МФО300335[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]Видаткова накладна № 6990 від 24 березня 2025 р .[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]Постачальник ТОВАРИСТВО : З ОБМЕЖЕНОЮ ВІДПОВІДАЛЬНІСТЮ " ЛАКОВЕР[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]"[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]п / р А853003350000000260072204334 у банку АТ " РАЙФФАЙЗЕН БАНК " м.Київ ,[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL],[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]Україна 01004 , , м . Київ , вул Пушкінська . , 21 , нежиле приміщення 1 , тел[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL].:(044502-52-20),[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]ЄДРПОУ код за 40236146 , ІПН 402361426599[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]Покупець : Товариство з обмеженою відповідальністю " Інформаційна[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]компанія " Інтера "[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]51400,Дніпропетровськаобл.,м.Павлоград,вул.Войнової,буд18/30.,[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]тел .: ( 056 )[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]324-19-90,3241990,3261228[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]Договір : № 435 від 26.07.2018[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]Рахунок : Рахунок на оплату покупцю № ЛК000006853 від 21.03.2025 р .[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]Режим[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]Ціна полімерізації /[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]Сума без No Артикул Товари ( роботи , послуги ) Кількість[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]без Тип нанесення[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]пдв пдв[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]Код УКТЗЕД[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]1W1013.05.05.ФарбапорошковаRAL11013поліефірна[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]180°C10хв/100кг208,8520885,0018.А[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]шагрень напівматова ТРІБО / КОРОНА[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]3907[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]Разом : 20 885,00[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]Сума ПДВ : 4 177,00[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]Усього з ПДВ : 25 062,00[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]Всього найменувань 1 , на суму 25062,00 грн .[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]Двадцять п'ять тисяч шістдесят дві гривні 00 копійок[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]У т.ч. ПДВ : Чотири тисячі сто сімдесят сім гривень 00 копійок[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]Місце складання 04073 18 : , буд . Кирова Куренівська . м[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL],.*[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]Идентифий[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]ОБМЕЖЕНОЮ постачальника Від * для Отримав ( ла )[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]МАШИНА[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]He raced[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]ДОКУМЕНТІВ град ) . ертер[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]CK[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]Оператор комп'ютерного набору Гаврилюк[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]201 Світлана Вікторівна 37562915[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]Відповідальний * за здійснення господарської довіреністю За від A No[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]льт 18 правильність і її оформлення[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]НБУ ** . Курс EUR : 44,9807[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]** Курс НБУ - офіційний курс гривні щодо іноземної валюти встановлений Національним банком України та оприлюднений на сайті[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]Офіційного інтернет представництва - Національного банку України www.bank.gov.ua ( )[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]УВАГА ! За затримку платежу будуть нараховані штрафні санкції згідно з умовами Договору .[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]Просимо відправити наш екземпляр[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]видаткової 04073 , м . Київ , вул Куренівська .[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL], 18 , оф.315 накладної[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]за адресою :[/CELL]
+[TABLE_ROW_END]
+
+[TABLE_ROW_START]
+[CELL]New45110[/CELL]
+[TABLE_ROW_END]

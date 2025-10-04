@@ -1,0 +1,22 @@
+{
+  "header": {
+    "postachalnyk": "ТОВАРИСТВО З ОБМЕЖЕНОЮ ВІДПОВІДАЛЬНІСТЮ \"ЛАКОВЕР\"",
+    "kod_edrpu": "40236146",
+    "telefon": "(044)502-52-20",
+    "adresa": "Україна, 01004, м. Київ, вул. Пушкінська, 21, нежиле приміщення 1",
+    "data_nakladnoi": "24 березня 2025",
+    "nomer_nakladnoi": "6990"
+  },
+  "items": [
+    {
+      "ukt_zed": "3907",
+      "naimenovanie_tovara": "Фарба порошкова RAL 1013 поліефірна шагрень напівматова",
+      "oboznachennya_tovara": "1HW1013.05.05.8A",
+      "tsina_za_sht_bez_pdv": "208,85",
+      "kilkist_shtuk": "100",
+      "suma_bez_pdv": "20885,00",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    }
+  ]
+}

@@ -1,106 +1,58 @@
 #!/usr/bin/env python3
 """
-Парсер накладных с улучшенной обработкой изображений.
-1. Улучшение изображения (3x разрешение, контраст, яркость, резкость)
-2. Google Vision API для OCR
-3. OpenAI для извлечения заголовка (prompt-header.txt)
-4. OpenAI для извлечения товаров (prompt-items.txt)
-5. Экспорт в Excel
+Парсер накладных с использованием Google Vision API для OCR и OpenAI для структурного парсинга.
+Решает проблему переносов строк внутри ячеек таблиц за счет анализа координат слов.
 """
 
 import json
 import sys
 import os
 import base64
-import io
 from pathlib import Path
 import xlwt
 from dotenv import load_dotenv
 from openai import OpenAI
 from pdf2image import convert_from_path
-from PIL import Image, ImageEnhance, ImageFilter
 import requests
+from vision_utils import (
+    extract_words_from_vision_response,
+    group_words_into_table_cells,
+    format_cells_as_table_text
+)
 
 # Загружаем переменные окружения
 load_dotenv()
 
 
-def enhance_image(img: Image.Image) -> Image.Image:
-    """
-    Улучшает качество изображения для OCR:
-    - 4x увеличение разрешения (для мелкого текста)
-    - Повышение контраста на 100%
-    - Повышение яркости на 40%
-    - Максимальная резкость x5
-    - Удаление шумов
-    - Дополнительное усиление краев
-    """
-    # 1. Увеличиваем разрешение в 4 раза (для мелкого текста)
-    scale_factor = 4
-    new_size = (img.width * scale_factor, img.height * scale_factor)
-    img = img.resize(new_size, Image.LANCZOS)
-
-    # 2. RGB conversion
-    if img.mode != 'RGB':
-        img = img.convert('RGB')
-
-    # 3. Увеличиваем контраст на 100%
-    enhancer = ImageEnhance.Contrast(img)
-    img = enhancer.enhance(2.0)
-
-    # 4. Повышаем яркость на 40%
-    enhancer = ImageEnhance.Brightness(img)
-    img = enhancer.enhance(1.4)
-
-    # 5. Максимальная резкость x5
-    enhancer = ImageEnhance.Sharpness(img)
-    img = enhancer.enhance(5.0)
-
-    # 6. Удаляем шумы
-    img = img.filter(ImageFilter.MedianFilter(size=3))
-
-    # 7. Дополнительная резкость
-    img = img.filter(ImageFilter.SHARPEN)
-
-    # 8. Усиление краев для мелкого текста
-    img = img.filter(ImageFilter.EDGE_ENHANCE_MORE)
-
-    return img
-
-
 def extract_text_with_google_vision(pdf_path: str) -> str:
     """
-    Извлекает текст из PDF/JPG/PNG используя Google Vision API с улучшением изображения.
+    Извлекает текст из PDF используя Google Vision API с сохранением структуры таблиц.
+
+    Args:
+        pdf_path: Путь к PDF файлу
+
+    Returns:
+        Форматированный текст с метками ячеек таблицы
     """
     api_key = os.getenv('GOOGLE_VISION_API_KEY')
     if not api_key:
         raise ValueError("GOOGLE_VISION_API_KEY не установлен в .env")
 
-    # Определяем тип файла
-    file_ext = Path(pdf_path).suffix.lower()
+    print(f"Конвертация PDF в изображения...")
+    # Конвертируем PDF в изображения
+    images = convert_from_path(pdf_path, dpi=150)
+    print(f"Конвертировано {len(images)} страниц")
 
-    if file_ext in ['.jpg', '.jpeg', '.png']:
-        # Если это изображение, загружаем его напрямую
-        print(f"Загрузка изображения...")
-        images = [Image.open(pdf_path)]
-        print(f"Загружено 1 изображение")
-    else:
-        # Если это PDF, конвертируем в изображения
-        print(f"Конвертация PDF в изображения...")
-        images = convert_from_path(pdf_path, dpi=150)
-        print(f"Конвертировано {len(images)} страниц")
+    all_words = []
 
-    all_text = []
-
+    # Обрабатываем каждую страницу
     for page_idx, image in enumerate(images):
-        print(f"Обработка страницы {page_idx + 1}/{len(images)}...", end=" ", flush=True)
-
-        # Улучшаем изображение
-        enhanced_image = enhance_image(image)
+        print(f"OCR страницы {page_idx + 1}/{len(images)}...", end=" ", flush=True)
 
         # Конвертируем изображение в base64
+        import io
         img_byte_arr = io.BytesIO()
-        enhanced_image.save(img_byte_arr, format='PNG')
+        image.save(img_byte_arr, format='PNG')
         img_byte_arr = img_byte_arr.getvalue()
         img_base64 = base64.b64encode(img_byte_arr).decode('utf-8')
 
@@ -122,90 +74,74 @@ def extract_text_with_google_vision(pdf_path: str) -> str:
             ]
         }
 
+        # Отправляем запрос
         try:
-            response = requests.post(url, json=payload, timeout=120)
+            response = requests.post(url, json=payload, timeout=60)
             response.raise_for_status()
             vision_response = response.json()
 
-            if 'error' in vision_response.get('responses', [{}])[0]:
-                error = vision_response['responses'][0]['error']
-                print(f"✗ Vision API error: {error.get('message', 'Unknown error')}")
-                continue
+            # Извлекаем слова с координатами
+            page_words = extract_words_from_vision_response(vision_response)
 
-            # Извлекаем полный текст
-            text_annotation = vision_response['responses'][0].get('fullTextAnnotation', {})
-            page_text = text_annotation.get('text', '')
-            all_text.append(page_text)
+            # Корректируем номер страницы
+            for word in page_words:
+                word['page'] = page_idx
 
-            print(f"✓ Извлечено {len(page_text)} символов")
+            all_words.extend(page_words)
+
+            print(f"✓ Извлечено {len(page_words)} слов")
 
         except requests.exceptions.RequestException as e:
             print(f"✗ Ошибка: {e}")
+            # Пытаемся извлечь детали ошибки из ответа
+            try:
+                error_detail = response.json()
+                print(f"   Детали: {error_detail}")
+            except:
+                pass
             continue
 
-    full_text = "\n\n".join(all_text)
+    print(f"Всего извлечено {len(all_words)} слов со всех страниц")
 
-    # Сохраняем текст для отладки
-    debug_file = f"{pdf_path}.vision_text.txt"
+    # Сохраняем слова для отладки
+    debug_file = f"{pdf_path}.vision_words.json"
     with open(debug_file, 'w', encoding='utf-8') as f:
-        f.write(full_text)
-    print(f"Отладка: текст сохранен в {debug_file}")
+        json.dump(all_words, f, ensure_ascii=False, indent=2)
+    print(f"Отладка: слова сохранены в {debug_file}")
 
-    return full_text
+    # Группируем слова в ячейки таблицы
+    print(f"Группировка слов в ячейки таблицы...")
+    cells = group_words_into_table_cells(all_words)
+    print(f"Создано {len(cells)} ячеек таблицы")
+
+    # Сохраняем ячейки для отладки
+    debug_cells_file = f"{pdf_path}.grouped_cells.json"
+    with open(debug_cells_file, 'w', encoding='utf-8') as f:
+        json.dump(cells, f, ensure_ascii=False, indent=2)
+    print(f"Отладка: ячейки сохранены в {debug_cells_file}")
+
+    # Форматируем ячейки в текст для LLM
+    formatted_text = format_cells_as_table_text(cells)
+
+    # Сохраняем форматированный текст для отладки
+    debug_text_file = f"{pdf_path}.formatted_text.txt"
+    with open(debug_text_file, 'w', encoding='utf-8') as f:
+        f.write(formatted_text)
+    print(f"Отладка: форматированный текст сохранен в {debug_text_file}")
+
+    return formatted_text
 
 
-def parse_header_with_openai(vision_text: str) -> dict:
+def parse_with_openai(formatted_text: str, prompt_file: str) -> dict:
     """
-    Извлекает заголовок документа с помощью OpenAI GPT-4o.
-    Использует промпт из prompt-header.txt.
-    """
-    api_key = os.getenv('OPENAI_API_KEY')
-    if not api_key:
-        raise ValueError("OPENAI_API_KEY не установлен в .env")
+    Парсит форматированный текст с помощью OpenAI GPT-4o.
 
-    client = OpenAI(api_key=api_key)
+    Args:
+        formatted_text: Текст с метками ячеек таблицы
+        prompt_file: Путь к файлу с промптом
 
-    # Загружаем промпт для заголовка
-    with open('prompt-header.txt', 'r', encoding='utf-8') as f:
-        system_prompt = f.read()
-
-    print(f"Извлечение заголовка с OpenAI...", end=" ", flush=True)
-
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": vision_text}
-            ],
-            temperature=0,
-            max_tokens=4000,
-            timeout=None
-        )
-
-        response_text = response.choices[0].message.content
-        print(f"✓")
-
-        # Парсим JSON из ответа
-        try:
-            json_start = response_text.find('{')
-            json_end = response_text.rfind('}') + 1
-            json_str = response_text[json_start:json_end]
-            data = json.loads(json_str)
-            return data.get('header', {})
-        except Exception as e:
-            print(f"⚠ Ошибка парсинга JSON заголовка: {e}")
-            return {}
-
-    except Exception as e:
-        print(f"✗ Ошибка OpenAI API: {e}")
-        return {}
-
-
-def parse_items_with_openai(vision_text: str) -> list:
-    """
-    Извлекает список товаров с помощью OpenAI GPT-4o.
-    Использует промпт из prompt-items.txt.
+    Returns:
+        Словарь с данными: {'header': {...}, 'items': [...]}
     """
     api_key = os.getenv('OPENAI_API_KEY')
     if not api_key:
@@ -213,26 +149,27 @@ def parse_items_with_openai(vision_text: str) -> list:
 
     client = OpenAI(api_key=api_key)
 
-    # Загружаем промпт для товаров
-    with open('prompt-items.txt', 'r', encoding='utf-8') as f:
+    # Загружаем промпт
+    with open(prompt_file, 'r', encoding='utf-8') as f:
         system_prompt = f.read()
 
-    print(f"Извлечение товаров с OpenAI...", end=" ", flush=True)
+    print(f"Отправка в OpenAI GPT-4o для парсинга...")
 
     try:
+        # Используем GPT-4o для парсинга
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": vision_text}
+                {"role": "user", "content": f"Extract data from this document:\n\n{formatted_text}"}
             ],
             temperature=0,
-            max_tokens=16384,
-            timeout=None
+            max_tokens=16000,
+            timeout=120.0
         )
 
         response_text = response.choices[0].message.content
-        print(f"✓")
+        print(f"Получен ответ от OpenAI")
 
         # Парсим JSON из ответа
         try:
@@ -240,39 +177,35 @@ def parse_items_with_openai(vision_text: str) -> list:
             json_end = response_text.rfind('}') + 1
             json_str = response_text[json_start:json_end]
             data = json.loads(json_str)
-            items = data.get('items', [])
-            print(f"  Найдено товаров: {len(items)}")
-            return items
+            return data
         except Exception as e:
-            print(f"⚠ Ошибка парсинга JSON товаров: {e}")
-            return []
+            print(f"⚠ Ошибка парсинга JSON: {e}")
+            print(f"Ответ: {response_text[:500]}...")
+            return {"header": {}, "items": [], "error": str(e)}
 
     except Exception as e:
-        print(f"✗ Ошибка OpenAI API: {e}")
-        return []
+        print(f"⚠ Ошибка OpenAI API: {e}")
+        return {"header": {}, "items": [], "error": str(e)}
 
 
 def parse_invoice_complete(pdf_path: str) -> dict:
     """
     Полный цикл парсинга накладной:
-    1. Улучшение изображения
-    2. OCR через Google Vision
-    3. Извлечение заголовка через OpenAI
-    4. Извлечение товаров через OpenAI
+    1. OCR через Google Vision (с координатами)
+    2. Группировка слов в ячейки таблицы
+    3. Парсинг структурированного текста через OpenAI
+
+    Args:
+        pdf_path: Путь к PDF файлу
+
+    Returns:
+        Словарь с данными: {'header': {...}, 'items': [...]}
     """
-    # Шаг 1-2: Извлекаем текст с Google Vision (с улучшением изображения)
-    vision_text = extract_text_with_google_vision(pdf_path)
+    # Шаг 1: Извлекаем текст с Google Vision и группируем в ячейки
+    formatted_text = extract_text_with_google_vision(pdf_path)
 
-    # Шаг 3: Извлекаем заголовок
-    header = parse_header_with_openai(vision_text)
-
-    # Шаг 4: Извлекаем товары
-    items = parse_items_with_openai(vision_text)
-
-    result = {
-        'header': header,
-        'items': items
-    }
+    # Шаг 2: Парсим с помощью OpenAI
+    result = parse_with_openai(formatted_text, 'prompt-openai-simple.txt')
 
     # Сохраняем результат для отладки
     debug_json = f"{pdf_path}.result.json"
@@ -286,6 +219,7 @@ def parse_invoice_complete(pdf_path: str) -> dict:
 def export_to_excel_advanced(data: dict, excel_file: str, pdf_filename: str):
     """
     Экспортирует данные в расширенный формат Excel с реквизитами поставщика.
+    (Переиспользован из invoice_parser.py)
     """
     # Проверяем, существует ли файл
     if Path(excel_file).exists():
@@ -436,11 +370,9 @@ def process_multiple_invoices(pdf_paths: list, excel_file: str = "таблиця
 def main():
     if len(sys.argv) < 2:
         print("Использование:")
-        print("  python3 invoice_parser_work_plan.py <путь_к_файлу> [output.xls]")
-        print("  python3 invoice_parser_work_plan.py <файл1> <файл2> ... [output.xls]")
-        print("  python3 invoice_parser_work_plan.py invoices/*.pdf")
-        print("  python3 invoice_parser_work_plan.py invoices/*.jpg")
-        print("\nПоддерживаемые форматы: PDF, JPG, PNG")
+        print("  python3 invoice_parser_gvision.py <путь_к_pdf> [output.xls]")
+        print("  python3 invoice_parser_gvision.py <путь1.pdf> <путь2.pdf> ... [output.xls]")
+        print("  python3 invoice_parser_gvision.py invoices/*.pdf")
         sys.exit(1)
 
     # Определяем выходной файл Excel
