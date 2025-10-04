@@ -1,0 +1,762 @@
+{
+  "header": {
+    "postachalnyk": "ТОВАРИСТВО З ОБМЕЖЕНОЮ ВІДПОВІДАЛЬНІСТЮ \"ДНІПРОСПЕЦМАШ\"",
+    "kod_edrpu": "40192099",
+    "telefon": "(056) 371-91-33",
+    "adresa": "03150, місто Київ, Представницька, Будинок № 28",
+    "data_nakladnoi": "16 квітня 2025",
+    "nomer_nakladnoi": "559"
+  },
+  "items": [
+    {
+      "ukt_zed": "521.318.01.04.06.00",
+      "naimenovanie_tovara": "Деталь Короб",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "240,84",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "240,84",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.318.01.04.10.00",
+      "naimenovanie_tovara": "Деталь Кришка",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "192,88",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "192,88",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.319.03.00.00.00",
+      "naimenovanie_tovara": "Деталь Профіль",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "279,54",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "279,54",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.319.03.00.00.00",
+      "naimenovanie_tovara": "Деталь Профіль",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "932,52",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "932,52",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.319.03.00.00.01",
+      "naimenovanie_tovara": "Деталь Профіль",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "395,00",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "395,00",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.319.03.00.00.01",
+      "naimenovanie_tovara": "Деталь Профіль",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "200,74",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "200,74",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.319.03.00.00.011-01",
+      "naimenovanie_tovara": "Деталь Профіль",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "230,69",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "230,69",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.301.02.05.00.00",
+      "naimenovanie_tovara": "Деталь Жолоб",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "1 142,50",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "1 142,50",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.301.02.05.00.001-01",
+      "naimenovanie_tovara": "Деталь Жолоб",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "694,10",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "694,10",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.301.02.06.00.00",
+      "naimenovanie_tovara": "Деталь Жолоб",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "1 159,42",
+      "kilkist_shtuk": "2",
+      "suma_bez_pdv": "2 318,84",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.301.02.06.00.001-01",
+      "naimenovanie_tovara": "Деталь Жолоб",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "703,95",
+      "kilkist_shtuk": "2",
+      "suma_bez_pdv": "1 407,90",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.00.60.00.00.001-01",
+      "naimenovanie_tovara": "Деталь Панель монтажна",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "98,72",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "98,72",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.00.60.01.00.001-01",
+      "naimenovanie_tovara": "Деталь Корпус",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "207,19",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "207,19",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.00.60.01.00.002-01",
+      "naimenovanie_tovara": "Деталь Кришка",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "81,96",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "81,96",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.00.60.01.00.003-01",
+      "naimenovanie_tovara": "Деталь Дно",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "77,92",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "77,92",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.00.60.01.00.004-01",
+      "naimenovanie_tovara": "Деталь Двері",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "117,69",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "117,69",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.301.02.00.00.006",
+      "naimenovanie_tovara": "Деталь Зажист",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "212,70",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "212,70",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.301.02.12.00.002",
+      "naimenovanie_tovara": "Деталь Зажист",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "28,04",
+      "kilkist_shtuk": "2",
+      "suma_bez_pdv": "56,08",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.301.02.14.00.001",
+      "naimenovanie_tovara": "Деталь Ребро",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "37,62",
+      "kilkist_shtuk": "2",
+      "suma_bez_pdv": "75,24",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.301.05.01.00.005",
+      "naimenovanie_tovara": "Деталь Направляюча",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "57,34",
+      "kilkist_shtuk": "2",
+      "suma_bez_pdv": "114,68",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.301.05.03.00.001",
+      "naimenovanie_tovara": "Деталь Дверка нижня",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "339,57",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "339,57",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.318.04.00.00.001",
+      "naimenovanie_tovara": "Деталь Бокована",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "270,70",
+      "kilkist_shtuk": "2",
+      "suma_bez_pdv": "541,40",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.318.04.00.00.002",
+      "naimenovanie_tovara": "Деталь Кришка",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "781,46",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "781,46",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.318.05.02.00.001",
+      "naimenovanie_tovara": "Деталь Дверка верхня",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "605,19",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "605,19",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.319.01.01.02.001",
+      "naimenovanie_tovara": "Деталь Двері",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "581,59",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "581,59",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.319.01.01.02.001-01",
+      "naimenovanie_tovara": "Деталь Двері",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "391,63",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "391,63",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.319.01.01.04.003-01",
+      "naimenovanie_tovara": "Деталь Прижим",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "12,24",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "12,24",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.319.01.26.01.001",
+      "naimenovanie_tovara": "Деталь Профіль",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "92,00",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "92,00",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.319.01.26.01.005",
+      "naimenovanie_tovara": "Деталь Профіль",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "35,64",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "35,64",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.319.01.26.02.001",
+      "naimenovanie_tovara": "Деталь Кришка",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "152,63",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "152,63",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.319.01.26.02.002",
+      "naimenovanie_tovara": "Деталь Боковина",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "58,53",
+      "kilkist_shtuk": "2",
+      "suma_bez_pdv": "117,06",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.301.02.00.00.006",
+      "naimenovanie_tovara": "Деталь Кожух",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "649,21",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "649,21",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.301.05.00.00.002",
+      "naimenovanie_tovara": "Деталь Лист",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "242,54",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "242,54",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.301.06.01.00.003",
+      "naimenovanie_tovara": "Деталь Кришка верхня",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "221,23",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "221,23",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.301.06.01.00.004",
+      "naimenovanie_tovara": "Деталь Кришка нижня",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "220,03",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "220,03",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.301.06.01.00.006",
+      "naimenovanie_tovara": "Деталь Швеллер",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "68,75",
+      "kilkist_shtuk": "4",
+      "suma_bez_pdv": "275,00",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.301.06.01.00.006-01",
+      "naimenovanie_tovara": "Деталь Швеллер",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "101,39",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "101,39",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.318.01.00.00.018",
+      "naimenovanie_tovara": "Деталь Кронштейн",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "30,60",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "30,60",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.318.03.00.00.00",
+      "naimenovanie_tovara": "Деталь Двері",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "583,09",
+      "kilkist_shtuk": "2",
+      "suma_bez_pdv": "1 166,18",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.318.03.01.00.00",
+      "naimenovanie_tovara": "Деталь Лист",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "1 035,20",
+      "kilkist_shtuk": "2",
+      "suma_bez_pdv": "2 070,40",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.318.03.01.00.001",
+      "naimenovanie_tovara": "Деталь Кронштейн",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "9,65",
+      "kilkist_shtuk": "2",
+      "suma_bez_pdv": "19,30",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.318.05.00.00.00",
+      "naimenovanie_tovara": "Деталь Лист",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "692,02",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "692,02",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.318.05.01.00.00",
+      "naimenovanie_tovara": "Деталь Боковина ліва",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "1 116,07",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "1 116,07",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.318.05.01.00.00",
+      "naimenovanie_tovara": "Деталь Боковина права",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "1 164,51",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "1 164,51",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.319.01.13.00.00",
+      "naimenovanie_tovara": "Деталь Кронштейн",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "94,74",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "94,74",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.319.01.13.00.00",
+      "naimenovanie_tovara": "Деталь Лист",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "21,26",
+      "kilkist_shtuk": "2",
+      "suma_bez_pdv": "42,52",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.319.01.26.01.00",
+      "naimenovanie_tovara": "Деталь Стінка",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "62,31",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "62,31",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.319.01.26.01.002-01",
+      "naimenovanie_tovara": "Деталь Стінка",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "58,46",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "58,46",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.319.03.00.00.00",
+      "naimenovanie_tovara": "Деталь Кожух зажимний",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "692,81",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "692,81",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.00.00.22.00.001002",
+      "naimenovanie_tovara": "Деталь Шайба",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "8,15",
+      "kilkist_shtuk": "6",
+      "suma_bez_pdv": "48,90",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.301.02.00.00.00",
+      "naimenovanie_tovara": "Деталь Кронштейн",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "26,25",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "26,25",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.304.02.08.03.00",
+      "naimenovanie_tovara": "Деталь Прижим",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "137,19",
+      "kilkist_shtuk": "2",
+      "suma_bez_pdv": "274,38",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.319.01.00.00.032",
+      "naimenovanie_tovara": "Деталь Важіль",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "119,63",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "119,63",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.301.02.12.00.00",
+      "naimenovanie_tovara": "Деталь Полоса",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "51,71",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "51,71",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.301.02.14.00.00",
+      "naimenovanie_tovara": "Деталь Пластина",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "22,94",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "22,94",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.301.02.15.00.00",
+      "naimenovanie_tovara": "Деталь Полоса",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "67,13",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "67,13",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.301.03.06.00.00",
+      "naimenovanie_tovara": "Деталь Кронштейн",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "42,35",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "42,35",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.301.06.00.00.003",
+      "naimenovanie_tovara": "Деталь Платик",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "12,21",
+      "kilkist_shtuk": "10",
+      "suma_bez_pdv": "122,10",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.304.01.00.00.005",
+      "naimenovanie_tovara": "Деталь Шайба",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "11,47",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "11,47",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.304.01.01.00.004",
+      "naimenovanie_tovara": "Деталь Засувка",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "13,19",
+      "kilkist_shtuk": "16",
+      "suma_bez_pdv": "211,04",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.304.01.04.03.00",
+      "naimenovanie_tovara": "Деталь Шайба",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "5,87",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "5,87",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.304.02.08.00.003",
+      "naimenovanie_tovara": "Деталь Шайба",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "6,09",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "6,09",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.304.02.08.00.005",
+      "naimenovanie_tovara": "Деталь Звено",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "9,52",
+      "kilkist_shtuk": "8",
+      "suma_bez_pdv": "76,16",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.304.02.08.00.006",
+      "naimenovanie_tovara": "Деталь Шайба",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "17,06",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "17,06",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.304.02.08.00.011",
+      "naimenovanie_tovara": "Деталь Полоса",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "60,77",
+      "kilkist_shtuk": "4",
+      "suma_bez_pdv": "243,08",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.304.02.08.02.00",
+      "naimenovanie_tovara": "Деталь Косинка",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "7,99",
+      "kilkist_shtuk": "2",
+      "suma_bez_pdv": "15,98",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.304.02.08.08.00",
+      "naimenovanie_tovara": "Деталь Платик",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "11,57",
+      "kilkist_shtuk": "2",
+      "suma_bez_pdv": "23,14",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.318.01.00.00.008",
+      "naimenovanie_tovara": "Деталь Полоса",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "91,27",
+      "kilkist_shtuk": "4",
+      "suma_bez_pdv": "365,08",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.318.01.00.00.009",
+      "naimenovanie_tovara": "Деталь Полоса",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "104,89",
+      "kilkist_shtuk": "2",
+      "suma_bez_pdv": "209,78",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.318.01.00.00.034",
+      "naimenovanie_tovara": "Деталь Пластина",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "56,44",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "56,44",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.318.01.00.00.035",
+      "naimenovanie_tovara": "Деталь Кронштейн",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "33,77",
+      "kilkist_shtuk": "2",
+      "suma_bez_pdv": "67,54",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.318.01.01.01.009",
+      "naimenovanie_tovara": "Деталь Кутик",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "475,51",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "475,51",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.318.01.01.01.010",
+      "naimenovanie_tovara": "Деталь Кутик",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "486,90",
+      "kilkist_shtuk": "1",
+      "suma_bez_pdv": "486,90",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.318.01.01.01.039",
+      "naimenovanie_tovara": "Деталь Кутик",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "552,19",
+      "kilkist_shtuk": "2",
+      "suma_bez_pdv": "1 104,38",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    },
+    {
+      "ukt_zed": "521.318.01.01.04.003",
+      "naimenovanie_tovara": "Деталь Лист",
+      "oboznachennya_tovara": "",
+      "tsina_za_sht_bez_pdv": "98,66",
+      "kilkist_shtuk": "2",
+      "suma_bez_pdv": "197,32",
+      "tsina_za_odynytsyu_z_pdv": "",
+      "suma_z_pdv": ""
+    }
+  ]
+}
