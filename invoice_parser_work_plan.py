@@ -28,14 +28,15 @@ load_dotenv()
 def enhance_image(img: Image.Image) -> Image.Image:
     """
     Улучшает качество изображения для OCR:
-    - 3x увеличение разрешения
-    - Повышение контраста на 70%
-    - Повышение яркости на 30%
-    - Максимальная резкость x4
+    - 4x увеличение разрешения (для мелкого текста)
+    - Повышение контраста на 100%
+    - Повышение яркости на 40%
+    - Максимальная резкость x5
     - Удаление шумов
+    - Дополнительное усиление краев
     """
-    # 1. Увеличиваем разрешение в 3 раза
-    scale_factor = 3
+    # 1. Увеличиваем разрешение в 4 раза (для мелкого текста)
+    scale_factor = 4
     new_size = (img.width * scale_factor, img.height * scale_factor)
     img = img.resize(new_size, Image.LANCZOS)
 
@@ -43,23 +44,26 @@ def enhance_image(img: Image.Image) -> Image.Image:
     if img.mode != 'RGB':
         img = img.convert('RGB')
 
-    # 3. Увеличиваем контраст на 70%
+    # 3. Увеличиваем контраст на 100%
     enhancer = ImageEnhance.Contrast(img)
-    img = enhancer.enhance(1.7)
+    img = enhancer.enhance(2.0)
 
-    # 4. Повышаем яркость на 30%
+    # 4. Повышаем яркость на 40%
     enhancer = ImageEnhance.Brightness(img)
-    img = enhancer.enhance(1.3)
+    img = enhancer.enhance(1.4)
 
-    # 5. Максимальная резкость x4
+    # 5. Максимальная резкость x5
     enhancer = ImageEnhance.Sharpness(img)
-    img = enhancer.enhance(4)
+    img = enhancer.enhance(5.0)
 
     # 6. Удаляем шумы
     img = img.filter(ImageFilter.MedianFilter(size=3))
 
     # 7. Дополнительная резкость
     img = img.filter(ImageFilter.SHARPEN)
+
+    # 8. Усиление краев для мелкого текста
+    img = img.filter(ImageFilter.EDGE_ENHANCE_MORE)
 
     return img
 
@@ -223,7 +227,7 @@ def parse_items_with_openai(vision_text: str) -> list:
                 {"role": "user", "content": vision_text}
             ],
             temperature=0,
-            max_tokens=16000,
+            max_tokens=16384,
             timeout=None
         )
 
