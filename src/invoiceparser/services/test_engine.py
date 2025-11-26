@@ -102,6 +102,8 @@ class TestEngine:
     def _find_test_documents(self, examples_dir: Path) -> List[Tuple[Path, Path]]:
         """
         Поиск тестовых документов и соответствующих эталонов
+        
+        Логика: для каждого документа в /invoices ищется эталон в /examples с именем {filename}.json
 
         Args:
             examples_dir: Директория с примерами
@@ -111,17 +113,26 @@ class TestEngine:
         """
         test_documents = []
 
-        # Поиск всех PDF и изображений
+        # Ищем документы в invoices_dir
+        invoices_dir = self.config.invoices_dir
+        
+        if not invoices_dir.exists():
+            logger.warning(f"Invoices directory not found: {invoices_dir}")
+            return test_documents
+
+        # Поиск всех PDF и изображений в invoices
         for pattern in ['*.pdf', '*.jpg', '*.jpeg', '*.png']:
-            for doc_path in examples_dir.glob(pattern):
-                # Поиск соответствующего JSON эталона
-                expected_path = doc_path.with_suffix('.json')
+            for doc_path in invoices_dir.glob(pattern):
+                # Поиск соответствующего JSON эталона в examples_dir
+                # Например: invoice.jpg -> examples/invoice.json
+                expected_filename = f"{doc_path.stem}.json"
+                expected_path = examples_dir / expected_filename
 
                 if expected_path.exists():
                     test_documents.append((doc_path, expected_path))
                     logger.info(f"Found test pair: {doc_path.name} <-> {expected_path.name}")
                 else:
-                    logger.warning(f"No expected JSON for: {doc_path.name}")
+                    logger.debug(f"No expected JSON for: {doc_path.name} (looking for {expected_filename})")
 
         return test_documents
 

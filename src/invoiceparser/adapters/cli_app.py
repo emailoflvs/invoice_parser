@@ -109,11 +109,32 @@ class CLIApp:
             # Вывод результата
             if result["success"]:
                 print("✓ Document parsed successfully\n")
-                print(f"Invoice Number: {result['data'].header.invoice_number}")
-                print(f"Date: {result['data'].header.date}")
-                print(f"Supplier: {result['data'].header.supplier_name}")
-                print(f"Total Amount: {result['data'].header.total_amount}")
-                print(f"Items: {len(result['data'].items)}")
+                
+                # result['data'] может быть InvoiceData объектом или словарем
+                data = result['data']
+                if hasattr(data, 'header'):
+                    # Если это объект Pydantic
+                    header = data.header
+                    items = data.items
+                elif isinstance(data, dict):
+                    # Если это словарь
+                    header = data.get('header', {})
+                    items = data.get('items', [])
+                else:
+                    header = {}
+                    items = []
+                
+                # Безопасный вывод данных
+                invoice_number = header.invoice_number if hasattr(header, 'invoice_number') else header.get('invoice_number', 'N/A')
+                date_val = header.date if hasattr(header, 'date') else header.get('date', 'N/A')
+                supplier = header.supplier_name if hasattr(header, 'supplier_name') else header.get('supplier_name', 'N/A')
+                total = header.total_amount if hasattr(header, 'total_amount') else header.get('total_amount', 'N/A')
+                
+                print(f"Invoice Number: {invoice_number}")
+                print(f"Date: {date_val}")
+                print(f"Supplier: {supplier}")
+                print(f"Total Amount: {total}")
+                print(f"Items: {len(items)}")
                 print(f"\nResults saved to: {self.config.output_dir}")
             else:
                 print(f"✗ Failed to parse document")
@@ -142,11 +163,21 @@ class CLIApp:
             # Запуск тестов
             results = self.test_engine.run_tests()
 
+            # Проверка наличия тестов
+            if results.get('total', 0) == 0:
+                print("⚠ No test documents found in examples directory")
+                print(f"Expected directory: {self.config.examples_dir}")
+                print("\nTo use test mode:")
+                print("1. Place test documents (PDF/images) in examples directory")
+                print("2. Create corresponding .json files with expected results")
+                sys.exit(0)
+
             # Генерация отчета
             if args.output:
                 report_path = Path(args.output)
             else:
-                report_path = self.config.output_dir / f"test_report_{results['timestamp']}.json"
+                timestamp = results.get('timestamp', 'unknown')
+                report_path = self.config.output_dir / f"test_report_{timestamp}.json"
 
             self.test_engine.generate_report(results, report_path)
 
