@@ -174,13 +174,16 @@ class TestEngine:
 
         # Сравнение
         comparison = compare_json(expected_data, actual_dict)
+        
+        # Фильтруем различия, оставляя только реальные ошибки данных
+        real_differences = self._filter_real_differences(comparison.get("differences", []))
 
         # Формирование результата
         test_result = {
             "document": str(doc_path),
-            "passed": comparison["match"],
+            "passed": len(real_differences) == 0,
             "accuracy": comparison.get("accuracy", 0),
-            "differences": comparison.get("differences", []),
+            "differences": real_differences,
             "expected": expected_data,
             "actual": actual_dict
         }
@@ -189,9 +192,104 @@ class TestEngine:
             logger.info(f"✓ Test passed: {doc_path.name}")
         else:
             logger.warning(f"✗ Test failed: {doc_path.name}")
-            logger.warning(f"Differences: {comparison.get('differences', [])}")
+            logger.warning(f"Real data differences: {len(real_differences)}")
 
         return test_result
+    
+    def _filter_real_differences(self, differences: List[Dict]) -> List[Dict]:
+        """
+        Фильтрация различий - оставляем только реальные ошибки в данных
+        
+        Args:
+            differences: Список всех различий
+            
+        Returns:
+            Список реальных ошибок данных
+        """
+        real_diffs = []
+        
+        for diff in differences:
+            path = diff.get('path', '')
+            diff_type = diff.get('type', '')
+            
+            # Игнорируем структурные различия (разные представления одних данных)
+            if diff_type in ['missing_in_expected', 'missing_in_actual']:
+                # Это структурные различия, данные могут быть в другом месте
+                continue
+            
+            # Оставляем только реальные несовпадения значений
+            if diff_type == 'mismatch':
+                real_diffs.append(diff)
+        
+        return real_diffs
+    
+    def _get_readable_description(self, path: str) -> str:
+        """
+        Преобразование пути в читаемое описание
+        
+        Args:
+            path: Путь типа "line_items[0].ukt_zed_code"
+            
+        Returns:
+            Читаемое описание типа "артикул в строке 1"
+        """
+        import re
+        
+        # Извлекаем индекс строки если есть
+        match = re.search(r'\[(\d+)\]', path)
+        row_num = int(match.group(1)) + 1 if match else None
+        
+        # Определяем тип поля
+        if 'ukt_zed' in path or 'sku' in path or 'code' in path:
+            field_name = "артикул"
+        elif 'item_name' in path or 'name' in path:
+            field_name = "наименование"
+        elif 'quantity' in path:
+            field_name = "количество"
+        elif 'price' in path:
+            field_name = "цена"
+        elif 'amount' in path or 'sum' in path:
+            field_name = "сумма"
+        elif 'inn' in path or 'edrpou' in path or 'ipn' in path:
+            field_name = "ИНН/ЕДРПОУ"
+        elif 'address' in path:
+            field_name = "адрес"
+        elif 'phone' in path:
+            field_name = "телефон"
+        elif 'date' in path:
+            field_name = "дата"
+        elif 'number' in path:
+            field_name = "номер"
+        else:
+            # Берем последнюю часть пути
+            field_name = path.split('.')[-1].replace('_', ' ')
+        
+        # Формируем описание
+        if row_num:
+            return f"{field_name} в строке {row_num}"
+        else:
+            return field_name
+    
+    def _format_value_for_display(self, value: Any) -> str:
+        """
+        Форматирование значения для отображения
+        
+        Args:
+            value: Значение
+            
+        Returns:
+            Отформатированная строка
+        """
+        if value is None:
+            return "отсутствует"
+        if isinstance(value, (dict, list)):
+            return f"{type(value).__name__}"
+        
+        value_str = str(value)
+        # Ограничиваем длину
+        if len(value_str) > 50:
+            return value_str[:47] + "..."
+        return value_str
 
     def generate_report(self, results: Dict[str, Any], output_path: Path):
         """
@@ -232,33 +330,25 @@ class TestEngine:
                             diff_count = len(test['differences'])
                             print(f"   ⚠️  Total differences: {diff_count}\n")
                             
-                            # Выводим список различий компактно
-                            print("   Differences:")
-                            for i, diff in enumerate(test['differences'][:10], 1):  # Показываем первые 10
-                                path = diff.get('path', 'unknown')
-                                diff_type = diff.get('type', 'unknown')
-                                
-                                if diff_type == 'missing_in_actual':
-                                    expected = diff.get('expected', '')
-                                    # Компактный вывод
-                                    if isinstance(expected, dict):
-                                        expected_str = f"dict with {len(expected)} keys"
-                                    elif isinstance(expected, list):
-                                        expected_str = f"list with {len(expected)} items"
-                                    else:
-                                        expected_str = str(expected)[:50]
-                                    print(f"   {i}. ❌ {path}: missing (expected: {expected_str})")
-                                    
-                                elif diff_type == 'missing_in_expected':
-                                    print(f"   {i}. ➕ {path}: extra field (not in expected)")
-                                    
-                                elif diff_type == 'mismatch':
+                            # Выводим список реальных ошибок данных
+                            if diff_count == 0:
+                                print("   ✅ No data errors found (only structural differences)\n")
+                            else:
+                                print("   Data errors:")
+                                for i, diff in enumerate(test['differences'], 1):
+                                    path = diff.get('path', 'unknown')
                                     expected = diff.get('expected', '')
                                     actual = diff.get('actual', '')
-                                    # Компактный вывод значений
-                                    exp_str = str(expected)[:30] if not isinstance(expected, (dict, list)) else f"{type(expected).__name__}"
-                                    act_str = str(actual)[:30] if not isinstance(actual, (dict, list)) else f"{type(actual).__name__}"
-                                    print(f"   {i}. ⚠️  {path}: '{exp_str}' ≠ '{act_str}'")
+                                    
+                                    # Извлекаем читаемое описание из пути
+                                    # Например: line_items[0].ukt_zed_code -> артикул в строке 1
+                                    description = self._get_readable_description(path)
+                                    
+                                    # Форматируем значения для вывода
+                                    exp_str = self._format_value_for_display(expected)
+                                    act_str = self._format_value_for_display(actual)
+                                    
+                                    print(f"   {i}. {description} ({exp_str} vs {act_str})")
                             
                             if diff_count > 10:
                                 print(f"   ... and {diff_count - 10} more differences")

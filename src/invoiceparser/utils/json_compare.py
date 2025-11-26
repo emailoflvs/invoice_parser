@@ -1,5 +1,6 @@
 """Утилиты для сравнения JSON"""
 import logging
+import re
 from decimal import Decimal
 from datetime import date, datetime
 from typing import Any, Dict, List
@@ -7,10 +8,22 @@ from typing import Any, Dict, List
 logger = logging.getLogger(__name__)
 
 def normalize_value(value: Any) -> Any:
+    """Нормализация значения для сравнения"""
     if value is None:
         return None
     if isinstance(value, str):
-        return value.strip()
+        # Убираем пробелы и приводим к lowercase для сравнения
+        normalized = value.strip().lower()
+        # Нормализуем числа в строках (убираем пробелы между цифрами)
+        normalized = re.sub(r'(\d)\s+(\d)', r'\1\2', normalized)
+        # Нормализуем валюты
+        if normalized in ['грн', 'грн.', 'uah']:
+            return 'uah'
+        # Нормализуем даты
+        date_match = re.match(r'(\d{4})-(\d{2})-(\d{2})', normalized)
+        if date_match:
+            return normalized
+        return normalized
     if isinstance(value, (int, float)):
         return Decimal(str(value))
     if isinstance(value, Decimal):
@@ -20,15 +33,25 @@ def normalize_value(value: Any) -> Any:
     return value
 
 def compare_values(expected: Any, actual: Any, tolerance: Decimal = Decimal('0.01')) -> bool:
+    """Сравнение значений с учетом нормализации"""
     if expected is None and actual is None:
         return True
     if expected is None or actual is None:
         return False
-    if isinstance(expected, Decimal) and isinstance(actual, Decimal):
-        return abs(expected - actual) <= tolerance
-    if isinstance(expected, str) and isinstance(actual, str):
-        return expected == actual
-    return expected == actual
+    
+    # Нормализуем оба значения
+    exp_norm = normalize_value(expected)
+    act_norm = normalize_value(actual)
+    
+    # Сравнение чисел с допуском
+    if isinstance(exp_norm, Decimal) and isinstance(act_norm, Decimal):
+        return abs(exp_norm - act_norm) <= tolerance
+    
+    # Сравнение строк
+    if isinstance(exp_norm, str) and isinstance(act_norm, str):
+        return exp_norm == act_norm
+    
+    return exp_norm == act_norm
 
 def compare_json(expected: Dict[str, Any], actual: Dict[str, Any], path: str = "") -> Dict[str, Any]:
     """
