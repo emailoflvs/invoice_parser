@@ -152,19 +152,28 @@ class Orchestrator:
         logger.info("Starting Gemini parsing")
 
         try:
-            # Парсинг header
-            header_response = self.gemini_client.parse_with_prompt_file(
-                image_path=main_image,
-                prompt_file_path=self.config.prompt_header_path
-            )
+            # ============================================================
+            # ВРЕМЕННО ОТКЛЮЧЕНО: Парсинг header (первый запрос)
+            # Для восстановления раскомментируйте блок ниже
+            # ============================================================
+            # # Парсинг header
+            # header_response = self.gemini_client.parse_with_prompt_file(
+            #     image_path=main_image,
+            #     prompt_file_path=self.config.prompt_header_path
+            # )
+            # 
+            # logger.info("Header parsed successfully")
+            # 
+            # # Парсинг JSON из ответа
+            # header_data = self._extract_json(header_response)
+            # header = InvoiceHeader(**header_data)
+            # ============================================================
+            
+            # Временная заглушка для header (все поля None)
+            logger.info("Using empty header (header parsing disabled)")
+            header = InvoiceHeader()
 
-            logger.info("Header parsed successfully")
-
-            # Парсинг JSON из ответа
-            header_data = self._extract_json(header_response)
-            header = InvoiceHeader(**header_data)
-
-            # Парсинг items
+            # Парсинг items (второй запрос)
             items_response = self.gemini_client.parse_with_prompt_file(
                 image_path=main_image,
                 prompt_file_path=self.config.prompt_items_path,

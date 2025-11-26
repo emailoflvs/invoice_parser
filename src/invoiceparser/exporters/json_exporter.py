@@ -1,7 +1,9 @@
 """Экспорт результатов в JSON"""
 import json
 import logging
+from decimal import Decimal
 from pathlib import Path
+from datetime import date, datetime
 from ..core.config import Config
 from ..core.models import InvoiceData
 from ..core.errors import ExportError
@@ -41,7 +43,19 @@ class JSONExporter:
             logger.debug(f"Exporting to JSON: {output_path.name}")
             
             # Конвертируем в словарь и экспортируем
-            json_data = invoice_data.model_dump_json(indent=2, ensure_ascii=False, exclude_none=False)
+            # В Pydantic v2 model_dump_json() не поддерживает ensure_ascii,
+            # используем model_dump() + json.dumps()
+            data_dict = invoice_data.model_dump(exclude_none=False)
+            
+            # Кастомный encoder для Decimal, date, datetime
+            def json_encoder(obj):
+                if isinstance(obj, Decimal):
+                    return float(obj)
+                if isinstance(obj, (date, datetime)):
+                    return obj.isoformat()
+                raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
+            
+            json_data = json.dumps(data_dict, indent=2, ensure_ascii=False, default=json_encoder)
             
             with open(output_path, 'w', encoding='utf-8') as f:
                 f.write(json_data)

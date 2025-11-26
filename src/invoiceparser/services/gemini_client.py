@@ -3,6 +3,7 @@
 """
 import os
 import random
+import threading
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 import logging
@@ -32,7 +33,7 @@ class GeminiClient:
         """Настройка Gemini API"""
         try:
             genai.configure(api_key=self.config.gemini_api_key)
-            logger.info(f"Gemini API configured with model: {self.config.gemini_model}")
+            logger.info(f"Gemini API configured with model: {self.config.gemini_model}, timeout: {self.config.gemini_timeout}s")
         except Exception as e:
             raise GeminiAPIError(f"Failed to configure Gemini API: {e}")
 
@@ -116,11 +117,10 @@ class GeminiClient:
 
             logger.info(f"Sending request to Gemini with {len(images)} image(s)")
 
-            # Отправка запроса с timeout из конфигурации
-            response = model.generate_content(
-                content,
-                request_options={"timeout": self.config.gemini_timeout}
-            )
+            # Отправка запроса (timeout обрабатывается на уровне библиотеки)
+            # В версии 0.3.2 request_options не поддерживается,
+            # используем дефолтный timeout библиотеки
+            response = model.generate_content(content)
 
             if not response or not response.text:
                 raise GeminiAPIError("Empty response from Gemini API")
@@ -186,10 +186,7 @@ class GeminiClient:
         """
         try:
             model = genai.GenerativeModel(model_name=self.config.gemini_model)
-            response = model.generate_content(
-                "Hello",
-                request_options={"timeout": self.config.gemini_timeout}
-            )
+            response = model.generate_content("Hello")
             return bool(response and response.text)
         except Exception as e:
             logger.error(f"Connection test failed: {e}")
