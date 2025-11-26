@@ -33,7 +33,7 @@ class GeminiClient:
         """Настройка Gemini API"""
         try:
             genai.configure(api_key=self.config.gemini_api_key)
-            logger.info(f"Gemini API configured with model: {self.config.gemini_model}, timeout: {self.config.gemini_timeout}s")
+            logger.info(f"Gemini API configured with model: {self.config.gemini_model}, delay between requests: {self.config.gemini_timeout}s")
         except Exception as e:
             raise GeminiAPIError(f"Failed to configure Gemini API: {e}")
 
@@ -123,40 +123,13 @@ class GeminiClient:
 
             logger.info(f"Sending request to Gemini with {len(images)} image(s)")
 
-            # Определяем таймаут
-            request_timeout = timeout if timeout is not None else self.config.gemini_timeout
-            logger.info(f"Request timeout: {request_timeout}s")
-
-            # ЛОГИКА ИЗ СТАРОГО ПРОЕКТА: Прямой вызов с таймаутом через threading
+            # ЛОГИКА ИЗ СТАРОГО ПРОЕКТА: Прямой вызов без таймаута
             import time
-            import threading
             
             start_time = time.time()
-            response = None
-            exception = None
-            
-            def make_request():
-                nonlocal response, exception
-                try:
-                    response = model.generate_content(content)
-                except Exception as e:
-                    exception = e
-            
-            request_thread = threading.Thread(target=make_request)
-            request_thread.daemon = True
-            request_thread.start()
-            request_thread.join(timeout=request_timeout)
-            
-            if request_thread.is_alive():
-                raise GeminiAPIError(f"Request timeout after {request_timeout} seconds")
-            
-            if exception is not None:
-                raise exception
-            
-            if response is None:
-                raise GeminiAPIError("Failed to get response from Gemini API")
-            
+            response = model.generate_content(content)
             elapsed = time.time() - start_time
+            
             logger.info(f"Response received in {elapsed:.2f}s")
 
             if not response or not response.text:

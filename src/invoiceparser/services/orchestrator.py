@@ -182,6 +182,12 @@ class Orchestrator:
             # Парсинг JSON из ответа (используем публичный метод!)
             header_data = self.gemini_client.parse_json_response(header_response, "header")
             
+            # Задержка между запросами
+            import time
+            delay = self.config.gemini_timeout
+            logger.info(f"Waiting {delay}s before next request...")
+            time.sleep(delay)
+            
             # ЛОГИКА ИЗ СТАРОГО ПРОЕКТА: просто dict, никакого Pydantic!
             if "error" not in header_data:
                 result["header"] = header_data
