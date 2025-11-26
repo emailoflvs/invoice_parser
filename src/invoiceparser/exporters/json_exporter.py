@@ -4,8 +4,9 @@ import logging
 from decimal import Decimal
 from pathlib import Path
 from datetime import date, datetime
+from typing import Dict, Any
 from ..core.config import Config
-from ..core.models import InvoiceData
+# НЕ импортируем InvoiceData - работаем с Dict
 from ..core.errors import ExportError
 
 logger = logging.getLogger(__name__)
@@ -24,13 +25,13 @@ class JSONExporter:
         self.output_dir = config.output_dir
         self.output_dir.mkdir(parents=True, exist_ok=True)
     
-    def export(self, document_path: Path, invoice_data: InvoiceData) -> Path:
+    def export(self, document_path: Path, invoice_data: Dict[str, Any]) -> Path:
         """
         Экспорт данных счета в JSON
         
         Args:
             document_path: Путь к исходному документу
-            invoice_data: Данные счета
+            invoice_data: Данные счета (dict)
             
         Returns:
             Путь к созданному JSON файлу
@@ -45,11 +46,7 @@ class JSONExporter:
             
             logger.debug(f"Exporting to JSON: {output_path.name}")
             
-            # Конвертируем в словарь и экспортируем
-            # В Pydantic v2 model_dump_json() не поддерживает ensure_ascii,
-            # используем model_dump() + json.dumps()
-            data_dict = invoice_data.model_dump(exclude_none=False)
-            
+            # invoice_data уже dict - используем напрямую
             # Кастомный encoder для Decimal, date, datetime
             def json_encoder(obj):
                 if isinstance(obj, Decimal):
@@ -58,7 +55,7 @@ class JSONExporter:
                     return obj.isoformat()
                 raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
             
-            json_data = json.dumps(data_dict, indent=2, ensure_ascii=False, default=json_encoder)
+            json_data = json.dumps(invoice_data, indent=2, ensure_ascii=False, default=json_encoder)
             
             with open(output_path, 'w', encoding='utf-8') as f:
                 f.write(json_data)

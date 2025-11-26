@@ -37,35 +37,30 @@ class GeminiClient:
         except Exception as e:
             raise GeminiAPIError(f"Failed to configure Gemini API: {e}")
 
-    def _get_generation_config(self, max_tokens: int = 16384) -> Dict[str, Any]:
+    def _get_generation_config(self, max_tokens: Optional[int] = None) -> Dict[str, Any]:
         """
         Получить конфигурацию генерации
+        
+        ЛОГИКА ИЗ СТАРОГО ПРОЕКТА:
+        - temperature из config (по умолчанию 0)
+        - max_tokens из config (по умолчанию 90000)
 
         Args:
-            max_tokens: Максимальное количество токенов (по умолчанию 16384 для больших ответов)
+            max_tokens: Переопределить max_output_tokens (если None - из config)
 
         Returns:
             Словарь с параметрами генерации
         """
-        seed = None
-        if self.config.vision_seed != "random":
-            try:
-                seed = int(self.config.vision_seed)
-            except ValueError:
-                logger.warning(f"Invalid VISION_SEED: {self.config.vision_seed}, using random")
-                seed = random.randint(1, 1000000)
-        else:
-            seed = random.randint(1, 1000000)
-
+        # Берём из config или переопределяем
+        tokens = max_tokens if max_tokens is not None else self.config.image_max_output_tokens
+        
         config = {
-            "temperature": 0.1,
-            "top_p": 0.95,
-            "top_k": 40,
-            "max_output_tokens": max_tokens,
+            "temperature": self.config.image_temperature,
+            "top_p": self.config.image_top_p,
+            "max_output_tokens": tokens,
         }
 
-        if seed is not None:
-            logger.info(f"Using seed: {seed}")
+        logger.debug(f"Generation config: temperature={config['temperature']}, max_tokens={tokens}")
 
         return config
 
@@ -74,16 +69,22 @@ class GeminiClient:
         image_path: Path,
         prompt: str,
         additional_images: Optional[List[Path]] = None,
-        max_tokens: int = 16384,
+        max_tokens: Optional[int] = None,
         timeout: Optional[int] = None
     ) -> str:
         """
         Парсинг документа с использованием vision модели
+        
+        ЛОГИКА ИЗ СТАРОГО ПРОЕКТА:
+        - Прямой вызов API (без threading)
+        - Логирование времени выполнения
 
         Args:
             image_path: Путь к основному изображению
             prompt: Промпт для модели
-            additional_images: Дополнительные изображения (для многостраничных документов)
+            additional_images: Дополнительные изображения
+            max_tokens: Максимальное количество токенов (если None - из config)
+            timeout: Не используется (оставлен для совместимости)
 
         Returns:
             Ответ от модели
@@ -111,7 +112,7 @@ class GeminiClient:
                         images.append(img)
                         logger.info(f"Loaded additional image: {img_path}")
 
-            # Создание модели
+            # Создание модели с правильными настройками из config
             model = genai.GenerativeModel(
                 model_name=self.config.gemini_model,
                 generation_config=self._get_generation_config(max_tokens=max_tokens)
@@ -120,12 +121,19 @@ class GeminiClient:
             # Формирование контента для запроса
             content = [prompt] + images
 
-            logger.info(f"Sending request to Gemini with {len(images)} image(s), timeout: {self.config.gemini_timeout}s")
+            logger.info(f"Sending request to Gemini with {len(images)} image(s)")
 
-            # Отправка запроса с контролем timeout через threading
+            # Определяем таймаут
+            request_timeout = timeout if timeout is not None else self.config.gemini_timeout
+            logger.info(f"Request timeout: {request_timeout}s")
+
+            # ЛОГИКА ИЗ СТАРОГО ПРОЕКТА: Прямой вызов с таймаутом через threading
+            import time
+            import threading
+            
+            start_time = time.time()
             response = None
             exception = None
-            timeout_occurred = threading.Event()
             
             def make_request():
                 nonlocal response, exception
@@ -134,31 +142,30 @@ class GeminiClient:
                 except Exception as e:
                     exception = e
             
-            # Запускаем запрос в отдельном потоке
-            request_timeout = timeout if timeout is not None else self.config.gemini_timeout
             request_thread = threading.Thread(target=make_request)
             request_thread.daemon = True
             request_thread.start()
             request_thread.join(timeout=request_timeout)
             
-            # Проверяем, завершился ли запрос
             if request_thread.is_alive():
-                timeout_occurred.set()
                 raise GeminiAPIError(f"Request timeout after {request_timeout} seconds")
             
-            # Проверяем, было ли исключение в потоке
             if exception is not None:
                 raise exception
             
             if response is None:
                 raise GeminiAPIError("Failed to get response from Gemini API")
+            
+            elapsed = time.time() - start_time
+            logger.info(f"Response received in {elapsed:.2f}s")
 
             if not response or not response.text:
                 raise GeminiAPIError("Empty response from Gemini API")
 
-            logger.info(f"Received response from Gemini ({len(response.text)} chars)")
+            raw_text = response.text
+            logger.info(f"Received response from Gemini ({len(raw_text)} chars)")
 
-            return response.text
+            return raw_text
 
         except Exception as e:
             logger.error(f"Gemini API error: {e}", exc_info=True)
@@ -226,3 +233,56 @@ class GeminiClient:
         except Exception as e:
             logger.error(f"Connection test failed: {e}")
             return False
+    
+    def parse_json_response(self, raw_text: str, debug_name: str = "response") -> Dict[str, Any]:
+        """
+        Парсинг JSON ответа с обработкой ошибок
+        
+        ЛОГИКА ИЗ СТАРОГО ПРОЕКТА:
+        - Правильная очистка от markdown (startswith/endswith)
+        - Детальное логирование ошибок
+        - Сохранение debug файла при ошибках
+        
+        Args:
+            raw_text: Сырой ответ от Gemini
+            debug_name: Имя для debug файла
+            
+        Returns:
+            Распарсенный JSON
+            
+        Raises:
+            GeminiAPIError: При ошибке парсинга
+        """
+        import json
+        
+        # Очистка от markdown (логика из старого проекта)
+        text = raw_text.strip()
+        
+        if text.startswith("```json"):
+            text = text[7:]  # Удаляем ```json
+        if text.endswith("```"):
+            text = text[:-3]  # Удаляем ```
+        
+        text = text.strip()
+        
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError as e:
+            # ЛОГИКА ИЗ СТАРОГО ПРОЕКТА: детальное логирование
+            logger.error(f"JSON Decode Error at position {e.pos}: {e.msg}")
+            logger.error(f"Raw text length: {len(text)} characters")
+            logger.error(f"First 200 chars: {text[:200]}")
+            logger.error(f"Last 200 chars: {text[-200:]}")
+            
+            # Сохраняем для отладки
+            debug_path = Path(self.config.output_dir) / f"debug_gemini_{debug_name}.txt"
+            try:
+                debug_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(debug_path, 'w', encoding='utf-8') as f:
+                    f.write(f"=== Original raw text ===\n{raw_text}\n\n")
+                    f.write(f"=== After cleaning ===\n{text}\n")
+                logger.error(f"Full response saved to: {debug_path}")
+            except Exception as save_error:
+                logger.error(f"Failed to save debug response: {save_error}")
+            
+            raise GeminiAPIError(f"Invalid JSON received from model: {e}")

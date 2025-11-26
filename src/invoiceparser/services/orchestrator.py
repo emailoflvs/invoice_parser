@@ -4,11 +4,11 @@
 import json
 import logging
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import datetime
 
 from ..core.config import Config
-from ..core.models import InvoiceHeader, InvoiceData
+# НЕ импортируем Pydantic модели - используем простые dict
 from ..core.errors import ProcessingError, GeminiAPIError
 from ..preprocessing.pdf_preprocessor import PDFPreprocessor
 from ..preprocessing.image_preprocessor import ImagePreprocessor
@@ -89,7 +89,7 @@ class Orchestrator:
                 "processed_at": datetime.now().isoformat()
             }
 
-    def _process_pdf(self, pdf_path: Path) -> InvoiceData:
+    def _process_pdf(self, pdf_path: Path) -> Dict[str, Any]:
         """
         Обработка PDF документа
 
@@ -97,7 +97,7 @@ class Orchestrator:
             pdf_path: Путь к PDF файлу
 
         Returns:
-            Распарсенные данные счета
+            Распарсенные данные (dict) счета
         """
         logger.info(f"Processing PDF: {pdf_path}")
 
@@ -115,7 +115,7 @@ class Orchestrator:
 
         return self._parse_with_gemini(main_image, additional_images)
 
-    def _process_image(self, image_path: Path) -> InvoiceData:
+    def _process_image(self, image_path: Path) -> Dict[str, Any]:
         """
         Обработка изображения
 
@@ -123,7 +123,7 @@ class Orchestrator:
             image_path: Путь к изображению
 
         Returns:
-            Распарсенные данные счета
+            Распарсенные данные (dict) счета
         """
         logger.info(f"Processing image: {image_path}")
 
@@ -138,138 +138,108 @@ class Orchestrator:
         self,
         main_image: Path,
         additional_images: Optional[list[Path]] = None
-    ) -> InvoiceData:
+    ) -> Dict[str, Any]:
         """
         Парсинг документа с помощью Gemini
+        
+        ЛОГИКА ИЗ СТАРОГО ПРОЕКТА:
+        - Возвращаем простой dict (без Pydantic!)
+        - Структура как в старом gemini_parser.py
+        - Используем публичный метод parse_json_response
 
         Args:
             main_image: Основное изображение (первая страница)
             additional_images: Дополнительные изображения
 
         Returns:
-            Распарсенные данные
+            Распарсенные данные в формате dict
         """
+        import time
+        
         logger.info("Starting Gemini parsing")
 
         try:
-            # Парсинг header (первый запрос)
+            # ЛОГИКА ИЗ СТАРОГО ПРОЕКТА: структура результата
+            result = {
+                "source_file": str(main_image),
+                "model": self.config.gemini_model,
+                "timestamp": time.time(),
+                "header": {},
+                "tables": [],
+                "pages": []
+            }
+
+            # Парсинг header (первый запрос) 
+            logger.info("Parsing header...")
             header_response = self.gemini_client.parse_with_prompt_file(
                 image_path=main_image,
-                prompt_file_path=self.config.prompt_header_path
+                prompt_file_path=self.config.prompt_header_path,
+                max_tokens=None  # Используем значение из config (90000)
             )
 
             logger.info("Header parsed successfully")
 
-            # Парсинг JSON из ответа
-            header_data = self._extract_json(header_response)
-            logger.debug(f"Header data from Gemini: {header_data}")
+            # Парсинг JSON из ответа (используем публичный метод!)
+            header_data = self.gemini_client.parse_json_response(header_response, "header")
             
-            # Маппинг полей перед созданием объекта
-            if "document_date" in header_data and "date" not in header_data:
-                # Преобразуем строку в date объект
-                date_str = header_data.get("document_date")
-                if date_str and isinstance(date_str, str):
-                    for fmt in ['%Y-%m-%d', '%d.%m.%Y', '%d/%m/%Y', '%Y/%m/%d']:
-                        try:
-                            header_data["date"] = datetime.strptime(date_str.strip(), fmt).date()
-                            break
-                        except ValueError:
-                            continue
-                else:
-                    header_data["date"] = date_str
-                del header_data["document_date"]
-            if "document_number" in header_data and "invoice_number" not in header_data:
-                header_data["invoice_number"] = header_data.get("document_number")
-            
-            # Удаляем document_date, если он все еще есть
-            if "document_date" in header_data:
-                del header_data["document_date"]
-            
-            logger.debug(f"Header data after mapping: {header_data}")
-            header = InvoiceHeader(**header_data)
+            # ЛОГИКА ИЗ СТАРОГО ПРОЕКТА: просто dict, никакого Pydantic!
+            if "error" not in header_data:
+                result["header"] = header_data
+            else:
+                logger.warning(f"Header parsing had errors: {header_data.get('error')}")
 
-            # Парсинг items (второй запрос) - используем больше токенов и timeout для больших списков
+            # Парсинг items (второй запрос)
+            logger.info("Parsing items...")
             items_response = self.gemini_client.parse_with_prompt_file(
                 image_path=main_image,
                 prompt_file_path=self.config.prompt_items_path,
                 additional_images=additional_images,
-                max_tokens=32768,  # Увеличенный лимит для items
-                timeout=120  # Увеличенный timeout для больших документов (2 минуты)
+                max_tokens=None  # Используем значение из config (90000)
             )
 
             logger.info("Items parsed successfully")
 
             # Парсинг JSON из ответа
-            items_data = self._extract_json(items_response)
+            items_data = self.gemini_client.parse_json_response(items_response, "items")
 
-            # Преобразование формата из tables в items
-            items = []
-            if "tables" in items_data and items_data["tables"]:
-                # Берем первую таблицу (основная таблица с товарами)
-                table = items_data["tables"][0] if items_data["tables"] else []
-                for idx, row in enumerate(table, start=1):
-                    item = {
-                        "line_number": idx,
-                        "name": row.get("Найменування", row.get("Назва", row.get("Товар", ""))),
-                        "sku": row.get("Артикул", row.get("Код", row.get("SKU", ""))),
-                        "unit": row.get("Од. вим.", row.get("Одиниця", row.get("Од.", ""))),
-                        "quantity": row.get("Кількість", row.get("К-сть", "")),
-                        "price": row.get("Ціна", row.get("Цена", "")),
-                        "amount": row.get("Сума", row.get("Вартість", "")),
-                        "vat_rate": row.get("ПДВ", row.get("НДС", "")),
-                        "vat_amount": row.get("Сума ПДВ", row.get("Сумма НДС", ""))
-                    }
-                    items.append(item)
+            # ЛОГИКА ИЗ СТАРОГО ПРОЕКТА: извлекаем tables из результата
+            if "error" in items_data:
+                result["error"] = items_data["error"]
+                return result
+
+            # Новый формат промпта возвращает {"tables": [[...]], "fields": [...]}
+            if "tables" in items_data and isinstance(items_data["tables"], list):
+                if len(items_data["tables"]) > 0:
+                    result["tables"] = items_data["tables"]
+                    # Добавляем в pages
+                    for i, table in enumerate(items_data["tables"]):
+                        result["pages"].append({
+                            "page_number": i + 1,
+                            "items": table
+                        })
+            # Обратная совместимость со старым форматом {"items": [...]}
             elif "items" in items_data:
-                items = items_data["items"]
+                result["tables"] = [items_data["items"]]
+                result["pages"].append({
+                    "page_number": 1,
+                    "items": items_data["items"]
+                })
 
-            # Создание результата
-            invoice_data = InvoiceData(
-                header=header,
-                items=items
-            )
+            # Если есть fields (текстовые поля вне таблиц)
+            if "fields" in items_data:
+                if "header" not in result:
+                    result["header"] = {}
+                result["header"]["fields"] = items_data["fields"]
 
-            return invoice_data
+            logger.info(f"Parsing completed: {len(result.get('tables', [[]])[0] if result.get('tables') else 0)} items found")
+
+            return result
 
         except Exception as e:
             logger.error(f"Gemini parsing failed: {e}", exc_info=True)
             raise GeminiAPIError(f"Failed to parse document with Gemini: {e}")
 
-    def _extract_json(self, text: str) -> Dict[str, Any]:
-        """
-        Извлечение JSON из текстового ответа
-
-        Args:
-            text: Текст с JSON
-
-        Returns:
-            Распарсенный JSON
-
-        Raises:
-            ProcessingError: Если JSON не найден
-        """
-        # Удаление markdown форматирования
-        text = text.strip()
-
-        # Поиск JSON блока
-        if "```json" in text:
-            start = text.find("```json") + 7
-            end = text.find("```", start)
-            json_text = text[start:end].strip()
-        elif "```" in text:
-            start = text.find("```") + 3
-            end = text.find("```", start)
-            json_text = text[start:end].strip()
-        else:
-            json_text = text
-
-        try:
-            return json.loads(json_text)
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse JSON: {e}\nText: {json_text[:500]}...")
-            raise ProcessingError(f"Invalid JSON in response: {e}")
-
-    def _export_results(self, document_path: Path, invoice_data: InvoiceData):
+    def _export_results(self, document_path: Path, invoice_data: Dict[str, Any]):
         """
         Экспорт результатов
 

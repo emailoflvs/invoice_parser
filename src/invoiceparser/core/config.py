@@ -16,53 +16,56 @@ class Config(BaseSettings):
     )
     
     # Основные настройки
-    mode: Literal["NORMAL", "TEST"] = "NORMAL"
-    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
+    mode: Literal["NORMAL", "TEST"] = Field(alias="MODE")
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = Field(alias="LOG_LEVEL")
     
     # Директории
-    invoices_dir: Path = Path("/app/invoices")
-    output_dir: Path = Path("/app/output")
-    logs_dir: Path = Path("/app/logs")
-    temp_dir: Path = Path("/app/output/temp")
-    examples_dir: Path = Path("/app/examples")
+    invoices_dir: Path = Field(alias="INVOICES_DIR")
+    output_dir: Path = Field(alias="OUTPUT_DIR")
+    logs_dir: Path = Field(alias="LOGS_DIR")
+    temp_dir: Path = Field(alias="TEMP_DIR")
+    examples_dir: Path = Field(alias="EXAMPLES_DIR")
     
     # Gemini API
     gemini_api_key: str = Field(alias="GEMINI_API_KEY")
-    gemini_model: str = Field(default="gemini-2.0-flash-exp", alias="GEMINI_MODEL")
-    gemini_timeout: int = Field(default=35, alias="GEMINI_TIMEOUT")
-    vision_seed: str = "random"
-    prompts_dir: Path = Path("/app/prompts")
-    prompt_header_path: Path = Path("/app/prompts/header.txt")
-    prompt_items_path: Path = Path("/app/prompts/items.txt")
+    gemini_model: str = Field(alias="GEMINI_MODEL")
+    gemini_timeout: int = Field(alias="GEMINI_TIMEOUT")
+    vision_seed: str = Field(alias="VISION_SEED")
+    prompts_dir: Path = Field(alias="PROMPTS_DIR")
+    prompt_header_path: Path = Field(alias="PROMPT_HEADER_PATH")
+    prompt_items_path: Path = Field(alias="PROMPT_ITEMS_PATH")
     
     # Настройки изображений
-    enable_image_enhancement: bool = True
-    image_upscale_factor: float = 2.0
-    image_brightness_factor: float = 1.1
-    image_contrast_factor: float = 1.2
-    image_sharpness_factor: float = 1.5
-    image_color_factor: float = 1.0
-    image_unsharp_radius: float = 2.0
-    image_unsharp_percent: int = 150
-    image_unsharp_threshold: int = 3
-    image_denoise_strength: float = 0.3
-    image_binarize: bool = False
-    image_binarize_threshold: int = 128
-    image_dilate: bool = False
-    image_dilate_kernel: int = 2
-    image_dpi: int = 300
-    image_format: Literal["PNG", "JPEG"] = "PNG"
-    image_quality: int = 95
+    enable_image_enhancement: bool = Field(alias="ENABLE_IMAGE_ENHANCEMENT")
+    image_upscale_factor: float = Field(alias="IMAGE_UPSCALE_FACTOR")
+    image_brightness_factor: float = Field(alias="IMAGE_BRIGHTNESS_FACTOR")
+    image_contrast_factor: float = Field(alias="IMAGE_CONTRAST_FACTOR")
+    image_sharpness_factor: float = Field(alias="IMAGE_SHARPNESS_FACTOR")
+    image_color_factor: float = Field(alias="IMAGE_COLOR_FACTOR")
+    image_unsharp_radius: float = Field(alias="IMAGE_UNSHARP_RADIUS")
+    image_unsharp_percent: int = Field(alias="IMAGE_UNSHARP_PERCENT")
+    image_unsharp_threshold: int = Field(alias="IMAGE_UNSHARP_THRESHOLD")
+    image_denoise_strength: float = Field(alias="IMAGE_DENOISE_STRENGTH")
+    image_binarize: bool = Field(alias="IMAGE_BINARIZE")
+    image_binarize_threshold: int = Field(alias="IMAGE_BINARIZE_THRESHOLD")
+    image_dilate: bool = Field(alias="IMAGE_DILATE")
+    image_dilate_kernel: int = Field(alias="IMAGE_DILATE_KERNEL")
+    image_dpi: int = Field(alias="IMAGE_DPI")
+    image_format: Literal["PNG", "JPEG"] = Field(alias="IMAGE_FORMAT")
+    image_quality: int = Field(alias="IMAGE_QUALITY")
+    image_temperature: float = Field(alias="IMAGE_TEMPERATURE")
+    image_top_p: float = Field(alias="IMAGE_TOP_P")
+    image_max_output_tokens: int = Field(alias="IMAGE_MAX_OUTPUT_TOKENS")
     
     # Настройки PDF
-    pdf_processing_mode: Literal["DIRECT", "IMAGE_BASED", "HYBRID"] = "HYBRID"
-    pdf_image_dpi: int = 300
-    pdf_max_pages: int = 50
-    pdf_text_threshold: int = 100
+    pdf_processing_mode: Literal["DIRECT", "IMAGE_BASED", "HYBRID"] = Field(alias="PDF_PROCESSING_MODE")
+    pdf_image_dpi: int = Field(alias="PDF_IMAGE_DPI")
+    pdf_max_pages: int = Field(alias="PDF_MAX_PAGES")
+    pdf_text_threshold: int = Field(alias="PDF_TEXT_THRESHOLD")
     
     # Настройки экспорта
-    export_excel_enabled: bool = True
-    export_crm_enabled: bool = False
+    export_excel_enabled: bool = Field(alias="EXPORT_EXCEL_ENABLED")
+    export_crm_enabled: bool = Field(alias="EXPORT_CRM_ENABLED")
     
     @classmethod
     def load(cls) -> "Config":
