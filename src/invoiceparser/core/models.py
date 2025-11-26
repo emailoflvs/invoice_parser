@@ -1,10 +1,11 @@
 """Основные модели данных для системы InvoiceParser"""
 from __future__ import annotations
-from datetime import datetime, date
+from datetime import datetime
+from datetime import date as DateType
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any, Optional, Union
 from enum import Enum
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 class DocumentType(str, Enum):
     IMAGE = "IMAGE"
@@ -31,7 +32,7 @@ class DocumentHeader(BaseModel):
     buyer_name: str | None = None
     buyer_inn: str | None = None
     document_number: str | None = None
-    document_date: date | None = None
+    document_date: DateType | None = None
     total_amount: Decimal | None = None
     total_vat: Decimal | None = None
     currency: str | None = None
@@ -103,38 +104,10 @@ class InvoiceHeader(BaseModel):
     buyer_inn: Optional[str] = None
     invoice_number: Optional[str] = None
     document_number: Optional[str] = None  # Альтернативное имя
-    date: Optional[date] = None
-    document_date: Optional[date] = None  # Альтернативное имя
+    date: Optional[DateType] = None
     total_amount: Optional[Decimal] = None
     total_vat: Optional[Decimal] = None
     currency: Optional[str] = None
-    
-    @field_validator('date', 'document_date', mode='before')
-    @classmethod
-    def parse_date(cls, v: Any) -> Optional[date]:
-        """Преобразование строки в date объект"""
-        if v is None:
-            return None
-        if isinstance(v, date):
-            return v
-        if isinstance(v, str):
-            # Пробуем различные форматы даты
-            for fmt in ['%Y-%m-%d', '%d.%m.%Y', '%d/%m/%Y', '%Y/%m/%d']:
-                try:
-                    return datetime.strptime(v.strip(), fmt).date()
-                except ValueError:
-                    continue
-            # Если не удалось распарсить, возвращаем None
-            return None
-        return v
-    
-    def __init__(self, **data):
-        # Маппинг document_number -> invoice_number и document_date -> date
-        if "document_number" in data and "invoice_number" not in data:
-            data["invoice_number"] = data.get("document_number")
-        if "document_date" in data and "date" not in data:
-            data["date"] = data.get("document_date")
-        super().__init__(**data)
     
     class Config:
         populate_by_name = True

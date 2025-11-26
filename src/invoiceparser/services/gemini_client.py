@@ -37,9 +37,12 @@ class GeminiClient:
         except Exception as e:
             raise GeminiAPIError(f"Failed to configure Gemini API: {e}")
 
-    def _get_generation_config(self) -> Dict[str, Any]:
+    def _get_generation_config(self, max_tokens: int = 16384) -> Dict[str, Any]:
         """
         Получить конфигурацию генерации
+
+        Args:
+            max_tokens: Максимальное количество токенов (по умолчанию 16384 для больших ответов)
 
         Returns:
             Словарь с параметрами генерации
@@ -58,7 +61,7 @@ class GeminiClient:
             "temperature": 0.1,
             "top_p": 0.95,
             "top_k": 40,
-            "max_output_tokens": 8192,
+            "max_output_tokens": max_tokens,
         }
 
         if seed is not None:
@@ -70,7 +73,9 @@ class GeminiClient:
         self,
         image_path: Path,
         prompt: str,
-        additional_images: Optional[List[Path]] = None
+        additional_images: Optional[List[Path]] = None,
+        max_tokens: int = 16384,
+        timeout: Optional[int] = None
     ) -> str:
         """
         Парсинг документа с использованием vision модели
@@ -109,18 +114,44 @@ class GeminiClient:
             # Создание модели
             model = genai.GenerativeModel(
                 model_name=self.config.gemini_model,
-                generation_config=self._get_generation_config()
+                generation_config=self._get_generation_config(max_tokens=max_tokens)
             )
 
             # Формирование контента для запроса
             content = [prompt] + images
 
-            logger.info(f"Sending request to Gemini with {len(images)} image(s)")
+            logger.info(f"Sending request to Gemini with {len(images)} image(s), timeout: {self.config.gemini_timeout}s")
 
-            # Отправка запроса (timeout обрабатывается на уровне библиотеки)
-            # В версии 0.3.2 request_options не поддерживается,
-            # используем дефолтный timeout библиотеки
-            response = model.generate_content(content)
+            # Отправка запроса с контролем timeout через threading
+            response = None
+            exception = None
+            timeout_occurred = threading.Event()
+            
+            def make_request():
+                nonlocal response, exception
+                try:
+                    response = model.generate_content(content)
+                except Exception as e:
+                    exception = e
+            
+            # Запускаем запрос в отдельном потоке
+            request_timeout = timeout if timeout is not None else self.config.gemini_timeout
+            request_thread = threading.Thread(target=make_request)
+            request_thread.daemon = True
+            request_thread.start()
+            request_thread.join(timeout=request_timeout)
+            
+            # Проверяем, завершился ли запрос
+            if request_thread.is_alive():
+                timeout_occurred.set()
+                raise GeminiAPIError(f"Request timeout after {request_timeout} seconds")
+            
+            # Проверяем, было ли исключение в потоке
+            if exception is not None:
+                raise exception
+            
+            if response is None:
+                raise GeminiAPIError("Failed to get response from Gemini API")
 
             if not response or not response.text:
                 raise GeminiAPIError("Empty response from Gemini API")
@@ -137,7 +168,9 @@ class GeminiClient:
         self,
         image_path: Path,
         prompt_file_path: Path,
-        additional_images: Optional[List[Path]] = None
+        additional_images: Optional[List[Path]] = None,
+        max_tokens: int = 16384,
+        timeout: Optional[int] = None
     ) -> str:
         """
         Парсинг документа с промптом из файла
@@ -169,7 +202,9 @@ class GeminiClient:
             return self.parse_document_with_vision(
                 image_path=image_path,
                 prompt=prompt,
-                additional_images=additional_images
+                additional_images=additional_images,
+                max_tokens=max_tokens,
+                timeout=timeout
             )
 
         except GeminiAPIError:

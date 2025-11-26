@@ -36,9 +36,12 @@ class JSONExporter:
             Путь к созданному JSON файлу
         """
         try:
-            # Генерируем имя файла на основе исходного документа
+            # Генерируем имя файла: название_инвойса_деньмесяцчасминута.json
+            # Формат: invoice_26111744.json (26 день, 11 месяц, 17 час, 44 минута)
             filename_base = document_path.stem
-            output_path = self.output_dir / f"{filename_base}.json"
+            now = datetime.now()
+            timestamp = f"{now.day:02d}{now.month:02d}{now.hour:02d}{now.minute:02d}"
+            output_path = self.output_dir / f"{filename_base}_{timestamp}.json"
             
             logger.debug(f"Exporting to JSON: {output_path.name}")
             
