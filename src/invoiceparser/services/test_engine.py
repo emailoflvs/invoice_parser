@@ -232,24 +232,33 @@ class TestEngine:
                             diff_count = len(test['differences'])
                             print(f"   ⚠️  Total differences: {diff_count}\n")
                             
-                            # Выводим список различий
-                            print("   Differences list:")
+                            # Выводим список различий компактно
+                            print("   Differences:")
                             for i, diff in enumerate(test['differences'][:10], 1):  # Показываем первые 10
                                 path = diff.get('path', 'unknown')
                                 diff_type = diff.get('type', 'unknown')
-                                print(f"   {i}. Path: {path}")
-                                print(f"      Type: {diff_type}")
                                 
                                 if diff_type == 'missing_in_actual':
-                                    print(f"      ❌ Missing in result (expected but not found)")
+                                    expected = diff.get('expected', '')
+                                    # Компактный вывод
+                                    if isinstance(expected, dict):
+                                        expected_str = f"dict with {len(expected)} keys"
+                                    elif isinstance(expected, list):
+                                        expected_str = f"list with {len(expected)} items"
+                                    else:
+                                        expected_str = str(expected)[:50]
+                                    print(f"   {i}. ❌ {path}: missing (expected: {expected_str})")
+                                    
                                 elif diff_type == 'missing_in_expected':
-                                    print(f"      ➕ Extra in result (found but not expected)")
-                                elif diff_type == 'value_mismatch':
+                                    print(f"   {i}. ➕ {path}: extra field (not in expected)")
+                                    
+                                elif diff_type == 'mismatch':
                                     expected = diff.get('expected', '')
                                     actual = diff.get('actual', '')
-                                    print(f"      Expected: {expected}")
-                                    print(f"      Actual: {actual}")
-                                print()
+                                    # Компактный вывод значений
+                                    exp_str = str(expected)[:30] if not isinstance(expected, (dict, list)) else f"{type(expected).__name__}"
+                                    act_str = str(actual)[:30] if not isinstance(actual, (dict, list)) else f"{type(actual).__name__}"
+                                    print(f"   {i}. ⚠️  {path}: '{exp_str}' ≠ '{act_str}'")
                             
                             if diff_count > 10:
                                 print(f"   ... and {diff_count - 10} more differences")

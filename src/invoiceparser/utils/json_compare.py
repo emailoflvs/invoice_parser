@@ -45,6 +45,12 @@ def compare_json(expected: Dict[str, Any], actual: Dict[str, Any], path: str = "
         - accuracy: float - точность совпадения (0-1)
         - differences: list - список различий
     """
+    # Служебные поля, которые игнорируются при сравнении
+    IGNORED_FIELDS = {
+        'model', 'timestamp', 'source_file', 'pages', 'tables', 
+        'fields', 'raw_block', 'header'  # Игнорируем дубликаты данных
+    }
+    
     differences = []
     match = True
     
@@ -55,6 +61,10 @@ def compare_json(expected: Dict[str, Any], actual: Dict[str, Any], path: str = "
             # Сравнение словарей
             all_keys = set(exp.keys()) | set(act.keys())
             for key in all_keys:
+                # Пропускаем служебные поля
+                if key in IGNORED_FIELDS:
+                    continue
+                    
                 new_path = f"{current_path}.{key}" if current_path else key
                 if key not in exp:
                     differences.append({
