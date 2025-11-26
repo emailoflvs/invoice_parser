@@ -108,7 +108,8 @@ class CLIApp:
 
             # Вывод результата
             if result["success"]:
-                print("✓ Document parsed successfully\n")
+                elapsed_time = result.get('elapsed_time', 0)
+                print(f"✓ Document parsed successfully (took {elapsed_time:.2f}s)\n")
                 
                 # result['data'] может быть InvoiceData объектом или словарем
                 data = result['data']
@@ -136,6 +137,7 @@ class CLIApp:
                 print(f"Total Amount: {total}")
                 print(f"Items: {len(items)}")
                 print(f"\nResults saved to: {self.config.output_dir}")
+                print(f"Total processing time: {elapsed_time:.2f}s")
             else:
                 print(f"✗ Failed to parse document")
                 print(f"Error: {result['error']}")

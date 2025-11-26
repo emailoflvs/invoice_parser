@@ -3,6 +3,7 @@
 """
 import json
 import logging
+import time
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 from datetime import datetime
@@ -50,6 +51,7 @@ class Orchestrator:
         Raises:
             ProcessingError: При ошибке обработки
         """
+        start_time = time.time()
         logger.info(f"Starting document processing: {document_path}")
 
         try:
@@ -71,13 +73,15 @@ class Orchestrator:
             # Экспорт результатов
             self._export_results(document_path, result)
 
-            logger.info(f"Document processing completed: {document_path}")
+            elapsed_time = time.time() - start_time
+            logger.info(f"Document processing completed: {document_path} (took {elapsed_time:.2f}s)")
 
             return {
                 "success": True,
                 "document": str(document_path),
                 "data": result,
-                "processed_at": datetime.now().isoformat()
+                "processed_at": datetime.now().isoformat(),
+                "elapsed_time": elapsed_time
             }
 
         except Exception as e:
@@ -181,12 +185,6 @@ class Orchestrator:
 
             # Парсинг JSON из ответа (используем публичный метод!)
             header_data = self.gemini_client.parse_json_response(header_response, "header")
-            
-            # Задержка между запросами
-            import time
-            delay = self.config.gemini_timeout
-            logger.info(f"Waiting {delay}s before next request...")
-            time.sleep(delay)
             
             # ЛОГИКА ИЗ СТАРОГО ПРОЕКТА: просто dict, никакого Pydantic!
             if "error" not in header_data:
