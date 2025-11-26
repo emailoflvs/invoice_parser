@@ -38,6 +38,7 @@ invoices/*
 !invoices/.gitkeep
 output/*
 !output/.gitkeep
+!output/temp/.gitkeep
 logs/*
 !logs/.gitkeep
 examples/*

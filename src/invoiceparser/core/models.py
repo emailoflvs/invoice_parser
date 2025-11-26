@@ -4,7 +4,7 @@ from datetime import datetime, date
 from decimal import Decimal
 from typing import Any, Optional
 from enum import Enum
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 class DocumentType(str, Enum):
     IMAGE = "IMAGE"
@@ -108,6 +108,25 @@ class InvoiceHeader(BaseModel):
     total_amount: Optional[Decimal] = None
     total_vat: Optional[Decimal] = None
     currency: Optional[str] = None
+    
+    @field_validator('date', 'document_date', mode='before')
+    @classmethod
+    def parse_date(cls, v: Any) -> Optional[date]:
+        """Преобразование строки в date объект"""
+        if v is None:
+            return None
+        if isinstance(v, date):
+            return v
+        if isinstance(v, str):
+            # Пробуем различные форматы даты
+            for fmt in ['%Y-%m-%d', '%d.%m.%Y', '%d/%m/%Y', '%Y/%m/%d']:
+                try:
+                    return datetime.strptime(v.strip(), fmt).date()
+                except ValueError:
+                    continue
+            # Если не удалось распарсить, возвращаем None
+            return None
+        return v
     
     def __init__(self, **data):
         # Маппинг document_number -> invoice_number и document_date -> date
