@@ -220,14 +220,40 @@ class TestEngine:
 
             # Детали по failed тестам
             if results['failed'] > 0:
-                print("Failed tests:")
+                print("Failed tests details:\n")
                 for test in results['tests']:
                     if not test['passed']:
-                        print(f"  - {test['document']}")
+                        doc_name = Path(test['document']).name
+                        print(f"📄 {doc_name}")
+                        
                         if 'error' in test:
-                            print(f"    Error: {test['error']}")
+                            print(f"   ❌ Error: {test['error']}\n")
                         elif 'differences' in test:
-                            print(f"    Differences: {len(test['differences'])}")
+                            diff_count = len(test['differences'])
+                            print(f"   ⚠️  Total differences: {diff_count}\n")
+                            
+                            # Выводим список различий
+                            print("   Differences list:")
+                            for i, diff in enumerate(test['differences'][:10], 1):  # Показываем первые 10
+                                path = diff.get('path', 'unknown')
+                                diff_type = diff.get('type', 'unknown')
+                                print(f"   {i}. Path: {path}")
+                                print(f"      Type: {diff_type}")
+                                
+                                if diff_type == 'missing_in_actual':
+                                    print(f"      ❌ Missing in result (expected but not found)")
+                                elif diff_type == 'missing_in_expected':
+                                    print(f"      ➕ Extra in result (found but not expected)")
+                                elif diff_type == 'value_mismatch':
+                                    expected = diff.get('expected', '')
+                                    actual = diff.get('actual', '')
+                                    print(f"      Expected: {expected}")
+                                    print(f"      Actual: {actual}")
+                                print()
+                            
+                            if diff_count > 10:
+                                print(f"   ... and {diff_count - 10} more differences")
+                                print(f"   See full report: {output_path}\n")
                 print()
 
         except Exception as e:

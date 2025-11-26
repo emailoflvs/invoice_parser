@@ -176,8 +176,12 @@ class CLIApp:
             if args.output:
                 report_path = Path(args.output)
             else:
-                timestamp = results.get('timestamp', 'unknown')
-                report_path = self.config.output_dir / f"test_report_{timestamp}.json"
+                from datetime import datetime
+                timestamp = datetime.now().strftime("%d%m%H%M")
+                failed_count = results.get('failed', 0)
+                # Формат: invoice_26112152_3errors.json
+                test_name = "test" if results.get('total', 0) > 1 else Path(results['tests'][0]['document']).stem
+                report_path = self.config.output_dir / f"{test_name}_{timestamp}_{failed_count}errors.json"
 
             self.test_engine.generate_report(results, report_path)
 
