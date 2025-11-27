@@ -131,15 +131,40 @@ class CLIApp:
                     # Если это словарь
                     header = data.get('header', {})
                     items = data.get('items', [])
+                    # Если items пустой, проверяем tables
+                    if not items and 'tables' in data:
+                        tables = data.get('tables', [])
+                        if isinstance(tables, list) and len(tables) > 0:
+                            # tables это список таблиц, берем первую
+                            items = tables[0] if isinstance(tables[0], list) else []
                 else:
                     header = {}
                     items = []
                 
-                # Безопасный вывод данных
-                invoice_number = header.invoice_number if hasattr(header, 'invoice_number') else header.get('invoice_number', 'N/A')
-                date_val = header.date if hasattr(header, 'date') else header.get('date', 'N/A')
-                supplier = header.supplier_name if hasattr(header, 'supplier_name') else header.get('supplier_name', 'N/A')
-                total = header.total_amount if hasattr(header, 'total_amount') else header.get('total_amount', 'N/A')
+                # Извлекаем данные из вложенной структуры header.header.*
+                invoice_number = 'N/A'
+                date_val = 'N/A'
+                supplier = 'N/A'
+                total = 'N/A'
+                
+                if isinstance(header, dict):
+                    # Проверяем вложенную структуру header.header
+                    nested_header = header.get('header', {})
+                    if isinstance(nested_header, dict):
+                        doc_info = nested_header.get('document_info', {})
+                        if isinstance(doc_info, dict):
+                            invoice_number = doc_info.get('number', 'N/A')
+                            date_val = doc_info.get('date_iso', doc_info.get('date_raw', 'N/A'))
+                        
+                        parties = nested_header.get('parties', {})
+                        if isinstance(parties, dict):
+                            performer = parties.get('performer', {})
+                            if isinstance(performer, dict):
+                                supplier = performer.get('full_name', performer.get('name', 'N/A'))
+                        
+                        amounts = nested_header.get('amounts', {})
+                        if isinstance(amounts, dict):
+                            total = amounts.get('total_with_vat', amounts.get('total_amount', 'N/A'))
                 
                 print(f"Invoice Number: {invoice_number}")
                 print(f"Date: {date_val}")
@@ -163,7 +188,13 @@ class CLIApp:
                     else:
                         print(f"⚠️  Test error: {test_results.get('message', 'Unknown')}")
                 
-                print(f"\nResults saved to: {self.config.output_dir}")
+                # Показываем имя сохраненного файла
+                output_file = result.get('output_file')
+                if output_file:
+                    import os
+                    print(f"\nResults saved to: {os.path.basename(output_file)}")
+                else:
+                    print(f"\nResults saved to: {self.config.output_dir}")
                 print(f"Total processing time: {elapsed_time:.2f}s")
             else:
                 print(f"✗ Failed to parse document")

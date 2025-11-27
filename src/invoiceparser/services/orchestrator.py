@@ -84,7 +84,7 @@ class Orchestrator:
                 result['test_results'] = test_result
 
             # Экспорт результатов
-            self._export_results(document_path, result)
+            output_file = self._export_results(document_path, result)
 
             elapsed_time = time.time() - start_time
             logger.info(f"Document processing completed: {document_path} (took {elapsed_time:.2f}s)")
@@ -95,7 +95,8 @@ class Orchestrator:
                 "data": result,
                 "processed_at": datetime.now().isoformat(),
                 "elapsed_time": elapsed_time,
-                "test_results": test_result
+                "test_results": test_result,
+                "output_file": str(output_file) if output_file else None
             }
 
         except Exception as e:
@@ -344,13 +345,16 @@ class Orchestrator:
             raise GeminiAPIError(f"Failed to parse document with Gemini: {e}")
 
     
-    def _export_results(self, document_path: Path, invoice_data: Dict[str, Any]):
+    def _export_results(self, document_path: Path, invoice_data: Dict[str, Any]) -> Optional[Path]:
         """
         Экспорт результатов
 
         Args:
             document_path: Путь к исходному документу
             invoice_data: Данные счета (может содержать test_results)
+        
+        Returns:
+            Путь к сохраненному JSON файлу
         """
         try:
             # Если есть результаты теста, добавляем их в данные перед экспортом
@@ -414,7 +418,9 @@ class Orchestrator:
                 logger.info(f"Exported to JSON: {json_path}")
 
             # Экспорт в Excel отключен (только JSON)
+            return json_path
 
         except Exception as e:
             logger.error(f"Export failed: {e}", exc_info=True)
             # Не падаем при ошибке экспорта
+            return None
