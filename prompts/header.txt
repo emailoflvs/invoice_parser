@@ -76,19 +76,19 @@ other_fields:
 Ответ ДОЛЖЕН быть строго в формате валидного JSON:
 
 {
-    "meta": {
-    "processing_id": "ОБЯЗАТЕЛЬНО скопируй timestamp из PROCESS_TIMESTAMP в начале запроса"
+  "meta": {
+    "processing_id": "скопируй сюда значение {{CURRENT_TIMESTAMP}} из самой первой строки запроса"
+  },
+  "header": {
+    "document_info": { ... },
+    "parties": {
+      "performer": { ... },
+      "customer": { ... }
     },
-"header": {
-"document_info": { ... },
-"parties": {
-"performer": { ... },
-"customer": { ... }
-},
-"contract_reference": { ... },
-"amounts": { ... },
-"other_fields": { ... }
-}
+    "contract_reference": { ... },
+    "amounts": { ... },
+    "other_fields": { ... }
+  }
 }
 
 Требования к JSON:

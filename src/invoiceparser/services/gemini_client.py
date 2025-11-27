@@ -247,22 +247,23 @@ class GeminiClient:
         # Ищем timestamp в разных местах JSON
         found_timestamp = None
         
-        # Проверяем header.meta.processing_id
-        if 'header' in parsed_json:
-            header = parsed_json['header']
-            if isinstance(header, dict):
-                # Может быть вложенная структура header.header.meta
-                if 'header' in header and isinstance(header['header'], dict):
-                    meta = header['header'].get('meta', {})
-                else:
-                    meta = header.get('meta', {})
-                
-                if isinstance(meta, dict):
-                    found_timestamp = meta.get('processing_id')
+        # 1. Проверяем корневой уровень meta.processing_id (для header.txt)
+        if 'meta' in parsed_json and isinstance(parsed_json['meta'], dict):
+            found_timestamp = parsed_json['meta'].get('processing_id')
         
-        # Проверяем корневой уровень
+        # 2. Проверяем корневой processing_id (для items.txt)
         if not found_timestamp:
             found_timestamp = parsed_json.get('processing_id')
+        
+        # 3. Проверяем вложенные структуры (на случай других форматов)
+        if not found_timestamp and 'header' in parsed_json:
+            header = parsed_json['header']
+            if isinstance(header, dict):
+                if 'meta' in header and isinstance(header['meta'], dict):
+                    found_timestamp = header['meta'].get('processing_id')
+                elif 'header' in header and isinstance(header['header'], dict):
+                    if 'meta' in header['header'] and isinstance(header['header']['meta'], dict):
+                        found_timestamp = header['header']['meta'].get('processing_id')
         
         # Проверяем совпадение
         if found_timestamp:
