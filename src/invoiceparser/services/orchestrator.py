@@ -14,6 +14,7 @@ from ..core.errors import ProcessingError, GeminiAPIError
 from ..preprocessing.pdf_preprocessor import PDFPreprocessor
 from ..preprocessing.image_preprocessor import ImagePreprocessor
 from ..services.gemini_client import GeminiClient
+from ..services.post_processor import InvoicePostProcessor
 from ..exporters.json_exporter import JSONExporter
 from ..exporters.excel_exporter import ExcelExporter
 from ..utils.file_ops import ensure_dir, get_file_hash
@@ -41,6 +42,7 @@ class Orchestrator:
         self.pdf_preprocessor = PDFPreprocessor(config)
         self.image_preprocessor = ImagePreprocessor(config)
         self.gemini_client = GeminiClient(config)
+        self.post_processor = InvoicePostProcessor()
         self.json_exporter = JSONExporter(config)
         self.excel_exporter = ExcelExporter(config)
 
@@ -269,16 +271,6 @@ class Orchestrator:
         logger.info("Starting Gemini parsing")
 
         try:
-            # ЛОГИКА ИЗ СТАРОГО ПРОЕКТА: структура результата
-            result = {
-                "source_file": str(main_image),
-                "model": self.config.gemini_model,
-                "timestamp": time.time(),
-                "header": {},
-                "tables": [],
-                "pages": []
-            }
-
             # Парсинг header (первый запрос) 
             logger.info("Parsing header...")
             header_response = self.gemini_client.parse_with_prompt_file(
@@ -292,12 +284,6 @@ class Orchestrator:
             # Парсинг JSON из ответа (используем публичный метод!)
             header_data = self.gemini_client.parse_json_response(header_response, "header")
             
-            # ЛОГИКА ИЗ СТАРОГО ПРОЕКТА: просто dict, никакого Pydantic!
-            if "error" not in header_data:
-                result["header"] = header_data
-            else:
-                logger.warning(f"Header parsing had errors: {header_data.get('error')}")
-
             # Парсинг items (второй запрос)
             logger.info("Parsing items...")
             items_response = self.gemini_client.parse_with_prompt_file(
@@ -312,36 +298,45 @@ class Orchestrator:
             # Парсинг JSON из ответа
             items_data = self.gemini_client.parse_json_response(items_response, "items")
 
-            # ЛОГИКА ИЗ СТАРОГО ПРОЕКТА: извлекаем tables из результата
-            if "error" in items_data:
-                result["error"] = items_data["error"]
-                return result
-
-            # Новый формат промпта возвращает {"tables": [[...]], "fields": [...]}
-            if "tables" in items_data and isinstance(items_data["tables"], list):
-                if len(items_data["tables"]) > 0:
-                    result["tables"] = items_data["tables"]
-                    # Добавляем в pages
-                    for i, table in enumerate(items_data["tables"]):
-                        result["pages"].append({
-                            "page_number": i + 1,
-                            "items": table
-                        })
-            # Обратная совместимость со старым форматом {"items": [...]}
-            elif "items" in items_data:
-                result["tables"] = [items_data["items"]]
-                result["pages"].append({
-                    "page_number": 1,
-                    "items": items_data["items"]
-                })
-
-            # Если есть fields (текстовые поля вне таблиц)
-            if "fields" in items_data:
-                if "header" not in result:
-                    result["header"] = {}
-                result["header"]["fields"] = items_data["fields"]
-
-            logger.info(f"Parsing completed: {len(result.get('tables', [[]])[0] if result.get('tables') else 0)} items found")
+            # Проверка ошибок
+            if "error" in header_data or "error" in items_data:
+                logger.error("Parsing failed")
+                if "error" in header_data:
+                    logger.error(f"Header error: {header_data.get('error')}")
+                if "error" in items_data:
+                    logger.error(f"Items error: {items_data.get('error')}")
+                return {
+                    "error": "Parsing failed",
+                    "header_error": header_data.get('error'),
+                    "items_error": items_data.get('error')
+                }
+            
+            # Если данные упакованы в header объект, распаковываем
+            if "header" in header_data and isinstance(header_data["header"], dict):
+                header_data = header_data["header"]
+            
+            # МАГИЯ: Post-processing через InvoicePostProcessor
+            # Превращаем сырые данные Gemini в финальную структуру
+            logger.info("Post-processing parsed data...")
+            result = self.post_processor.process(
+                {"document_info": header_data.get("document_info", {}),
+                 "parties": header_data.get("parties", {}),
+                 "contract_reference": header_data.get("contract_reference", {}),
+                 "amounts": header_data.get("amounts", {}),
+                 "other_fields": header_data.get("other_fields", {})},
+                items_data
+            )
+            
+            # Добавляем служебные данные
+            result["_meta"] = {
+                "source_file": str(main_image),
+                "model": self.config.gemini_model,
+                "timestamp": datetime.now().isoformat(),
+                "processing_time_seconds": 0  # Будет обновлено позже
+            }
+            
+            items_count = len(result.get("line_items", []))
+            logger.info(f"Parsing completed: {items_count} items found")
 
             return result
 

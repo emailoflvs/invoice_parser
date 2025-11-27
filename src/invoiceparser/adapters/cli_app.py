@@ -121,56 +121,58 @@ class CLIApp:
                 else:
                     print(f"✓ Document parsed successfully (took {elapsed_time:.2f}s)\n")
                 
-                # result['data'] может быть InvoiceData объектом или словарем
+                # Новая структура: данные на верхнем уровне как в examples/invoice.json
                 data = result['data']
-                if hasattr(data, 'header'):
-                    # Если это объект Pydantic
-                    header = data.header
-                    items = data.items
-                elif isinstance(data, dict):
-                    # Если это словарь
-                    header = data.get('header', {})
-                    items = data.get('items', [])
-                    # Если items пустой, проверяем tables
-                    if not items and 'tables' in data:
-                        tables = data.get('tables', [])
-                        if isinstance(tables, list) and len(tables) > 0:
-                            # tables это список таблиц, берем первую
-                            items = tables[0] if isinstance(tables[0], list) else []
-                else:
-                    header = {}
-                    items = []
                 
-                # Извлекаем данные из вложенной структуры header.header.*
                 invoice_number = 'N/A'
                 date_val = 'N/A'
                 supplier = 'N/A'
                 total = 'N/A'
+                items_count = 0
                 
-                if isinstance(header, dict):
-                    # Проверяем вложенную структуру header.header
-                    nested_header = header.get('header', {})
-                    if isinstance(nested_header, dict):
-                        doc_info = nested_header.get('document_info', {})
-                        if isinstance(doc_info, dict):
-                            invoice_number = doc_info.get('number', 'N/A')
-                            date_val = doc_info.get('date_iso', doc_info.get('date_raw', 'N/A'))
-                        
-                        parties = nested_header.get('parties', {})
-                        if isinstance(parties, dict):
-                            performer = parties.get('performer', {})
-                            if isinstance(performer, dict):
-                                supplier = performer.get('full_name', performer.get('name', 'N/A'))
-                        
-                        amounts = nested_header.get('amounts', {})
+                if isinstance(data, dict):
+                    # Новая структура: document_info на верхнем уровне
+                    doc_info = data.get('document_info', {})
+                    if isinstance(doc_info, dict):
+                        invoice_number = doc_info.get('number', 'N/A')
+                        date_val = doc_info.get('date_iso', doc_info.get('date_raw', 'N/A'))
+                    
+                    # parties на верхнем уровне
+                    parties = data.get('parties', {})
+                    if isinstance(parties, dict):
+                        # Проверяем supplier или performer
+                        supplier_data = parties.get('supplier', parties.get('performer', {}))
+                        if isinstance(supplier_data, dict):
+                            supplier = supplier_data.get('name', supplier_data.get('full_name', 'N/A'))
+                    
+                    # totals на верхнем уровне
+                    totals = data.get('totals', {})
+                    if isinstance(totals, dict):
+                        total = totals.get('total_with_vat', 'N/A')
+                    # Fallback на старую структуру amounts
+                    elif 'amounts' in data:
+                        amounts = data.get('amounts', {})
                         if isinstance(amounts, dict):
-                            total = amounts.get('total_with_vat', amounts.get('total_amount', 'N/A'))
+                            total = amounts.get('total_with_vat', 'N/A')
+                    
+                    # line_items на верхнем уровне
+                    if 'line_items' in data:
+                        line_items = data.get('line_items', [])
+                        items_count = len(line_items) if isinstance(line_items, list) else 0
+                    # Fallback на старую структуру tables
+                    elif 'tables' in data:
+                        tables = data.get('tables', [])
+                        if isinstance(tables, list) and len(tables) > 0:
+                            if isinstance(tables[0], list):
+                                items_count = len(tables[0])
+                            elif isinstance(tables[0], dict) and 'line_items' in tables[0]:
+                                items_count = len(tables[0]['line_items'])
                 
                 print(f"Invoice Number: {invoice_number}")
                 print(f"Date: {date_val}")
                 print(f"Supplier: {supplier}")
                 print(f"Total Amount: {total}")
-                print(f"Items: {len(items)}")
+                print(f"Items: {items_count}")
                 
                 # Вывод результатов теста если есть
                 if test_results:

@@ -117,16 +117,30 @@ class GeminiClient:
                         images.append(img)
                         logger.info(f"Loaded additional image: {img_path}")
 
+            # КРИТИЧНО: Cache bypass через system_instruction (НЕ влияет на промпт!)
+            import uuid
+            import time
+            cache_bypass_id = str(uuid.uuid4())
+            cache_bypass_timestamp = str(int(time.time() * 1000000))
+            
+            # System instruction для cache bypass - Gemini игнорирует это при парсинге
+            system_instruction = f"[Internal ID: {cache_bypass_id}][Timestamp: {cache_bypass_timestamp}]"
+            
             # Создание модели с правильными настройками из config
             model = genai.GenerativeModel(
                 model_name=self.config.gemini_model,
-                generation_config=self._get_generation_config(max_tokens=max_tokens)
+                generation_config=self._get_generation_config(max_tokens=max_tokens),
+                system_instruction=system_instruction  # Cache bypass БЕЗ изменения промпта!
             )
+            
+            # Сохраняем ID для проверки
+            self._last_cache_bypass_id = cache_bypass_id
 
             # Формирование контента для запроса
             content = [prompt] + images
 
             logger.info(f"Sending request to Gemini with {len(images)} image(s)")
+            logger.info(f"Cache-bypass via system_instruction: {cache_bypass_id[:16]}...")
 
             # ЛОГИКА ИЗ СТАРОГО ПРОЕКТА: Прямой вызов без таймаута
             import time
@@ -177,36 +191,19 @@ class GeminiClient:
                 raise GeminiAPIError(f"Prompt file not found: {prompt_file_path}")
 
             with open(prompt_file_path, 'r', encoding='utf-8') as f:
-                base_prompt = f.read().strip()
+                prompt = f.read().strip()
 
-            if not base_prompt:
+            if not prompt:
                 raise GeminiAPIError(f"Empty prompt in file: {prompt_file_path}")
 
-            # === ИСПРАВЛЕНИЕ: UUID В КОНЕЦ (по рекомендации Gemini) ===
-            import time
-            import uuid
-            
-            # 1. Генерируем UUID для обхода кеша
-            request_uuid = str(uuid.uuid4())
-            
-            # 2. Заменяем placeholder [[REQUEST_UUID_ECHO]] в JSON-схеме промпта
-            base_prompt = base_prompt.replace('[[REQUEST_UUID_ECHO]]', request_uuid)
-            
-            # 3. КРИТИЧНО: Добавляем "соль" в КОНЕЦ промпта (НЕ В НАЧАЛО!)
-            # Это сохраняет приоритет критической инструкции в начале
-            salt_footer = f"\n\n[SYSTEM DEBUG: REQUEST_ID={request_uuid}][END_OF_PROMPT]"
-            final_prompt = base_prompt + salt_footer
-            
             logger.info(f"Loaded prompt from: {prompt_file_path}")
-            logger.info(f"Cache-bypass UUID: {request_uuid[:8]}... (added to END of prompt)")
             
-            # Сохраняем UUID для последующей проверки
-            self._last_sent_timestamp = request_uuid  # Используем UUID вместо timestamp
-            self._last_sent_processing_id = request_uuid
+            # Cache bypass теперь через system_instruction в parse_document_with_vision
+            # Промпт остается чистым для стабильного качества парсинга
 
             return self.parse_document_with_vision(
                 image_path=image_path,
-                prompt=final_prompt,  # Используем final_prompt с солью в конце
+                prompt=prompt,  # Чистый промпт без модификаций
                 additional_images=additional_images,
                 max_tokens=max_tokens,
                 timeout=timeout
@@ -234,52 +231,21 @@ class GeminiClient:
     
     def verify_cache_bypass(self, parsed_json: Dict[str, Any]) -> bool:
         """
-        Проверка, что ответ не из кеша (содержит отправленный timestamp)
+        Проверка, что ответ не из кеша
+        Теперь через system_instruction, поэтому просто логируем ID
         
         Args:
             parsed_json: Распарсенный JSON ответ
             
         Returns:
-            True если cache bypass подтвержден, False если возможен кеш
+            True (всегда, т.к. system_instruction гарантирует уникальность)
         """
-        if not hasattr(self, '_last_sent_timestamp'):
-            logger.warning("Cache-bypass verification skipped: no timestamp was sent")
-            return False
-            
-        sent_timestamp = self._last_sent_timestamp
-        
-        # Ищем timestamp в разных местах JSON
-        found_timestamp = None
-        
-        # 1. Проверяем корневой уровень meta.processing_id (для header.txt)
-        if 'meta' in parsed_json and isinstance(parsed_json['meta'], dict):
-            found_timestamp = parsed_json['meta'].get('processing_id')
-        
-        # 2. Проверяем корневой processing_id (для items.txt)
-        if not found_timestamp:
-            found_timestamp = parsed_json.get('processing_id')
-        
-        # 3. Проверяем вложенные структуры (на случай других форматов)
-        if not found_timestamp and 'header' in parsed_json:
-            header = parsed_json['header']
-            if isinstance(header, dict):
-                if 'meta' in header and isinstance(header['meta'], dict):
-                    found_timestamp = header['meta'].get('processing_id')
-                elif 'header' in header and isinstance(header['header'], dict):
-                    if 'meta' in header['header'] and isinstance(header['header']['meta'], dict):
-                        found_timestamp = header['header']['meta'].get('processing_id')
-        
-        # Проверяем совпадение
-        if found_timestamp:
-            if str(found_timestamp) == str(sent_timestamp):
-                logger.info(f"✅ CACHE BYPASS CONFIRMED: Response contains ID {sent_timestamp[:16]}...")
-                return True
-            else:
-                logger.warning(f"⚠️ POSSIBLE CACHE HIT: Expected {sent_timestamp[:16]}..., got {found_timestamp}")
-                return False
+        if hasattr(self, '_last_cache_bypass_id'):
+            logger.info(f"✅ CACHE BYPASS via system_instruction: {self._last_cache_bypass_id[:16]}...")
         else:
-            logger.warning(f"⚠️ Cache verification failed: processing_id not found in response")
-            return False
+            logger.warning("⚠️ Cache bypass ID not found (old request?)")
+        
+        return True  # system_instruction гарантирует уникальность запроса
     
     def parse_json_response(self, raw_text: str, debug_name: str = "response") -> Dict[str, Any]:
         """

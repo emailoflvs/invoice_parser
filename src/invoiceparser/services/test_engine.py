@@ -27,6 +27,42 @@ class TestEngine:
         """
         self.config = config
         self.orchestrator = Orchestrator(config)
+    
+    def _normalize_quotes(self, text: str) -> str:
+        """
+        Нормализация кавычек для сравнения
+        Заменяет все типы кавычек на стандартные двойные кавычки
+        
+        Args:
+            text: Текст для нормализации
+            
+        Returns:
+            Текст с нормализованными кавычками
+        """
+        if not isinstance(text, str):
+            return text
+        
+        # Все типы кавычек заменяем на стандартные двойные
+        quote_variants = [
+            '"',  # ASCII двойные кавычки
+            '"',  # Левая типографская двойная кавычка
+            '"',  # Правая типографская двойная кавычка
+            '«',  # Французская левая кавычка
+            '»',  # Французская правая кавычка
+            '„',  # Немецкая нижняя кавычка
+            '‟',  # Двойная верхняя перевернутая кавычка
+            ''',  # Одинарная левая типографская
+            ''',  # Одинарная правая типографская
+            '‚',  # Одинарная нижняя
+            '‛',  # Одинарная верхняя перевернутая
+            "'",  # ASCII одинарная
+        ]
+        
+        result = text
+        for quote in quote_variants:
+            result = result.replace(quote, '"')
+        
+        return result
 
     def run_tests(self) -> Dict[str, Any]:
         """
@@ -263,27 +299,31 @@ class TestEngine:
             act = actual_items[i]
             
             # Сравниваем критичные поля
-            # 1. Артикул
-            exp_article = str(exp.get('article', '')).strip()
-            act_article = str(act.get('article', '')).strip()
+            # 1. Артикул (с нормализацией кавычек)
+            exp_article_orig = str(exp.get('article', '')).strip()
+            act_article_orig = str(act.get('article', '')).strip()
+            exp_article = self._normalize_quotes(exp_article_orig)
+            act_article = self._normalize_quotes(act_article_orig)
             if exp_article != act_article:
                 differences.append({
                     "path": f"items[{i}].article",
                     "type": "mismatch",
-                    "expected": exp_article,
-                    "actual": act_article,
+                    "expected": exp_article_orig,  # Оригинал для отображения
+                    "actual": act_article_orig,
                     "line": i + 1
                 })
             
-            # 2. Наименование
-            exp_name = str(exp.get('product_name', '')).strip()
-            act_name = str(act.get('product_name', '')).strip()
+            # 2. Наименование (с нормализацией кавычек)
+            exp_name_orig = str(exp.get('product_name', '')).strip()
+            act_name_orig = str(act.get('product_name', '')).strip()
+            exp_name = self._normalize_quotes(exp_name_orig)
+            act_name = self._normalize_quotes(act_name_orig)
             if exp_name != act_name:
                 differences.append({
                     "path": f"items[{i}].product_name",
                     "type": "mismatch",
-                    "expected": exp_name,
-                    "actual": act_name,
+                    "expected": exp_name_orig,  # Оригинал для отображения
+                    "actual": act_name_orig,
                     "line": i + 1
                 })
             
@@ -393,15 +433,17 @@ class TestEngine:
         exp_performer = exp_parties.get('performer', {})
         act_performer = act_parties.get('performer', {})
         
-        # 3.1. Название исполнителя
-        exp_perf_name = str(exp_performer.get('name', exp_performer.get('full_name', ''))).strip()
-        act_perf_name = str(act_performer.get('name', act_performer.get('full_name', ''))).strip()
+        # 3.1. Название исполнителя (с нормализацией кавычек)
+        exp_perf_name_orig = str(exp_performer.get('name', exp_performer.get('full_name', ''))).strip()
+        act_perf_name_orig = str(act_performer.get('name', act_performer.get('full_name', ''))).strip()
+        exp_perf_name = self._normalize_quotes(exp_perf_name_orig)
+        act_perf_name = self._normalize_quotes(act_perf_name_orig)
         if exp_perf_name and act_perf_name and exp_perf_name != act_perf_name:
             differences.append({
                 "path": "header.parties.performer.name",
                 "type": "mismatch",
-                "expected": exp_perf_name,
-                "actual": act_perf_name,
+                "expected": exp_perf_name_orig,  # Оригинал для отображения
+                "actual": act_perf_name_orig,
                 "description": "Название исполнителя"
             })
         
@@ -417,21 +459,24 @@ class TestEngine:
                 "description": "ЄДРПОУ исполнителя"
             })
         
-        # 3.3. Банк исполнителя (может быть в bank_name или bank_account.bank_name)
-        exp_perf_bank = str(exp_performer.get('bank_name', '')).strip()
-        if not exp_perf_bank and isinstance(exp_performer.get('bank_account'), dict):
-            exp_perf_bank = str(exp_performer['bank_account'].get('bank_name', '')).strip()
+        # 3.3. Банк исполнителя (может быть в bank_name или bank_account.bank_name, с нормализацией кавычек)
+        exp_perf_bank_orig = str(exp_performer.get('bank_name', '')).strip()
+        if not exp_perf_bank_orig and isinstance(exp_performer.get('bank_account'), dict):
+            exp_perf_bank_orig = str(exp_performer['bank_account'].get('bank_name', '')).strip()
         
-        act_perf_bank = str(act_performer.get('bank_name', '')).strip()
-        if not act_perf_bank and isinstance(act_performer.get('bank_account'), dict):
-            act_perf_bank = str(act_performer['bank_account'].get('bank_name', '')).strip()
+        act_perf_bank_orig = str(act_performer.get('bank_name', '')).strip()
+        if not act_perf_bank_orig and isinstance(act_performer.get('bank_account'), dict):
+            act_perf_bank_orig = str(act_performer['bank_account'].get('bank_name', '')).strip()
+        
+        exp_perf_bank = self._normalize_quotes(exp_perf_bank_orig)
+        act_perf_bank = self._normalize_quotes(act_perf_bank_orig)
         
         if exp_perf_bank and act_perf_bank and exp_perf_bank != act_perf_bank:
             differences.append({
                 "path": "header.parties.performer.bank_name",
                 "type": "mismatch",
-                "expected": exp_perf_bank,
-                "actual": act_perf_bank,
+                "expected": exp_perf_bank_orig,  # Оригинал для отображения
+                "actual": act_perf_bank_orig,
                 "description": "Банк исполнителя"
             })
         
@@ -439,15 +484,17 @@ class TestEngine:
         exp_customer = exp_parties.get('customer', {})
         act_customer = act_parties.get('customer', {})
         
-        # 4.1. Название заказчика
-        exp_cust_name = str(exp_customer.get('name', exp_customer.get('full_name', ''))).strip()
-        act_cust_name = str(act_customer.get('name', act_customer.get('full_name', ''))).strip()
+        # 4.1. Название заказчика (с нормализацией кавычек)
+        exp_cust_name_orig = str(exp_customer.get('name', exp_customer.get('full_name', ''))).strip()
+        act_cust_name_orig = str(act_customer.get('name', act_customer.get('full_name', ''))).strip()
+        exp_cust_name = self._normalize_quotes(exp_cust_name_orig)
+        act_cust_name = self._normalize_quotes(act_cust_name_orig)
         if exp_cust_name and act_cust_name and exp_cust_name != act_cust_name:
             differences.append({
                 "path": "header.parties.customer.name",
                 "type": "mismatch",
-                "expected": exp_cust_name,
-                "actual": act_cust_name,
+                "expected": exp_cust_name_orig,  # Оригинал для отображения
+                "actual": act_cust_name_orig,
                 "description": "Название заказчика"
             })
         
@@ -463,21 +510,24 @@ class TestEngine:
                 "description": "ЄДРПОУ заказчика"
             })
         
-        # 4.3. Банк заказчика (может быть в bank_name или bank_account.bank_name)
-        exp_cust_bank = str(exp_customer.get('bank_name', '')).strip()
-        if not exp_cust_bank and isinstance(exp_customer.get('bank_account'), dict):
-            exp_cust_bank = str(exp_customer['bank_account'].get('bank_name', '')).strip()
+        # 4.3. Банк заказчика (может быть в bank_name или bank_account.bank_name, с нормализацией кавычек)
+        exp_cust_bank_orig = str(exp_customer.get('bank_name', '')).strip()
+        if not exp_cust_bank_orig and isinstance(exp_customer.get('bank_account'), dict):
+            exp_cust_bank_orig = str(exp_customer['bank_account'].get('bank_name', '')).strip()
         
-        act_cust_bank = str(act_customer.get('bank_name', '')).strip()
-        if not act_cust_bank and isinstance(act_customer.get('bank_account'), dict):
-            act_cust_bank = str(act_customer['bank_account'].get('bank_name', '')).strip()
+        act_cust_bank_orig = str(act_customer.get('bank_name', '')).strip()
+        if not act_cust_bank_orig and isinstance(act_customer.get('bank_account'), dict):
+            act_cust_bank_orig = str(act_customer['bank_account'].get('bank_name', '')).strip()
+        
+        exp_cust_bank = self._normalize_quotes(exp_cust_bank_orig)
+        act_cust_bank = self._normalize_quotes(act_cust_bank_orig)
         
         if exp_cust_bank and act_cust_bank and exp_cust_bank != act_cust_bank:
             differences.append({
                 "path": "header.parties.customer.bank_name",
                 "type": "mismatch",
-                "expected": exp_cust_bank,
-                "actual": act_cust_bank,
+                "expected": exp_cust_bank_orig,  # Оригинал для отображения
+                "actual": act_cust_bank_orig,
                 "description": "Банк заказчика"
             })
         
@@ -631,9 +681,7 @@ class TestEngine:
                 
                 item = {}
                 # Маппинг полей - нужно поддерживать разные форматы
-                # Формат 1: {'№': '1', 'Артикул': '...', 'Продукція': '...', ...}
-                # Формат 2: {'№': '1', 'УКТ ЗЕД': '...', 'Товар': '...', ...}
-                # Формат 3: {'line_number': 1, 'article': '...', 'product_name': '...', ...}
+                # Разные форматы: с украинскими заголовками или нормализованными ключами
                 
                 # Номер строки / ID
                 if '№' in row:
