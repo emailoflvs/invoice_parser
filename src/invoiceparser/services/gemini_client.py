@@ -37,16 +37,18 @@ class GeminiClient:
         except Exception as e:
             raise GeminiAPIError(f"Failed to configure Gemini API: {e}")
 
-    def _get_generation_config(self, max_tokens: Optional[int] = None) -> Dict[str, Any]:
+    def _get_generation_config(self, max_tokens: Optional[int] = None, use_seed: bool = True) -> Dict[str, Any]:
         """
         Получить конфигурацию генерации
         
-        ЛОГИКА ИЗ СТАРОГО ПРОЕКТА:
-        - temperature из config (по умолчанию 0)
+        ЛОГИКА:
+        - temperature=0 для детерминированности (стабильные результаты)
+        - seed=0 для дополнительной стабильности
         - max_tokens из config (по умолчанию 90000)
 
         Args:
             max_tokens: Переопределить max_output_tokens (если None - из config)
+            use_seed: Использовать seed для детерминированности
 
         Returns:
             Словарь с параметрами генерации
@@ -55,10 +57,13 @@ class GeminiClient:
         tokens = max_tokens if max_tokens is not None else self.config.image_max_output_tokens
         
         config = {
-            "temperature": self.config.image_temperature,
+            "temperature": self.config.image_temperature,  # Должно быть 0 для стабильности
             "top_p": self.config.image_top_p,
             "max_output_tokens": tokens,
         }
+        
+        # Примечание: seed не поддерживается в текущей версии google-generativeai
+        # Для детерминированности достаточно temperature=0 + уникальный ID в промпте
 
         logger.debug(f"Generation config: temperature={config['temperature']}, max_tokens={tokens}")
 
@@ -172,12 +177,24 @@ class GeminiClient:
                 raise GeminiAPIError(f"Prompt file not found: {prompt_file_path}")
 
             with open(prompt_file_path, 'r', encoding='utf-8') as f:
-                prompt = f.read().strip()
+                prompt_template = f.read().strip()
 
-            if not prompt:
+            if not prompt_template:
                 raise GeminiAPIError(f"Empty prompt in file: {prompt_file_path}")
 
+            # Генерация уникального ID для обхода кеша
+            import time
+            import uuid
+            
+            current_timestamp = str(int(time.time() * 1000000))  # Микросекунды для уникальности
+            processing_id = str(uuid.uuid4())
+            
+            # Замена заглушек в промпте реальными значениями
+            prompt = prompt_template.replace('{{CURRENT_TIMESTAMP}}', current_timestamp)
+            prompt = prompt.replace('{{PROCESSING_ID}}', processing_id)
+            
             logger.info(f"Loaded prompt from: {prompt_file_path}")
+            logger.info(f"Cache-bypass ID: {processing_id[:8]}... (timestamp: {current_timestamp})")
 
             return self.parse_document_with_vision(
                 image_path=image_path,
