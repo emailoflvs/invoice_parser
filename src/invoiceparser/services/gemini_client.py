@@ -177,32 +177,36 @@ class GeminiClient:
                 raise GeminiAPIError(f"Prompt file not found: {prompt_file_path}")
 
             with open(prompt_file_path, 'r', encoding='utf-8') as f:
-                prompt_template = f.read().strip()
+                base_prompt = f.read().strip()
 
-            if not prompt_template:
+            if not base_prompt:
                 raise GeminiAPIError(f"Empty prompt in file: {prompt_file_path}")
 
-            # Генерация уникального ID для обхода кеша
+            # === ИСПРАВЛЕНИЕ: UUID В КОНЕЦ (по рекомендации Gemini) ===
             import time
             import uuid
             
-            current_timestamp = str(int(time.time() * 1000000))  # Микросекунды для уникальности
-            processing_id = str(uuid.uuid4())
+            # 1. Генерируем UUID для обхода кеша
+            request_uuid = str(uuid.uuid4())
             
-            # Замена заглушек в промпте реальными значениями
-            prompt = prompt_template.replace('{{CURRENT_TIMESTAMP}}', current_timestamp)
-            prompt = prompt.replace('{{PROCESSING_ID}}', processing_id)
+            # 2. Заменяем placeholder [[REQUEST_UUID_ECHO]] в JSON-схеме промпта
+            base_prompt = base_prompt.replace('[[REQUEST_UUID_ECHO]]', request_uuid)
+            
+            # 3. КРИТИЧНО: Добавляем "соль" в КОНЕЦ промпта (НЕ В НАЧАЛО!)
+            # Это сохраняет приоритет критической инструкции в начале
+            salt_footer = f"\n\n[SYSTEM DEBUG: REQUEST_ID={request_uuid}][END_OF_PROMPT]"
+            final_prompt = base_prompt + salt_footer
             
             logger.info(f"Loaded prompt from: {prompt_file_path}")
-            logger.info(f"Cache-bypass ID: {processing_id[:8]}... (timestamp: {current_timestamp})")
+            logger.info(f"Cache-bypass UUID: {request_uuid[:8]}... (added to END of prompt)")
             
-            # Сохраняем timestamp для последующей проверки
-            self._last_sent_timestamp = current_timestamp
-            self._last_sent_processing_id = processing_id
+            # Сохраняем UUID для последующей проверки
+            self._last_sent_timestamp = request_uuid  # Используем UUID вместо timestamp
+            self._last_sent_processing_id = request_uuid
 
             return self.parse_document_with_vision(
                 image_path=image_path,
-                prompt=prompt,
+                prompt=final_prompt,  # Используем final_prompt с солью в конце
                 additional_images=additional_images,
                 max_tokens=max_tokens,
                 timeout=timeout
