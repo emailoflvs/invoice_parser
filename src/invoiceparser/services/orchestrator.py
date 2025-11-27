@@ -187,12 +187,17 @@ class Orchestrator:
             expected_normalized = test_engine._normalize_structure(expected_data)
             actual_normalized = test_engine._normalize_structure(parsed_data)
             
-            # Сравниваем товары
-            differences = test_engine._compare_items(
+            # 1. Сравниваем header (шапку)
+            header_differences = test_engine._compare_header(expected_normalized, actual_normalized)
+            
+            # 2. Сравниваем items (товары)
+            item_differences = test_engine._compare_items(
                 expected_normalized.get('items', []),
                 actual_normalized.get('items', [])
             )
             
+            # Объединяем все различия
+            differences = header_differences + item_differences
             error_count = len(differences)
             
             # Формируем краткий список ошибок для вывода (первые 5)
@@ -368,31 +373,42 @@ class Orchestrator:
                 # Формируем полный список ошибок для JSON
                 all_errors = []
                 for diff in test_results.get('all_differences', []):
-                    line = diff.get('line', '?')
-                    path = diff.get('path', '').split('.')[-1]
+                    line = diff.get('line')
+                    path = diff.get('path', '')
                     expected = diff.get('expected', 'N/A')
                     actual = diff.get('actual', 'N/A')
+                    description = diff.get('description', '')
                     
-                    # Определяем название поля
-                    if path == 'article':
-                        field_name = 'артикул'
-                    elif path == 'product_name':
-                        field_name = 'наименование'
-                    elif path == 'quantity':
-                        field_name = 'количество'
-                    elif path == 'price_no_vat':
-                        field_name = 'цена'
-                    elif path == 'sum_no_vat':
-                        field_name = 'сумма'
+                    # Если есть line - это ошибка в items
+                    if line is not None:
+                        path_last = path.split('.')[-1]
+                        if path_last == 'article':
+                            field_name = 'артикул'
+                        elif path_last == 'product_name':
+                            field_name = 'наименование'
+                        elif path_last == 'quantity':
+                            field_name = 'количество'
+                        elif path_last == 'price_no_vat':
+                            field_name = 'цена'
+                        elif path_last == 'sum_no_vat':
+                            field_name = 'сумма'
+                        else:
+                            field_name = path_last
+                        
+                        all_errors.append({
+                            "line": line,
+                            "field": field_name,
+                            "expected": str(expected),
+                            "actual": str(actual)
+                        })
                     else:
-                        field_name = path
-                    
-                    all_errors.append({
-                        "line": line,
-                        "field": field_name,
-                        "expected": str(expected),
-                        "actual": str(actual)
-                    })
+                        # Это ошибка в header
+                        all_errors.append({
+                            "section": "header",
+                            "field": description or path,
+                            "expected": str(expected)[:100],
+                            "actual": str(actual)[:100]
+                        })
                 
                 export_data_with_test = {
                     "test_results": {

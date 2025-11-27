@@ -176,26 +176,36 @@ class TestEngine:
         expected_normalized = self._normalize_structure(expected_data)
         actual_normalized = self._normalize_structure(actual_dict)
 
-        # Сравниваем товары построчно (самое важное)
+        # 1. Сравниваем HEADER (шапку документа)
+        header_differences = self._compare_header(expected_normalized, actual_normalized)
+        
+        # 2. Сравниваем ITEMS (товары)
         item_differences = self._compare_items(
             expected_normalized.get('items', []),
             actual_normalized.get('items', [])
         )
         
-        # Формируем результат только по товарам
-        accuracy = 1.0
+        # Объединяем все различия
+        all_differences = header_differences + item_differences
+        
+        # Формируем результат по всем данным (header + items)
+        total_fields = 0
+        # Header: примерно 10 ключевых полей (номер, дата, исполнитель, заказчик, банки и т.д.)
+        total_fields += 10
+        # Items: по 5 полей на каждую строку
         if len(expected_normalized.get('items', [])) > 0:
-            item_fields_count = len(expected_normalized['items']) * 5  # article, name, qty, price, amount
-            accuracy = 1.0 - (len(item_differences) / item_fields_count) if item_fields_count > 0 else 1.0
+            total_fields += len(expected_normalized['items']) * 5
+        
+        accuracy = 1.0 - (len(all_differences) / total_fields) if total_fields > 0 else 1.0
         
         comparison = {
-            "match": len(item_differences) == 0,
+            "match": len(all_differences) == 0,
             "accuracy": max(0.0, min(1.0, accuracy)),
-            "differences": item_differences
+            "differences": all_differences
         }
         
-        # Фильтруем различия, оставляя только реальные ошибки данных
-        real_differences = item_differences  # Товары - это и есть реальные данные
+        # Все различия - это реальные ошибки данных
+        real_differences = all_differences
 
         # Формирование результата
         test_result = {
@@ -324,6 +334,174 @@ class TestEngine:
         
         return differences
     
+    def _compare_header(self, expected_norm: Dict[str, Any], actual_norm: Dict[str, Any]) -> List[Dict]:
+        """
+        Сравнение данных шапки документа
+        
+        Args:
+            expected_norm: Нормализованные ожидаемые данные
+            actual_norm: Нормализованные фактические данные
+        
+        Returns:
+            Список различий в шапке
+        """
+        differences = []
+        
+        # Извлекаем данные из header (они могут быть на разных уровнях)
+        exp_doc_info = {}
+        act_doc_info = {}
+        exp_parties = {}
+        act_parties = {}
+        
+        # Пытаемся найти document_info
+        if 'document_info' in expected_norm:
+            exp_doc_info = expected_norm['document_info']
+        if 'document_info' in actual_norm:
+            act_doc_info = actual_norm['document_info']
+        
+        # Пытаемся найти parties
+        if 'parties' in expected_norm:
+            exp_parties = expected_norm['parties']
+        if 'parties' in actual_norm:
+            act_parties = actual_norm['parties']
+        
+        # 1. Номер документа
+        exp_number = str(exp_doc_info.get('number', '')).strip()
+        act_number = str(act_doc_info.get('number', '')).strip()
+        if exp_number and act_number and exp_number != act_number:
+            differences.append({
+                "path": "header.document_info.number",
+                "type": "mismatch",
+                "expected": exp_number,
+                "actual": act_number,
+                "description": "Номер документа"
+            })
+        
+        # 2. Дата документа
+        exp_date = str(exp_doc_info.get('date_iso', exp_doc_info.get('date', ''))).strip()
+        act_date = str(act_doc_info.get('date_iso', act_doc_info.get('date', ''))).strip()
+        if exp_date and act_date and exp_date != act_date:
+            differences.append({
+                "path": "header.document_info.date",
+                "type": "mismatch",
+                "expected": exp_date,
+                "actual": act_date,
+                "description": "Дата документа"
+            })
+        
+        # 3. Исполнитель (performer)
+        exp_performer = exp_parties.get('performer', {})
+        act_performer = act_parties.get('performer', {})
+        
+        # 3.1. Название исполнителя
+        exp_perf_name = str(exp_performer.get('name', exp_performer.get('full_name', ''))).strip()
+        act_perf_name = str(act_performer.get('name', act_performer.get('full_name', ''))).strip()
+        if exp_perf_name and act_perf_name and exp_perf_name != act_perf_name:
+            differences.append({
+                "path": "header.parties.performer.name",
+                "type": "mismatch",
+                "expected": exp_perf_name,
+                "actual": act_perf_name,
+                "description": "Название исполнителя"
+            })
+        
+        # 3.2. ЄДРПОУ исполнителя
+        exp_perf_edrpou = str(exp_performer.get('edrpou', '')).strip()
+        act_perf_edrpou = str(act_performer.get('edrpou', '')).strip()
+        if exp_perf_edrpou and act_perf_edrpou and exp_perf_edrpou != act_perf_edrpou:
+            differences.append({
+                "path": "header.parties.performer.edrpou",
+                "type": "mismatch",
+                "expected": exp_perf_edrpou,
+                "actual": act_perf_edrpou,
+                "description": "ЄДРПОУ исполнителя"
+            })
+        
+        # 3.3. Банк исполнителя (может быть в bank_name или bank_account.bank_name)
+        exp_perf_bank = str(exp_performer.get('bank_name', '')).strip()
+        if not exp_perf_bank and isinstance(exp_performer.get('bank_account'), dict):
+            exp_perf_bank = str(exp_performer['bank_account'].get('bank_name', '')).strip()
+        
+        act_perf_bank = str(act_performer.get('bank_name', '')).strip()
+        if not act_perf_bank and isinstance(act_performer.get('bank_account'), dict):
+            act_perf_bank = str(act_performer['bank_account'].get('bank_name', '')).strip()
+        
+        if exp_perf_bank and act_perf_bank and exp_perf_bank != act_perf_bank:
+            differences.append({
+                "path": "header.parties.performer.bank_name",
+                "type": "mismatch",
+                "expected": exp_perf_bank,
+                "actual": act_perf_bank,
+                "description": "Банк исполнителя"
+            })
+        
+        # 4. Заказчик (customer)
+        exp_customer = exp_parties.get('customer', {})
+        act_customer = act_parties.get('customer', {})
+        
+        # 4.1. Название заказчика
+        exp_cust_name = str(exp_customer.get('name', exp_customer.get('full_name', ''))).strip()
+        act_cust_name = str(act_customer.get('name', act_customer.get('full_name', ''))).strip()
+        if exp_cust_name and act_cust_name and exp_cust_name != act_cust_name:
+            differences.append({
+                "path": "header.parties.customer.name",
+                "type": "mismatch",
+                "expected": exp_cust_name,
+                "actual": act_cust_name,
+                "description": "Название заказчика"
+            })
+        
+        # 4.2. ЄДРПОУ заказчика
+        exp_cust_edrpou = str(exp_customer.get('edrpou', '')).strip()
+        act_cust_edrpou = str(act_customer.get('edrpou', '')).strip()
+        if exp_cust_edrpou and act_cust_edrpou and exp_cust_edrpou != act_cust_edrpou:
+            differences.append({
+                "path": "header.parties.customer.edrpou",
+                "type": "mismatch",
+                "expected": exp_cust_edrpou,
+                "actual": act_cust_edrpou,
+                "description": "ЄДРПОУ заказчика"
+            })
+        
+        # 4.3. Банк заказчика (может быть в bank_name или bank_account.bank_name)
+        exp_cust_bank = str(exp_customer.get('bank_name', '')).strip()
+        if not exp_cust_bank and isinstance(exp_customer.get('bank_account'), dict):
+            exp_cust_bank = str(exp_customer['bank_account'].get('bank_name', '')).strip()
+        
+        act_cust_bank = str(act_customer.get('bank_name', '')).strip()
+        if not act_cust_bank and isinstance(act_customer.get('bank_account'), dict):
+            act_cust_bank = str(act_customer['bank_account'].get('bank_name', '')).strip()
+        
+        if exp_cust_bank and act_cust_bank and exp_cust_bank != act_cust_bank:
+            differences.append({
+                "path": "header.parties.customer.bank_name",
+                "type": "mismatch",
+                "expected": exp_cust_bank,
+                "actual": act_cust_bank,
+                "description": "Банк заказчика"
+            })
+        
+        # 5. Проверка текстовых блоков (raw_block) - для поиска ошибок типа "59 вместо 559"
+        exp_raw = str(exp_performer.get('raw_block', '')).lower()
+        act_raw = str(act_performer.get('raw_block', '')).lower()
+        
+        # Проверяем, есть ли номер документа в raw_block и совпадает ли он
+        if exp_number and act_number:
+            exp_has_num = exp_number in exp_raw
+            act_has_num = act_number in act_raw
+            
+            # Если номер должен быть в тексте, но его нет или он неправильный
+            if exp_has_num and not act_has_num:
+                differences.append({
+                    "path": "header.raw_block.document_number",
+                    "type": "mismatch",
+                    "expected": f"Номер {exp_number} в тексте",
+                    "actual": f"Номер не найден или неверный в тексте",
+                    "description": "Номер документа в текстовом блоке"
+                })
+        
+        return differences
+    
     def _extract_comparable_values(self, data: Any, prefix: str = "") -> Dict[str, Any]:
         """
         Извлечение всех значимых значений из структуры независимо от вложенности
@@ -382,19 +560,49 @@ class TestEngine:
         """
         normalized = {}
         
-        # Если есть вложенный header.header, разворачиваем его
-        if 'header' in data and isinstance(data['header'], dict):
+        # Извлекаем document_info и parties
+        # Формат 1: данные на корневом уровне (эталонный JSON)
+        if 'document_info' in data and 'parties' in data:
+            normalized['document_info'] = data.get('document_info', {})
+            normalized['parties'] = data.get('parties', {})
+            normalized['contract_reference'] = data.get('contract_reference', {})
+        # Формат 2: данные внутри header (actual JSON)
+        elif 'header' in data and isinstance(data['header'], dict):
             header_data = data['header']
             if 'header' in header_data:
                 # Двойной header - берем внутренний
                 header_data = header_data['header']
             
-            # Извлекаем данные из header
-            for key, value in header_data.items():
-                if key not in ['raw_block']:
-                    normalized[key] = value
+            # Извлекаем данные из header и нормализуем названия полей
+            normalized['document_info'] = header_data.get('document_info', {})
+            
+            # Нормализуем parties: full_name -> name
+            parties = header_data.get('parties', {})
+            if isinstance(parties, dict):
+                normalized_parties = {}
+                for role, party_data in parties.items():
+                    if isinstance(party_data, dict):
+                        normalized_party = party_data.copy()
+                        # Маппинг: full_name -> name
+                        if 'full_name' in normalized_party and 'name' not in normalized_party:
+                            normalized_party['name'] = normalized_party['full_name']
+                        normalized_parties[role] = normalized_party
+                    else:
+                        normalized_parties[role] = party_data
+                normalized['parties'] = normalized_parties
+            else:
+                normalized['parties'] = parties
+            
+            normalized['contract_reference'] = header_data.get('contract_reference', {})
         
-        # Обрабатываем tables -> items
+        # Обрабатываем items
+        # Формат 1: items уже есть на корневом уровне (эталонный JSON)
+        if 'items' in data and isinstance(data['items'], list):
+            # Просто копируем items, они уже в правильном формате
+            normalized['items'] = data['items']
+            return normalized
+        
+        # Формат 2: tables -> items (actual JSON от Gemini)
         if 'tables' in data and isinstance(data['tables'], list) and len(data['tables']) > 0:
             # Берем первую таблицу
             table = data['tables'][0]
