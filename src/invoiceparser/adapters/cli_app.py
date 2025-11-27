@@ -109,7 +109,17 @@ class CLIApp:
             # Вывод результата
             if result["success"]:
                 elapsed_time = result.get('elapsed_time', 0)
-                print(f"✓ Document parsed successfully (took {elapsed_time:.2f}s)\n")
+                
+                # Проверяем наличие результатов тестирования
+                test_results = result.get('test_results')
+                if test_results and test_results.get('status') == 'tested':
+                    error_count = test_results.get('errors', 0)
+                    if error_count == 0:
+                        print(f"✓ Document parsed successfully (took {elapsed_time:.2f}s) - 0 errors\n")
+                    else:
+                        print(f"✓ Document parsed successfully (took {elapsed_time:.2f}s) - {error_count} errors found\n")
+                else:
+                    print(f"✓ Document parsed successfully (took {elapsed_time:.2f}s)\n")
                 
                 # result['data'] может быть InvoiceData объектом или словарем
                 data = result['data']
@@ -136,6 +146,23 @@ class CLIApp:
                 print(f"Supplier: {supplier}")
                 print(f"Total Amount: {total}")
                 print(f"Items: {len(items)}")
+                
+                # Вывод результатов теста если есть
+                if test_results:
+                    print(f"\n--- Test Results ---")
+                    if test_results.get('status') == 'tested':
+                        error_count = test_results.get('errors', 0)
+                        if error_count == 0:
+                            print(f"✅ All data matched - 0 errors")
+                        else:
+                            print(f"❌ Found {error_count} errors:")
+                            for sample in test_results.get('sample_errors', []):
+                                print(f"   • {sample}")
+                    elif test_results.get('status') == 'no_reference':
+                        print(f"ℹ️  No reference file found - skipped testing")
+                    else:
+                        print(f"⚠️  Test error: {test_results.get('message', 'Unknown')}")
+                
                 print(f"\nResults saved to: {self.config.output_dir}")
                 print(f"Total processing time: {elapsed_time:.2f}s")
             else:

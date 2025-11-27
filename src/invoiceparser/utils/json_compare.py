@@ -12,17 +12,10 @@ def normalize_value(value: Any) -> Any:
     if value is None:
         return None
     if isinstance(value, str):
-        # Убираем пробелы и приводим к lowercase для сравнения
-        normalized = value.strip().lower()
-        # Нормализуем числа в строках (убираем пробелы между цифрами)
-        normalized = re.sub(r'(\d)\s+(\d)', r'\1\2', normalized)
-        # Нормализуем валюты
-        if normalized in ['грн', 'грн.', 'uah']:
-            return 'uah'
-        # Нормализуем даты
-        date_match = re.match(r'(\d{4})-(\d{2})-(\d{2})', normalized)
-        if date_match:
-            return normalized
+        # Убираем только начальные/конечные пробелы, но НЕ lowercase
+        normalized = value.strip()
+        # Нормализуем множественные пробелы в один
+        normalized = re.sub(r'\s+', ' ', normalized)
         return normalized
     if isinstance(value, (int, float)):
         return Decimal(str(value))
@@ -70,8 +63,8 @@ def compare_json(expected: Dict[str, Any], actual: Dict[str, Any], path: str = "
     """
     # Служебные поля, которые игнорируются при сравнении
     IGNORED_FIELDS = {
-        'model', 'timestamp', 'source_file', 'pages', 'tables', 
-        'fields', 'raw_block', 'header'  # Игнорируем дубликаты данных
+        'model', 'timestamp', 'source_file', 'pages',
+        'raw_block'  # Только технические поля, данные не игнорируем
     }
     
     differences = []

@@ -21,6 +21,12 @@ from ..utils.file_ops import ensure_dir, get_file_hash
 logger = logging.getLogger(__name__)
 
 
+def _lazy_import_test_engine():
+    """Ленивый импорт TestEngine для избежания циклических зависимостей"""
+    from ..services.test_engine import TestEngine
+    return TestEngine
+
+
 class Orchestrator:
     """Главный оркестратор обработки документов"""
 
@@ -70,6 +76,13 @@ class Orchestrator:
             else:
                 raise ProcessingError(f"Unsupported file format: {file_extension}")
 
+            # Тестирование если MODE=TEST
+            test_result = None
+            if self.config.mode.upper() == 'TEST':
+                test_result = self._run_test_for_document(document_path, result)
+                # Добавляем результаты теста в данные
+                result['test_results'] = test_result
+
             # Экспорт результатов
             self._export_results(document_path, result)
 
@@ -81,7 +94,8 @@ class Orchestrator:
                 "document": str(document_path),
                 "data": result,
                 "processed_at": datetime.now().isoformat(),
-                "elapsed_time": elapsed_time
+                "elapsed_time": elapsed_time,
+                "test_results": test_result
             }
 
         except Exception as e:
@@ -137,6 +151,92 @@ class Orchestrator:
         logger.info(f"Image preprocessed: {processed_image}")
 
         return self._parse_with_gemini(processed_image)
+    
+    def _run_test_for_document(self, document_path: Path, parsed_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Запуск теста для одного документа
+        
+        Args:
+            document_path: Путь к исходному документу
+            parsed_data: Распарсенные данные
+            
+        Returns:
+            Результаты теста
+        """
+        try:
+            TestEngine = _lazy_import_test_engine()
+            test_engine = TestEngine(self.config)
+            
+            # Ищем эталонный JSON
+            expected_path = self.config.examples_dir / f"{document_path.stem}.json"
+            
+            if not expected_path.exists():
+                logger.info(f"No reference file for {document_path.name} - skipping test")
+                return {
+                    "status": "no_reference",
+                    "message": f"No reference file found: {expected_path.name}",
+                    "errors": 0
+                }
+            
+            # Загружаем эталон
+            with open(expected_path, 'r', encoding='utf-8') as f:
+                expected_data = json.load(f)
+            
+            # Нормализуем структуры
+            expected_normalized = test_engine._normalize_structure(expected_data)
+            actual_normalized = test_engine._normalize_structure(parsed_data)
+            
+            # Сравниваем товары
+            differences = test_engine._compare_items(
+                expected_normalized.get('items', []),
+                actual_normalized.get('items', [])
+            )
+            
+            error_count = len(differences)
+            
+            # Формируем краткий список ошибок для вывода (первые 5)
+            sample_errors = []
+            for diff in differences[:5]:
+                line = diff.get('line', '?')
+                path = diff.get('path', '').split('.')[-1]
+                expected = diff.get('expected', 'N/A')
+                actual = diff.get('actual', 'N/A')
+                
+                # Укорачиваем значения
+                exp_str = str(expected)[:30] + '...' if len(str(expected)) > 30 else str(expected)
+                act_str = str(actual)[:30] + '...' if len(str(actual)) > 30 else str(actual)
+                
+                if path == 'article':
+                    field_name = 'артикул'
+                elif path == 'product_name':
+                    field_name = 'наименование'
+                elif path == 'quantity':
+                    field_name = 'количество'
+                elif path == 'price_no_vat':
+                    field_name = 'цена'
+                elif path == 'sum_no_vat':
+                    field_name = 'сумма'
+                else:
+                    field_name = path
+                
+                sample_errors.append(f"строка {line}: {field_name}: {exp_str} vs {act_str}")
+            
+            return {
+                "status": "tested",
+                "reference_file": expected_path.name,
+                "errors": error_count,
+                "total_items": len(expected_normalized.get('items', [])),
+                "sample_errors": sample_errors,
+                "all_differences": differences  # Полный список для JSON
+            }
+            
+        except Exception as e:
+            logger.error(f"Test failed for {document_path}: {e}", exc_info=True)
+            return {
+                "status": "error",
+                "message": str(e),
+                "errors": -1
+            }
 
     def _parse_with_gemini(
         self,
@@ -243,18 +343,75 @@ class Orchestrator:
             logger.error(f"Gemini parsing failed: {e}", exc_info=True)
             raise GeminiAPIError(f"Failed to parse document with Gemini: {e}")
 
+    
     def _export_results(self, document_path: Path, invoice_data: Dict[str, Any]):
         """
         Экспорт результатов
 
         Args:
             document_path: Путь к исходному документу
-            invoice_data: Данные счета
+            invoice_data: Данные счета (может содержать test_results)
         """
         try:
-            # Экспорт в JSON
-            json_path = self.json_exporter.export(document_path, invoice_data)
-            logger.info(f"Exported to JSON: {json_path}")
+            # Если есть результаты теста, добавляем их в данные перед экспортом
+            if 'test_results' in invoice_data and invoice_data['test_results']:
+                test_results = invoice_data['test_results']
+                
+                # Создаем копию данных для экспорта с результатами теста
+                export_data = invoice_data.copy()
+                
+                # Добавляем секцию test_results в начало файла
+                # Формируем полный список ошибок для JSON
+                all_errors = []
+                for diff in test_results.get('all_differences', []):
+                    line = diff.get('line', '?')
+                    path = diff.get('path', '').split('.')[-1]
+                    expected = diff.get('expected', 'N/A')
+                    actual = diff.get('actual', 'N/A')
+                    
+                    # Определяем название поля
+                    if path == 'article':
+                        field_name = 'артикул'
+                    elif path == 'product_name':
+                        field_name = 'наименование'
+                    elif path == 'quantity':
+                        field_name = 'количество'
+                    elif path == 'price_no_vat':
+                        field_name = 'цена'
+                    elif path == 'sum_no_vat':
+                        field_name = 'сумма'
+                    else:
+                        field_name = path
+                    
+                    all_errors.append({
+                        "line": line,
+                        "field": field_name,
+                        "expected": str(expected),
+                        "actual": str(actual)
+                    })
+                
+                export_data_with_test = {
+                    "test_results": {
+                        "status": test_results.get('status'),
+                        "errors": test_results.get('errors', 0),
+                        "reference_file": test_results.get('reference_file', 'N/A'),
+                        "sample_errors": test_results.get('sample_errors', []),
+                        "all_errors": all_errors  # Полный список всех ошибок
+                    }
+                }
+                
+                # Добавляем остальные данные
+                for key, value in export_data.items():
+                    if key != 'test_results':
+                        export_data_with_test[key] = value
+                
+                # Экспорт в JSON с результатами теста
+                json_path = self.json_exporter.export(document_path, export_data_with_test)
+                logger.info(f"Exported to JSON with test results: {json_path}")
+            else:
+                # Экспорт в JSON без результатов теста
+                json_path = self.json_exporter.export(document_path, invoice_data)
+                logger.info(f"Exported to JSON: {json_path}")
 
             # Экспорт в Excel отключен (только JSON)
 
