@@ -195,6 +195,10 @@ class GeminiClient:
             
             logger.info(f"Loaded prompt from: {prompt_file_path}")
             logger.info(f"Cache-bypass ID: {processing_id[:8]}... (timestamp: {current_timestamp})")
+            
+            # Сохраняем timestamp для последующей проверки
+            self._last_sent_timestamp = current_timestamp
+            self._last_sent_processing_id = processing_id
 
             return self.parse_document_with_vision(
                 image_path=image_path,
@@ -224,6 +228,54 @@ class GeminiClient:
             logger.error(f"Connection test failed: {e}")
             return False
     
+    def verify_cache_bypass(self, parsed_json: Dict[str, Any]) -> bool:
+        """
+        Проверка, что ответ не из кеша (содержит отправленный timestamp)
+        
+        Args:
+            parsed_json: Распарсенный JSON ответ
+            
+        Returns:
+            True если cache bypass подтвержден, False если возможен кеш
+        """
+        if not hasattr(self, '_last_sent_timestamp'):
+            logger.warning("Cache-bypass verification skipped: no timestamp was sent")
+            return False
+            
+        sent_timestamp = self._last_sent_timestamp
+        
+        # Ищем timestamp в разных местах JSON
+        found_timestamp = None
+        
+        # Проверяем header.meta.processing_id
+        if 'header' in parsed_json:
+            header = parsed_json['header']
+            if isinstance(header, dict):
+                # Может быть вложенная структура header.header.meta
+                if 'header' in header and isinstance(header['header'], dict):
+                    meta = header['header'].get('meta', {})
+                else:
+                    meta = header.get('meta', {})
+                
+                if isinstance(meta, dict):
+                    found_timestamp = meta.get('processing_id')
+        
+        # Проверяем корневой уровень
+        if not found_timestamp:
+            found_timestamp = parsed_json.get('processing_id')
+        
+        # Проверяем совпадение
+        if found_timestamp:
+            if str(found_timestamp) == str(sent_timestamp):
+                logger.info(f"✅ CACHE BYPASS CONFIRMED: Response contains ID {sent_timestamp[:16]}...")
+                return True
+            else:
+                logger.warning(f"⚠️ POSSIBLE CACHE HIT: Expected {sent_timestamp[:16]}..., got {found_timestamp}")
+                return False
+        else:
+            logger.warning(f"⚠️ Cache verification failed: processing_id not found in response")
+            return False
+    
     def parse_json_response(self, raw_text: str, debug_name: str = "response") -> Dict[str, Any]:
         """
         Парсинг JSON ответа с обработкой ошибок
@@ -232,6 +284,7 @@ class GeminiClient:
         - Правильная очистка от markdown (startswith/endswith)
         - Детальное логирование ошибок
         - Сохранение debug файла при ошибках
+        - Проверка cache-bypass
         
         Args:
             raw_text: Сырой ответ от Gemini
@@ -256,7 +309,12 @@ class GeminiClient:
         text = text.strip()
         
         try:
-            return json.loads(text)
+            parsed = json.loads(text)
+            
+            # Проверяем cache-bypass
+            self.verify_cache_bypass(parsed)
+            
+            return parsed
         except json.JSONDecodeError as e:
             # ЛОГИКА ИЗ СТАРОГО ПРОЕКТА: детальное логирование
             logger.error(f"JSON Decode Error at position {e.pos}: {e.msg}")

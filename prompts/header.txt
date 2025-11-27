@@ -77,8 +77,7 @@ other_fields:
 
 {
     "meta": {
-        "processing_id": "значение из SYSTEM INFO PROCESSING_ID",
-        "timestamp": "..."
+    "processing_id": "ОБЯЗАТЕЛЬНО скопируй timestamp из PROCESS_TIMESTAMP в начале запроса"
     },
 "header": {
 "document_info": { ... },

@@ -30,7 +30,7 @@ class Config(BaseSettings):
     gemini_api_key: str = Field(alias="GEMINI_API_KEY")
     gemini_model: str = Field(alias="GEMINI_MODEL")
     gemini_timeout: int = Field(alias="GEMINI_TIMEOUT")
-    vision_seed: str = Field(alias="VISION_SEED")
+    # vision_seed больше не используется - timestamp генерируется динамически
     prompts_dir: Path = Field(alias="PROMPTS_DIR")
     prompt_header_path: Path = Field(alias="PROMPT_HEADER_PATH")
     prompt_items_path: Path = Field(alias="PROMPT_ITEMS_PATH")
