@@ -154,25 +154,25 @@ class Orchestrator:
         logger.info(f"Image preprocessed: {processed_image}")
 
         return self._parse_with_gemini(processed_image)
-    
+
     def _run_test_for_document(self, document_path: Path, parsed_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Запуск теста для одного документа
-        
+
         Args:
             document_path: Путь к исходному документу
             parsed_data: Распарсенные данные
-            
+
         Returns:
             Результаты теста
         """
         try:
             TestEngine = _lazy_import_test_engine()
             test_engine = TestEngine(self.config)
-            
+
             # Ищем эталонный JSON
             expected_path = self.config.examples_dir / f"{document_path.stem}.json"
-            
+
             if not expected_path.exists():
                 logger.info(f"No reference file for {document_path.name} - skipping test")
                 return {
@@ -180,28 +180,28 @@ class Orchestrator:
                     "message": f"No reference file found: {expected_path.name}",
                     "errors": 0
                 }
-            
+
             # Загружаем эталон
             with open(expected_path, 'r', encoding='utf-8') as f:
                 expected_data = json.load(f)
-            
+
             # Нормализуем структуры
             expected_normalized = test_engine._normalize_structure(expected_data)
             actual_normalized = test_engine._normalize_structure(parsed_data)
-            
+
             # 1. Сравниваем header (шапку)
             header_differences = test_engine._compare_header(expected_normalized, actual_normalized)
-            
+
             # 2. Сравниваем items (товары)
             item_differences = test_engine._compare_items(
                 expected_normalized.get('items', []),
                 actual_normalized.get('items', [])
             )
-            
+
             # Объединяем все различия
             differences = header_differences + item_differences
             error_count = len(differences)
-            
+
             # Формируем краткий список ошибок для вывода (первые 5)
             sample_errors = []
             for diff in differences[:5]:
@@ -209,11 +209,11 @@ class Orchestrator:
                 path = diff.get('path', '').split('.')[-1]
                 expected = diff.get('expected', 'N/A')
                 actual = diff.get('actual', 'N/A')
-                
+
                 # Укорачиваем значения
                 exp_str = str(expected)[:30] + '...' if len(str(expected)) > 30 else str(expected)
                 act_str = str(actual)[:30] + '...' if len(str(actual)) > 30 else str(actual)
-                
+
                 if path == 'article':
                     field_name = 'артикул'
                 elif path == 'product_name':
@@ -226,9 +226,9 @@ class Orchestrator:
                     field_name = 'сумма'
                 else:
                     field_name = path
-                
+
                 sample_errors.append(f"строка {line}: {field_name}: {exp_str} vs {act_str}")
-            
+
             return {
                 "status": "tested",
                 "reference_file": expected_path.name,
@@ -237,7 +237,7 @@ class Orchestrator:
                 "sample_errors": sample_errors,
                 "all_differences": differences  # Полный список для JSON
             }
-            
+
         except Exception as e:
             logger.error(f"Test failed for {document_path}: {e}", exc_info=True)
             return {
@@ -253,7 +253,7 @@ class Orchestrator:
     ) -> Dict[str, Any]:
         """
         Парсинг документа с помощью Gemini
-        
+
         ЛОГИКА ИЗ СТАРОГО ПРОЕКТА:
         - Возвращаем простой dict (без Pydantic!)
         - Структура как в старом gemini_parser.py
@@ -267,11 +267,11 @@ class Orchestrator:
             Распарсенные данные в формате dict
         """
         import time
-        
+
         logger.info("Starting Gemini parsing")
 
         try:
-            # Парсинг header (первый запрос) 
+            # Парсинг header (первый запрос)
             logger.info("Parsing header...")
             header_response = self.gemini_client.parse_with_prompt_file(
                 image_path=main_image,
@@ -283,7 +283,7 @@ class Orchestrator:
 
             # Парсинг JSON из ответа (используем публичный метод!)
             header_data = self.gemini_client.parse_json_response(header_response, "header")
-            
+
             # Парсинг items (второй запрос)
             logger.info("Parsing items...")
             items_response = self.gemini_client.parse_with_prompt_file(
@@ -298,6 +298,18 @@ class Orchestrator:
             # Парсинг JSON из ответа
             items_data = self.gemini_client.parse_json_response(items_response, "items")
 
+            # INFO: Логируем структуру items_data
+            logger.info(f"items_data keys: {items_data.keys() if isinstance(items_data, dict) else type(items_data)}")
+            if isinstance(items_data, dict) and "tables" in items_data:
+                logger.info(f"tables count: {len(items_data['tables'])}")
+                if items_data['tables']:
+                    first_table = items_data['tables'][0]
+                    logger.info(f"First table type: {type(first_table)}")
+                    if isinstance(first_table, dict):
+                        logger.info(f"First table keys: {first_table.keys()}")
+                    elif isinstance(first_table, list):
+                        logger.info(f"First table is list with {len(first_table)} items")
+
             # Проверка ошибок
             if "error" in header_data or "error" in items_data:
                 logger.error("Parsing failed")
@@ -310,11 +322,11 @@ class Orchestrator:
                     "header_error": header_data.get('error'),
                     "items_error": items_data.get('error')
                 }
-            
+
             # Если данные упакованы в header объект, распаковываем
             if "header" in header_data and isinstance(header_data["header"], dict):
                 header_data = header_data["header"]
-            
+
             # МАГИЯ: Post-processing через InvoicePostProcessor
             # Превращаем сырые данные Gemini в финальную структуру
             logger.info("Post-processing parsed data...")
@@ -326,7 +338,7 @@ class Orchestrator:
                  "other_fields": header_data.get("other_fields", {})},
                 items_data
             )
-            
+
             # Добавляем служебные данные
             result["_meta"] = {
                 "source_file": str(main_image),
@@ -334,7 +346,7 @@ class Orchestrator:
                 "timestamp": datetime.now().isoformat(),
                 "processing_time_seconds": 0  # Будет обновлено позже
             }
-            
+
             items_count = len(result.get("line_items", []))
             logger.info(f"Parsing completed: {items_count} items found")
 
@@ -344,7 +356,7 @@ class Orchestrator:
             logger.error(f"Gemini parsing failed: {e}", exc_info=True)
             raise GeminiAPIError(f"Failed to parse document with Gemini: {e}")
 
-    
+
     def _export_results(self, document_path: Path, invoice_data: Dict[str, Any]) -> Optional[Path]:
         """
         Экспорт результатов
@@ -352,7 +364,7 @@ class Orchestrator:
         Args:
             document_path: Путь к исходному документу
             invoice_data: Данные счета (может содержать test_results)
-        
+
         Returns:
             Путь к сохраненному JSON файлу
         """
@@ -360,10 +372,10 @@ class Orchestrator:
             # Если есть результаты теста, добавляем их в данные перед экспортом
             if 'test_results' in invoice_data and invoice_data['test_results']:
                 test_results = invoice_data['test_results']
-                
+
                 # Создаем копию данных для экспорта с результатами теста
                 export_data = invoice_data.copy()
-                
+
                 # Добавляем секцию test_results в начало файла
                 # Формируем полный список ошибок для JSON
                 all_errors = []
@@ -373,7 +385,7 @@ class Orchestrator:
                     expected = diff.get('expected', 'N/A')
                     actual = diff.get('actual', 'N/A')
                     description = diff.get('description', '')
-                    
+
                     # Если есть line - это ошибка в items
                     if line is not None:
                         path_last = path.split('.')[-1]
@@ -389,7 +401,7 @@ class Orchestrator:
                             field_name = 'сумма'
                         else:
                             field_name = path_last
-                        
+
                         all_errors.append({
                             "line": line,
                             "field": field_name,
@@ -404,7 +416,7 @@ class Orchestrator:
                             "expected": str(expected)[:100],
                             "actual": str(actual)[:100]
                         })
-                
+
                 export_data_with_test = {
                     "test_results": {
                         "status": test_results.get('status'),
@@ -414,12 +426,12 @@ class Orchestrator:
                         "all_errors": all_errors  # Полный список всех ошибок
                     }
                 }
-                
+
                 # Добавляем остальные данные
                 for key, value in export_data.items():
                     if key != 'test_results':
                         export_data_with_test[key] = value
-                
+
                 # Экспорт в JSON с результатами теста
                 json_path = self.json_exporter.export(document_path, export_data_with_test)
                 logger.info(f"Exported to JSON with test results: {json_path}")

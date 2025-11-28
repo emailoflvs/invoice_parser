@@ -27,21 +27,21 @@ class TestEngine:
         """
         self.config = config
         self.orchestrator = Orchestrator(config)
-    
+
     def _normalize_quotes(self, text: str) -> str:
         """
         Нормализация кавычек для сравнения
         Заменяет все типы кавычек на стандартные двойные кавычки
-        
+
         Args:
             text: Текст для нормализации
-            
+
         Returns:
             Текст с нормализованными кавычками
         """
         if not isinstance(text, str):
             return text
-        
+
         # Все типы кавычек заменяем на стандартные двойные
         quote_variants = [
             '"',  # ASCII двойные кавычки
@@ -57,11 +57,11 @@ class TestEngine:
             '‛',  # Одинарная верхняя перевернутая
             "'",  # ASCII одинарная
         ]
-        
+
         result = text
         for quote in quote_variants:
             result = result.replace(quote, '"')
-        
+
         return result
 
     def run_tests(self) -> Dict[str, Any]:
@@ -138,7 +138,7 @@ class TestEngine:
     def _find_test_documents(self, examples_dir: Path) -> List[Tuple[Path, Path]]:
         """
         Поиск тестовых документов и соответствующих эталонов
-        
+
         Логика: для каждого документа в /invoices ищется эталон в /examples с именем {filename}.json
 
         Args:
@@ -151,7 +151,7 @@ class TestEngine:
 
         # Ищем документы в invoices_dir
         invoices_dir = self.config.invoices_dir
-        
+
         if not invoices_dir.exists():
             logger.warning(f"Invoices directory not found: {invoices_dir}")
             return test_documents
@@ -214,32 +214,32 @@ class TestEngine:
 
         # 1. Сравниваем HEADER (шапку документа)
         header_differences = self._compare_header(expected_normalized, actual_normalized)
-        
+
         # 2. Сравниваем ITEMS (товары)
         item_differences = self._compare_items(
             expected_normalized.get('items', []),
             actual_normalized.get('items', [])
         )
-        
+
         # Объединяем все различия
         all_differences = header_differences + item_differences
-        
+
         # Формируем результат по всем данным (header + items)
         total_fields = 0
-        # Header: примерно 10 ключевых полей (номер, дата, исполнитель, заказчик, банки и т.д.)
+        # Header: document metadata fields
         total_fields += 10
         # Items: по 5 полей на каждую строку
         if len(expected_normalized.get('items', [])) > 0:
             total_fields += len(expected_normalized['items']) * 5
-        
+
         accuracy = 1.0 - (len(all_differences) / total_fields) if total_fields > 0 else 1.0
-        
+
         comparison = {
             "match": len(all_differences) == 0,
             "accuracy": max(0.0, min(1.0, accuracy)),
             "differences": all_differences
         }
-        
+
         # Все различия - это реальные ошибки данных
         real_differences = all_differences
 
@@ -260,22 +260,22 @@ class TestEngine:
             logger.warning(f"Real data differences: {len(real_differences)}")
 
         return test_result
-    
+
     def _compare_items(self, expected_items: List[Dict], actual_items: List[Dict]) -> List[Dict]:
         """
         Построчное сравнение товаров
-        
+
         Args:
             expected_items: Ожидаемые товары
             actual_items: Фактические товары
-            
+
         Returns:
             Список различий
         """
         differences = []
-        
+
         max_len = max(len(expected_items), len(actual_items))
-        
+
         for i in range(max_len):
             if i >= len(expected_items):
                 differences.append({
@@ -285,7 +285,7 @@ class TestEngine:
                     "actual": f"Лишняя строка {i+1}"
                 })
                 continue
-            
+
             if i >= len(actual_items):
                 differences.append({
                     "path": f"items[{i}]",
@@ -294,12 +294,12 @@ class TestEngine:
                     "actual": None
                 })
                 continue
-            
+
             exp = expected_items[i]
             act = actual_items[i]
-            
+
             # Сравниваем критичные поля
-            # 1. Артикул (с нормализацией кавычек)
+            # Field comparison with quote normalization
             exp_article_orig = str(exp.get('article', '')).strip()
             act_article_orig = str(act.get('article', '')).strip()
             exp_article = self._normalize_quotes(exp_article_orig)
@@ -312,7 +312,7 @@ class TestEngine:
                     "actual": act_article_orig,
                     "line": i + 1
                 })
-            
+
             # 2. Наименование (с нормализацией кавычек)
             exp_name_orig = str(exp.get('product_name', '')).strip()
             act_name_orig = str(act.get('product_name', '')).strip()
@@ -326,7 +326,7 @@ class TestEngine:
                     "actual": act_name_orig,
                     "line": i + 1
                 })
-            
+
             # 3. Количество (с точностью до 0.01)
             try:
                 exp_qty = float(exp.get('quantity', 0))
@@ -341,7 +341,7 @@ class TestEngine:
                     })
             except (ValueError, TypeError):
                 pass
-            
+
             # 4. Цена (с точностью до 0.01)
             try:
                 exp_price = float(exp.get('price_no_vat', 0))
@@ -356,7 +356,7 @@ class TestEngine:
                     })
             except (ValueError, TypeError):
                 pass
-            
+
             # 5. Сумма (с точностью до 0.01)
             try:
                 exp_sum = float(exp.get('sum_no_vat', 0))
@@ -371,40 +371,40 @@ class TestEngine:
                     })
             except (ValueError, TypeError):
                 pass
-        
+
         return differences
-    
+
     def _compare_header(self, expected_norm: Dict[str, Any], actual_norm: Dict[str, Any]) -> List[Dict]:
         """
         Сравнение данных шапки документа
-        
+
         Args:
             expected_norm: Нормализованные ожидаемые данные
             actual_norm: Нормализованные фактические данные
-        
+
         Returns:
             Список различий в шапке
         """
         differences = []
-        
+
         # Извлекаем данные из header (они могут быть на разных уровнях)
         exp_doc_info = {}
         act_doc_info = {}
         exp_parties = {}
         act_parties = {}
-        
+
         # Пытаемся найти document_info
         if 'document_info' in expected_norm:
             exp_doc_info = expected_norm['document_info']
         if 'document_info' in actual_norm:
             act_doc_info = actual_norm['document_info']
-        
+
         # Пытаемся найти parties
         if 'parties' in expected_norm:
             exp_parties = expected_norm['parties']
         if 'parties' in actual_norm:
             act_parties = actual_norm['parties']
-        
+
         # 1. Номер документа
         exp_number = str(exp_doc_info.get('number', '')).strip()
         act_number = str(act_doc_info.get('number', '')).strip()
@@ -416,7 +416,7 @@ class TestEngine:
                 "actual": act_number,
                 "description": "Номер документа"
             })
-        
+
         # 2. Дата документа
         exp_date = str(exp_doc_info.get('date_iso', exp_doc_info.get('date', ''))).strip()
         act_date = str(act_doc_info.get('date_iso', act_doc_info.get('date', ''))).strip()
@@ -428,11 +428,11 @@ class TestEngine:
                 "actual": act_date,
                 "description": "Дата документа"
             })
-        
+
         # 3. Исполнитель (performer)
         exp_performer = exp_parties.get('performer', {})
         act_performer = act_parties.get('performer', {})
-        
+
         # 3.1. Название исполнителя (с нормализацией кавычек)
         exp_perf_name_orig = str(exp_performer.get('name', exp_performer.get('full_name', ''))).strip()
         act_perf_name_orig = str(act_performer.get('name', act_performer.get('full_name', ''))).strip()
@@ -446,7 +446,7 @@ class TestEngine:
                 "actual": act_perf_name_orig,
                 "description": "Название исполнителя"
             })
-        
+
         # 3.2. ЄДРПОУ исполнителя
         exp_perf_edrpou = str(exp_performer.get('edrpou', '')).strip()
         act_perf_edrpou = str(act_performer.get('edrpou', '')).strip()
@@ -458,19 +458,19 @@ class TestEngine:
                 "actual": act_perf_edrpou,
                 "description": "ЄДРПОУ исполнителя"
             })
-        
+
         # 3.3. Банк исполнителя (может быть в bank_name или bank_account.bank_name, с нормализацией кавычек)
         exp_perf_bank_orig = str(exp_performer.get('bank_name', '')).strip()
         if not exp_perf_bank_orig and isinstance(exp_performer.get('bank_account'), dict):
             exp_perf_bank_orig = str(exp_performer['bank_account'].get('bank_name', '')).strip()
-        
+
         act_perf_bank_orig = str(act_performer.get('bank_name', '')).strip()
         if not act_perf_bank_orig and isinstance(act_performer.get('bank_account'), dict):
             act_perf_bank_orig = str(act_performer['bank_account'].get('bank_name', '')).strip()
-        
+
         exp_perf_bank = self._normalize_quotes(exp_perf_bank_orig)
         act_perf_bank = self._normalize_quotes(act_perf_bank_orig)
-        
+
         if exp_perf_bank and act_perf_bank and exp_perf_bank != act_perf_bank:
             differences.append({
                 "path": "header.parties.performer.bank_name",
@@ -479,12 +479,12 @@ class TestEngine:
                 "actual": act_perf_bank_orig,
                 "description": "Банк исполнителя"
             })
-        
+
         # 4. Заказчик (customer)
         exp_customer = exp_parties.get('customer', {})
         act_customer = act_parties.get('customer', {})
-        
-        # 4.1. Название заказчика (с нормализацией кавычек)
+
+        # Customer name field comparison
         exp_cust_name_orig = str(exp_customer.get('name', exp_customer.get('full_name', ''))).strip()
         act_cust_name_orig = str(act_customer.get('name', act_customer.get('full_name', ''))).strip()
         exp_cust_name = self._normalize_quotes(exp_cust_name_orig)
@@ -495,10 +495,10 @@ class TestEngine:
                 "type": "mismatch",
                 "expected": exp_cust_name_orig,  # Оригинал для отображения
                 "actual": act_cust_name_orig,
-                "description": "Название заказчика"
+                "description": "Customer name mismatch"
             })
-        
-        # 4.2. ЄДРПОУ заказчика
+
+        # Tax ID comparison
         exp_cust_edrpou = str(exp_customer.get('edrpou', '')).strip()
         act_cust_edrpou = str(act_customer.get('edrpou', '')).strip()
         if exp_cust_edrpou and act_cust_edrpou and exp_cust_edrpou != act_cust_edrpou:
@@ -507,39 +507,39 @@ class TestEngine:
                 "type": "mismatch",
                 "expected": exp_cust_edrpou,
                 "actual": act_cust_edrpou,
-                "description": "ЄДРПОУ заказчика"
+                "description": "Tax ID mismatch"
             })
-        
-        # 4.3. Банк заказчика (может быть в bank_name или bank_account.bank_name, с нормализацией кавычек)
+
+        # Bank name comparison
         exp_cust_bank_orig = str(exp_customer.get('bank_name', '')).strip()
         if not exp_cust_bank_orig and isinstance(exp_customer.get('bank_account'), dict):
             exp_cust_bank_orig = str(exp_customer['bank_account'].get('bank_name', '')).strip()
-        
+
         act_cust_bank_orig = str(act_customer.get('bank_name', '')).strip()
         if not act_cust_bank_orig and isinstance(act_customer.get('bank_account'), dict):
             act_cust_bank_orig = str(act_customer['bank_account'].get('bank_name', '')).strip()
-        
+
         exp_cust_bank = self._normalize_quotes(exp_cust_bank_orig)
         act_cust_bank = self._normalize_quotes(act_cust_bank_orig)
-        
+
         if exp_cust_bank and act_cust_bank and exp_cust_bank != act_cust_bank:
             differences.append({
                 "path": "header.parties.customer.bank_name",
                 "type": "mismatch",
                 "expected": exp_cust_bank_orig,  # Оригинал для отображения
                 "actual": act_cust_bank_orig,
-                "description": "Банк заказчика"
+                "description": "Bank name mismatch"
             })
-        
+
         # 5. Проверка текстовых блоков (raw_block) - для поиска ошибок типа "59 вместо 559"
         exp_raw = str(exp_performer.get('raw_block', '')).lower()
         act_raw = str(act_performer.get('raw_block', '')).lower()
-        
+
         # Проверяем, есть ли номер документа в raw_block и совпадает ли он
         if exp_number and act_number:
             exp_has_num = exp_number in exp_raw
             act_has_num = act_number in act_raw
-            
+
             # Если номер должен быть в тексте, но его нет или он неправильный
             if exp_has_num and not act_has_num:
                 differences.append({
@@ -549,28 +549,28 @@ class TestEngine:
                     "actual": f"Номер не найден или неверный в тексте",
                     "description": "Номер документа в текстовом блоке"
                 })
-        
+
         return differences
-    
+
     def _extract_comparable_values(self, data: Any, prefix: str = "") -> Dict[str, Any]:
         """
         Извлечение всех значимых значений из структуры независимо от вложенности
-        
+
         Рекурсивно обходит структуру и извлекает все "листовые" значения
         (строки, числа), игнорируя структуру и названия полей.
-        
+
         Args:
             data: Исходные данные
             prefix: Префикс пути (для отладки)
-            
+
         Returns:
             Словарь с плоской структурой {описание: значение}
         """
         values = {}
-        
+
         if data is None:
             return values
-        
+
         if isinstance(data, dict):
             for key, value in data.items():
                 # Игнорируем служебные поля
@@ -593,23 +593,23 @@ class TestEngine:
                 values[prefix] = data
             elif data is not None:
                 values[prefix] = str(data)
-        
+
         return values
-    
+
     def _normalize_structure(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Нормализация структуры данных для сравнения
-        
+
         Приводит разные форматы вывода к единому виду для корректного сравнения
-        
+
         Args:
             data: Исходные данные
-            
+
         Returns:
             Нормализованные данные
         """
         normalized = {}
-        
+
         # Извлекаем document_info и parties
         # Формат 1: данные на корневом уровне (эталонный JSON)
         if 'document_info' in data and 'parties' in data:
@@ -622,10 +622,10 @@ class TestEngine:
             if 'header' in header_data:
                 # Двойной header - берем внутренний
                 header_data = header_data['header']
-            
+
             # Извлекаем данные из header и нормализуем названия полей
             normalized['document_info'] = header_data.get('document_info', {})
-            
+
             # Нормализуем parties: full_name -> name
             parties = header_data.get('parties', {})
             if isinstance(parties, dict):
@@ -642,124 +642,31 @@ class TestEngine:
                 normalized['parties'] = normalized_parties
             else:
                 normalized['parties'] = parties
-            
+
             normalized['contract_reference'] = header_data.get('contract_reference', {})
-        
+
         # Обрабатываем items
         # Формат 1: items уже есть на корневом уровне (эталонный JSON)
         if 'items' in data and isinstance(data['items'], list):
             # Просто копируем items, они уже в правильном формате
             normalized['items'] = data['items']
             return normalized
-        
+
         # Формат 2: tables -> items (actual JSON от Gemini)
         if 'tables' in data and isinstance(data['tables'], list) and len(data['tables']) > 0:
             # Берем первую таблицу
             table = data['tables'][0]
-            
+
             # Таблица может быть списком строк или словарем с ключом rows
             rows = []
             if isinstance(table, list):
                 rows = table
             elif isinstance(table, dict) and 'rows' in table:
                 rows = table['rows']
-            
-            # Преобразуем rows в items
-            items = []
-            for row in rows:
-                # Пропускаем итоговые строки (где нет номера или наименование начинается с "Разом", "Сума", "Всього")
-                row_num = row.get('№', '')
-                product_name = row.get('Продукція', row.get('Товар', row.get('product_name', row.get('name', ''))))
-                
-                # Проверяем, является ли строка итоговой
-                if not row_num or str(row_num).strip() == '':
-                    # Проверяем наименование
-                    if isinstance(product_name, str):
-                        product_name_lower = product_name.lower().strip()
-                        if any(keyword in product_name_lower for keyword in ['разом', 'сума', 'всього', 'итого', 'пдв']):
-                            continue  # Пропускаем итоговую строку
-                
-                item = {}
-                # Маппинг полей - нужно поддерживать разные форматы
-                # Разные форматы: с украинскими заголовками или нормализованными ключами
-                
-                # Номер строки / ID
-                if '№' in row:
-                    try:
-                        item['id'] = int(row['№'])
-                    except (ValueError, TypeError):
-                        item['id'] = row['№']
-                elif 'line_number' in row:
-                    item['id'] = row['line_number']
-                
-                # Артикул (может быть в разных полях)
-                if 'Артикул' in row:
-                    item['article'] = str(row['Артикул']).strip()
-                elif 'УКТ ЗЕД' in row:
-                    item['article'] = str(row['УКТ ЗЕД']).strip()
-                elif 'article' in row:
-                    item['article'] = str(row['article']).strip()
-                elif 'sku' in row:
-                    item['article'] = str(row['sku']).strip()
-                elif 'ukt_zed_code' in row:
-                    item['article'] = str(row['ukt_zed_code']).strip()
-                
-                # Наименование
-                if 'Продукція' in row:
-                    item['product_name'] = str(row['Продукція']).strip()
-                elif 'Товар' in row:
-                    item['product_name'] = str(row['Товар']).strip()
-                elif 'product_name' in row:
-                    item['product_name'] = str(row['product_name']).strip()
-                elif 'name' in row:
-                    item['product_name'] = str(row['name']).strip()
-                elif 'item_name' in row:
-                    item['product_name'] = str(row['item_name']).strip()
-                
-                # Количество
-                if 'Кількість' in row:
-                    qty_str = str(row['Кількість']).replace('шт', '').replace(' ', '').replace(',', '.').strip()
-                    try:
-                        item['quantity'] = float(qty_str)
-                    except:
-                        item['quantity'] = 0
-                elif 'quantity' in row:
-                    item['quantity'] = row['quantity']
-                
-                # Единица измерения
-                if 'Кількість' in row and 'шт' in str(row['Кількість']):
-                    item['unit'] = 'шт'
-                elif 'unit' in row:
-                    item['unit'] = row['unit']
-                
-                # Цена
-                if 'Ціна без ПДВ' in row:
-                    price_str = str(row['Ціна без ПДВ']).replace(' ', '').replace(',', '.').strip()
-                    try:
-                        item['price_no_vat'] = float(price_str)
-                    except:
-                        item['price_no_vat'] = 0
-                elif 'unit_price' in row:
-                    item['price_no_vat'] = row['unit_price']
-                elif 'price' in row:
-                    item['price_no_vat'] = row['price']
-                
-                # Сумма
-                if 'Сума без ПДВ' in row:
-                    sum_str = str(row['Сума без ПДВ']).replace(' ', '').replace(',', '.').strip()
-                    try:
-                        item['sum_no_vat'] = float(sum_str)
-                    except:
-                        item['sum_no_vat'] = 0
-                elif 'total_price' in row:
-                    item['sum_no_vat'] = row['total_price']
-                elif 'amount' in row:
-                    item['sum_no_vat'] = row['amount']
-                
-                items.append(item)
-            
-            normalized['items'] = items
-        
+
+            # Просто берем rows как есть - без преобразований
+            normalized['items'] = rows
+
         # Если items уже есть напрямую, используем их
         if 'items' in data:
             normalized['items'] = data['items']
@@ -784,56 +691,56 @@ class TestEngine:
                 if 'sum_without_vat' in item:
                     mapped_item['sum_no_vat'] = item['sum_without_vat']
                 normalized['items'].append(mapped_item)
-        
+
         # Копируем остальные поля верхнего уровня
         for key in ['document_info', 'parties', 'contract_reference', 'totals', 'signatures', 'references', 'annotations']:
             if key in data:
                 normalized[key] = data[key]
-        
+
         return normalized
-    
+
     def _filter_real_differences(self, differences: List[Dict]) -> List[Dict]:
         """
         Фильтрация различий - оставляем только реальные ошибки в данных
-        
+
         Args:
             differences: Список всех различий
-            
+
         Returns:
             Список реальных ошибок данных
         """
         real_diffs = []
-        
+
         # Список полей, которые можно игнорировать при сравнении
         IGNORE_PATHS_CONTAINING = [
             'raw_block',  # Сырые данные
             'timestamp',  # Служебная метка времени
             'model',      # Название модели
         ]
-        
+
         for diff in differences:
             path = diff.get('path', '')
             diff_type = diff.get('type', '')
-            
+
             # Проверяем, не содержит ли путь игнорируемые поля
             if any(ignore in path for ignore in IGNORE_PATHS_CONTAINING):
                 continue
-            
+
             # Все типы различий важны для данных
             real_diffs.append(diff)
-        
+
         return real_diffs
-    
+
     def _get_readable_description(self, path: str, diff_type: str = '') -> str:
         """
-        Преобразование пути в читаемое описание
+        Преобразование технического пути в читаемый формат
         
         Args:
             path: Путь типа "line_items[0].ukt_zed_code"
             diff_type: Тип различия
-            
+        
         Returns:
-            Читаемое описание типа "артикул в строке 1"
+            Путь с номером строки: "ukt_zed_code (строка 1)"
         """
         import re
         
@@ -841,58 +748,29 @@ class TestEngine:
         match = re.search(r'\[(\d+)\]', path)
         row_num = int(match.group(1)) + 1 if match else None
         
-        # Определяем тип поля
-        path_lower = path.lower()
-        if 'article' in path_lower or 'ukt_zed' in path_lower or 'sku' in path_lower or 'code' in path_lower:
-            field_name = "артикул"
-        elif 'product_name' in path_lower or 'item_name' in path_lower or ('name' in path_lower and 'line_items' in path):
-            field_name = "наименование"
-        elif 'quantity' in path_lower:
-            field_name = "количество"
-        elif 'price' in path_lower and 'unit' in path_lower:
-            field_name = "цена"
-        elif 'amount' in path_lower or 'sum' in path_lower:
-            field_name = "сумма"
-        elif 'inn' in path_lower or 'edrpou' in path_lower or 'ipn' in path_lower or 'едрпоу' in path_lower:
-            field_name = "ЕДРПОУ/ІПН"
-        elif 'address' in path_lower or 'адрес' in path_lower:
-            field_name = "адрес"
-        elif 'phone' in path_lower:
-            field_name = "телефон"
-        elif 'date' in path_lower and 'document' not in path_lower:
-            field_name = "дата"
-        elif 'number' in path_lower and 'document' not in path_lower and 'line' not in path_lower:
-            field_name = "номер"
-        elif 'supplier' in path_lower or 'виконавець' in path_lower:
-            field_name = "поставщик"
-        elif 'customer' in path_lower or 'замовник' in path_lower:
-            field_name = "заказчик"
-        elif 'contract' in path_lower or 'договір' in path_lower:
-            field_name = "договор"
-        else:
-            # Берем последнюю часть пути
-            field_name = path.split('.')[-1].replace('_', ' ')
-        
+        # Берем последнюю часть пути (техническое название поля)
+        field_name = path.split('.')[-1].replace('_', ' ')
+
         # Добавляем префикс для missing полей
         prefix = ""
         if diff_type == 'missing_in_actual':
             prefix = "[отсутствует] "
         elif diff_type == 'missing_in_expected':
             prefix = "[лишнее] "
-        
+
         # Формируем описание
         if row_num:
             return f"{prefix}{field_name} в строке {row_num}"
         else:
             return f"{prefix}{field_name}"
-    
+
     def _format_value_for_display(self, value: Any) -> str:
         """
         Форматирование значения для отображения
-        
+
         Args:
             value: Значение
-            
+
         Returns:
             Отформатированная строка
         """
@@ -900,7 +778,7 @@ class TestEngine:
             return "отсутствует"
         if isinstance(value, (dict, list)):
             return f"{type(value).__name__}"
-        
+
         value_str = str(value)
         # Ограничиваем длину
         if len(value_str) > 50:
@@ -939,13 +817,13 @@ class TestEngine:
                     if not test['passed']:
                         doc_name = Path(test['document']).name
                         print(f"📄 {doc_name}")
-                        
+
                         if 'error' in test:
                             print(f"   ❌ Error: {test['error']}\n")
                         elif 'differences' in test:
                             diff_count = len(test['differences'])
                             print(f"   ⚠️  Total differences: {diff_count}\n")
-                            
+
                             # Выводим список реальных ошибок данных
                             if diff_count == 0:
                                 print("   ✅ No data errors found\n")
@@ -959,17 +837,17 @@ class TestEngine:
                                     expected = diff.get('expected', '')
                                     actual = diff.get('actual', '')
                                     line = diff.get('line', None)
-                                    
+
                                     # Извлекаем читаемое описание из пути
                                     description = self._get_readable_description(path, diff_type)
-                                    
+
                                     # Форматируем значения для вывода
                                     exp_str = self._format_value_for_display(expected)
                                     act_str = self._format_value_for_display(actual)
-                                    
+
                                     # Добавляем номер строки если есть
                                     line_prefix = f"строка {line}: " if line else ""
-                                    
+
                                     # Компактный вывод
                                     if diff_type == 'missing_in_actual':
                                         print(f"   {i}. {line_prefix}{description} - ожидалось '{exp_str}'")
@@ -977,7 +855,7 @@ class TestEngine:
                                         print(f"   {i}. {line_prefix}{description} - получено '{act_str}'")
                                     else:
                                         print(f"   {i}. {line_prefix}{description}: {exp_str} vs {act_str}")
-                            
+
                             if diff_count > display_limit:
                                 print(f"   ... и еще {diff_count - display_limit} ошибок")
                                 print(f"   Полный отчет: {output_path}\n")

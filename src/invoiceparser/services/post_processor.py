@@ -13,29 +13,56 @@ class InvoicePostProcessor:
     Класс для превращения сырых ответов Gemini в идеальную структуру Invoice
     """
 
-    # Маппинг ключей из промпта (Items) в целевой JSON
-    ITEMS_KEY_MAPPING = {
-        "ROW_NUMBER": "row_number",
-        "ITEM_NAME": "item_name",
-        "ARTICLE_CODE": "ukt_zed_code",
-        "SKU_CODE": "ukt_zed_code",
-        "QUANTITY": "quantity",
-        "UNIT": "unit",
-        "UNIT_OF_MEASURE": "unit",
-        "PRICE_SINGLE": "price_without_vat",
-        "PRICE_UNIT": "price_without_vat",
-        "AMOUNT_ROW": "sum_without_vat",
-        "AMOUNT_TOTAL_NO_VAT": "sum_without_vat",
-        "VAT_RATE": "vat_rate",
-        # Украинские варианты (если модель вернет с оригинальными заголовками)
-        "№": "row_number",
-        "Артикул": "ukt_zed_code",
-        "УКТ ЗЕД": "ukt_zed_code",
-        "Товар": "item_name",
-        "Продукція": "item_name",
-        "Кількість": "quantity",
-        "Ціна без ПДВ": "price_without_vat",
-        "Сума без ПДВ": "sum_without_vat"
+    # Маппинг АБСТРАКТНЫХ РОЛЕЙ (из column_mapping) в целевые ключи JSON
+    # НЕТ КОНКРЕТНЫХ ЗАГОЛОВКОВ - только универсальные роли
+    ABSTRACT_TO_TARGET_MAP = {
+        # Индексы/номера строк
+        "row_index": "row_number",
+        "index_field": "row_number",
+        "line_number": "row_number",
+        "line_number_field": "row_number",
+
+        # Коды товаров/артикулы
+        "product_code": "ukt_zed_code",
+        "product_code_field": "ukt_zed_code",
+        "product_article_field": "ukt_zed_code",
+        "article_code": "ukt_zed_code",
+        "sku_code": "ukt_zed_code",
+        "item_code": "ukt_zed_code",
+        "ukt_zed_field": "ukt_zed_code",
+
+        # Наименования
+        "product_description": "item_name",
+        "product_description_field": "item_name",
+        "item_description": "item_name",
+        "product_name": "item_name",
+        "item_name_field": "item_name",
+
+        # Количество
+        "quantity_field": "quantity",
+        "qty_field": "quantity",
+        "amount_field": "quantity",
+
+        # Единицы измерения
+        "unit_field": "unit",
+        "measure_field": "unit",
+        "uom_field": "unit",
+
+        # Цены
+        "price_field": "price_without_vat",
+        "unit_price_field": "price_without_vat",
+        "single_price": "price_without_vat",
+        "price_without_vat_field": "price_without_vat",
+
+        # Суммы
+        "total_field": "sum_without_vat",
+        "sum_field": "sum_without_vat",
+        "amount_total": "sum_without_vat",
+        "amount_without_vat_field": "sum_without_vat",
+
+        # НДС
+        "vat_rate_field": "vat_rate",
+        "tax_rate": "vat_rate"
     }
 
     @staticmethod
@@ -45,14 +72,14 @@ class InvoicePostProcessor:
             return float(value)
         if not value or not isinstance(value, str):
             return 0.0
-        
+
         # Убираем пробелы (неразрывные и обычные)
         clean = value.replace(" ", "").replace("\u00a0", "")
         # Заменяем запятую на точку
         clean = clean.replace(",", ".")
         # Удаляем все кроме цифр и точки
         clean = re.sub(r"[^\d.]", "", clean)
-        
+
         try:
             return float(clean) if clean else 0.0
         except ValueError:
@@ -71,67 +98,67 @@ class InvoicePostProcessor:
         """Извлекает количество и единицу измерения из '2 шт' -> (2.0, 'шт')"""
         if not isinstance(quantity_str, str):
             return (InvoicePostProcessor.clean_number_str(quantity_str), "")
-        
+
         # Ищем число в начале строки
         match = re.match(r"([0-9\s,.]+)\s*(.+)?", quantity_str.strip())
         if match:
             num_part = match.group(1)
             unit_part = match.group(2) or ""
             return (InvoicePostProcessor.clean_number_str(num_part), unit_part.strip())
-        
+
         return (InvoicePostProcessor.clean_number_str(quantity_str), "")
 
     def process(self, header_json: Dict[str, Any], items_json: Dict[str, Any]) -> Dict[str, Any]:
         """
         Главный метод объединения
-        
+
         Args:
             header_json: Результат парсинга header.txt
             items_json: Результат парсинга items.txt
-            
+
         Returns:
             Финальная структура Invoice
         """
         final_invoice = {}
-        
+
         # 1. Обработка Header
         # document_info
         final_invoice["document_info"] = self._normalize_document_info(
             header_json.get("document_info", {})
         )
-        
+
         # parties (нормализация supplier/buyer)
         final_invoice["parties"] = self._normalize_parties(
             header_json.get("parties", {})
         )
-        
+
         # references
         final_invoice["references"] = self._normalize_references(
             header_json.get("contract_reference", {})
         )
-        
+
         # 2. Обработка Items (трансформация таблицы)
         tables = items_json.get("tables", [])
         final_invoice["line_items"] = self._normalize_line_items(tables)
-        
+
         # 3. Totals
         final_invoice["totals"] = self._calculate_totals(
             final_invoice["line_items"],
             header_json.get("amounts", {})
         )
-        
+
         # 4. Amounts in words
         final_invoice["amounts_in_words"] = self._extract_amounts_in_words(
             header_json.get("other_fields", {}),
             items_json.get("fields", [])
         )
-        
+
         # 5. Signatures (если есть)
         final_invoice["signatures"] = self._extract_signatures(
             header_json.get("other_fields", {}),
             items_json.get("fields", [])
         )
-        
+
         return final_invoice
 
     def _normalize_document_info(self, doc_info: Dict[str, Any]) -> Dict[str, Any]:
@@ -148,7 +175,7 @@ class InvoicePostProcessor:
     def _normalize_parties(self, raw_parties: Dict[str, Any]) -> Dict[str, Any]:
         """Приводит структуру сторон к единому виду"""
         normalized = {}
-        
+
         # Маппинг ролей
         role_map = {
             "performer": "supplier",
@@ -156,22 +183,22 @@ class InvoicePostProcessor:
             "customer": "buyer",
             "buyer": "buyer"
         }
-        
+
         for key, data in raw_parties.items():
             if not isinstance(data, dict):
                 continue
-                
+
             target_key = role_map.get(key, key)
-            
+
             # Извлекаем данные
             name = data.get("name", data.get("full_name", ""))
-            
+
             # details может быть dict или данные на верхнем уровне
             if "details" in data and isinstance(data["details"], dict):
                 details = data["details"]
             else:
                 details = data
-            
+
             normalized[target_key] = {
                 "role": data.get("role", ""),
                 "name": name,
@@ -184,14 +211,14 @@ class InvoicePostProcessor:
                     "phone": details.get("phone", details.get("contact", ""))
                 }
             }
-        
+
         return normalized
 
     def _normalize_references(self, contract_ref: Dict[str, Any]) -> Dict[str, Any]:
         """Нормализация ссылок на договоры/заказы"""
         contract = contract_ref.get("contract", contract_ref.get("contract_number", ""))
         order = contract_ref.get("order", contract_ref.get("order_number", ""))
-        
+
         # Если order содержит полный текст типа "Замовлення покупця № 826 від..."
         # оставляем как есть, иначе пытаемся собрать
         if not order and contract_ref.get("order_number"):
@@ -201,44 +228,53 @@ class InvoicePostProcessor:
                 order = f"Замовлення покупця № {order_num} від {order_date}"
             else:
                 order = order_num
-        
+
         return {
             "contract": contract,
             "order": order
         }
 
     def _normalize_line_items(self, tables: List) -> List[Dict[str, Any]]:
-        """Превращает таблицы Gemini в плоский список товаров"""
+        """
+        Превращает таблицы Gemini в плоский список товаров.
+        Использует column_mapping для преобразования СЫРЫХ заголовков в целевые ключи.
+        """
         all_items = []
-        
-        # tables может быть list[list[dict]] (старый формат) или list[dict] (новый формат)
+
         for table in tables:
+            # Извлекаем column_mapping и line_items
+            column_mapping = {}
             raw_items = []
-            
-            # Новый формат: {"table_id": 1, "line_items": [...]}
-            if isinstance(table, dict) and "line_items" in table:
+
+            if isinstance(table, dict):
+                # Новый формат с column_mapping
+                column_mapping = table.get("column_mapping", {})
                 raw_items = table.get("line_items", [])
-            # Старый формат: [[{...}, {...}]]
             elif isinstance(table, list):
+                # Старый формат без column_mapping
                 raw_items = table
-            
+
+            # Создаем финальную карту: СЫРОЙ_ЗАГОЛОВОК -> ЦЕЛЕВОЙ_КЛЮЧ
+            raw_to_target_map = self._create_final_column_map(column_mapping)
+
+            logger.debug(f"Column mapping для таблицы: {raw_to_target_map}")
+
             for raw_item in raw_items:
                 if not isinstance(raw_item, dict):
                     continue
-                    
+
                 clean_item = {}
-                
-                # Проходим по каждому ключу
-                for semantic_key, value in raw_item.items():
-                    # Находим соответствие в маппинге
-                    target_key = self.ITEMS_KEY_MAPPING.get(semantic_key)
-                    
+
+                # Проходим по каждому полю в строке
+                for raw_header, value in raw_item.items():
+                    # Находим целевой ключ через карту
+                    target_key = raw_to_target_map.get(raw_header)
+
                     if target_key:
                         # Конвертируем типы
                         if target_key == "row_number":
                             clean_item[target_key] = self.clean_int_str(value)
                         elif target_key == "quantity":
-                            # Если количество содержит единицу измерения
                             qty, unit = self.extract_unit_from_quantity(str(value))
                             clean_item[target_key] = qty
                             if unit and "unit" not in clean_item:
@@ -247,23 +283,48 @@ class InvoicePostProcessor:
                             clean_item[target_key] = self.clean_number_str(value)
                         else:
                             clean_item[target_key] = str(value).strip()
-                
+                    else:
+                        # Если ключ не найден в маппинге, сохраняем как есть
+                        logger.warning(f"Неизвестный заголовок '{raw_header}' - сохраняем как есть")
+                        clean_item[raw_header] = str(value).strip()
+
                 # Добавляем, если есть минимально необходимые данные
                 if "item_name" in clean_item or "sum_without_vat" in clean_item:
                     all_items.append(clean_item)
-        
+
         return all_items
+
+    def _create_final_column_map(self, column_mapping: Dict[str, str]) -> Dict[str, str]:
+        """
+        Создает финальную карту: СЫРОЙ_ЗАГОЛОВОК -> ЦЕЛЕВОЙ_КЛЮЧ
+
+        column_mapping из Gemini: {"abstract_role": "СЫРОЙ ЗАГОЛОВОК"}
+        Возвращает: {"СЫРОЙ ЗАГОЛОВОК": "target_key"}
+        """
+        final_map = {}
+
+        for abstract_role, raw_header in column_mapping.items():
+            # Преобразуем абстрактную роль в целевой ключ
+            target_key = self.ABSTRACT_TO_TARGET_MAP.get(abstract_role)
+
+            if target_key:
+                final_map[raw_header] = target_key
+                logger.debug(f"Маппинг: '{raw_header}' -> '{target_key}' (через '{abstract_role}')")
+            else:
+                logger.warning(f"Неизвестная абстрактная роль: '{abstract_role}'")
+
+        return final_map
 
     def _calculate_totals(self, items: List[Dict[str, Any]], header_amounts: Dict[str, Any]) -> Dict[str, Any]:
         """Считает итоги"""
         # Считаем по строкам
         calc_subtotal = sum(item.get("sum_without_vat", 0.0) for item in items)
-        
+
         # Берем из шапки (приоритет)
         header_total_no_vat = self.clean_number_str(header_amounts.get("total_without_vat", 0))
         header_vat = self.clean_number_str(header_amounts.get("vat_amount", 0))
         header_total_with_vat = self.clean_number_str(header_amounts.get("total_with_vat", 0))
-        
+
         return {
             "currency": header_amounts.get("currency", "UAH").replace("грн.", "UAH").strip(),
             "subtotal_without_vat": header_total_no_vat if header_total_no_vat > 0 else calc_subtotal,
@@ -279,20 +340,20 @@ class InvoicePostProcessor:
             "total_value": "",
             "vat_value": ""
         }
-        
+
         # other_fields может быть dict или list
         if isinstance(other_fields, dict):
             result["total_summary"] = other_fields.get("total_items_text", "")
             result["total_value"] = other_fields.get("total_amount_text", "")
             result["vat_value"] = other_fields.get("vat_amount_text", "")
-        
+
         # Если нет в other_fields, ищем в fields
         if not result["total_summary"]:
             for field in fields:
                 if isinstance(field, dict) and "найменувань" in field.get("value", "").lower():
                     result["total_summary"] = field["value"]
                     break
-        
+
         return result
 
     def _extract_signatures(self, other_fields: Any, fields: List[Dict[str, Any]]) -> Dict[str, Any]:
