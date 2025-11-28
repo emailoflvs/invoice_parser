@@ -214,18 +214,8 @@ class Orchestrator:
                 exp_str = str(expected)[:30] + '...' if len(str(expected)) > 30 else str(expected)
                 act_str = str(actual)[:30] + '...' if len(str(actual)) > 30 else str(actual)
 
-                if path == 'article':
-                    field_name = 'артикул'
-                elif path == 'product_name':
-                    field_name = 'наименование'
-                elif path == 'quantity':
-                    field_name = 'количество'
-                elif path == 'price_no_vat':
-                    field_name = 'цена'
-                elif path == 'sum_no_vat':
-                    field_name = 'сумма'
-                else:
-                    field_name = path
+                # Используем технические названия как есть
+                field_name = path
 
                 sample_errors.append(f"строка {line}: {field_name}: {exp_str} vs {act_str}")
 
@@ -386,30 +376,17 @@ class Orchestrator:
                     actual = diff.get('actual', 'N/A')
                     description = diff.get('description', '')
 
-                    # Если есть line - это ошибка в items
+                    # Используем технические названия полей
                     if line is not None:
-                        path_last = path.split('.')[-1]
-                        if path_last == 'article':
-                            field_name = 'артикул'
-                        elif path_last == 'product_name':
-                            field_name = 'наименование'
-                        elif path_last == 'quantity':
-                            field_name = 'количество'
-                        elif path_last == 'price_no_vat':
-                            field_name = 'цена'
-                        elif path_last == 'sum_no_vat':
-                            field_name = 'сумма'
-                        else:
-                            field_name = path_last
-
+                        # Item error
                         all_errors.append({
                             "line": line,
-                            "field": field_name,
+                            "field": path.split('.')[-1],
                             "expected": str(expected),
                             "actual": str(actual)
                         })
                     else:
-                        # Это ошибка в header
+                        # Header error
                         all_errors.append({
                             "section": "header",
                             "field": description or path,

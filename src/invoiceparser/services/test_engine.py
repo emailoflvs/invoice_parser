@@ -734,20 +734,20 @@ class TestEngine:
     def _get_readable_description(self, path: str, diff_type: str = '') -> str:
         """
         Преобразование технического пути в читаемый формат
-        
+
         Args:
             path: Путь типа "line_items[0].ukt_zed_code"
             diff_type: Тип различия
-        
+
         Returns:
             Путь с номером строки: "ukt_zed_code (строка 1)"
         """
         import re
-        
+
         # Извлекаем индекс строки если есть
         match = re.search(r'\[(\d+)\]', path)
         row_num = int(match.group(1)) + 1 if match else None
-        
+
         # Берем последнюю часть пути (техническое название поля)
         field_name = path.split('.')[-1].replace('_', ' ')
 
