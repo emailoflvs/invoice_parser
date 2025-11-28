@@ -67,7 +67,7 @@ class InvoicePostProcessor:
 
     @staticmethod
     def clean_number_str(value: Any) -> float:
-        """Конвертирует строку '10 500,00' -> 10500.0"""
+        """Converts string numbers to float"""
         if isinstance(value, (int, float)):
             return float(value)
         if not value or not isinstance(value, str):
@@ -87,7 +87,7 @@ class InvoicePostProcessor:
 
     @staticmethod
     def clean_int_str(value: Any) -> int:
-        """Конвертирует строку '2.00' или '2 шт' -> 2"""
+        """Converts string numbers to integers"""
         if isinstance(value, int):
             return value
         val_float = InvoicePostProcessor.clean_number_str(value)
@@ -95,7 +95,7 @@ class InvoicePostProcessor:
 
     @staticmethod
     def extract_unit_from_quantity(quantity_str: str) -> tuple[float, str]:
-        """Извлекает количество и единицу измерения из '2 шт' -> (2.0, 'шт')"""
+        """Extracts quantity and unit from quantity string"""
         if not isinstance(quantity_str, str):
             return (InvoicePostProcessor.clean_number_str(quantity_str), "")
 
@@ -219,15 +219,9 @@ class InvoicePostProcessor:
         contract = contract_ref.get("contract", contract_ref.get("contract_number", ""))
         order = contract_ref.get("order", contract_ref.get("order_number", ""))
 
-        # Если order содержит полный текст типа "Замовлення покупця № 826 від..."
-        # оставляем как есть, иначе пытаемся собрать
-        if not order and contract_ref.get("order_number"):
-            order_num = contract_ref.get("order_number", "")
-            order_date = contract_ref.get("order_date", "")
-            if order_num and order_date:
-                order = f"Замовлення покупця № {order_num} від {order_date}"
-            else:
-                order = order_num
+        # Используем данные как есть, без форматирования
+        if not order:
+            order = contract_ref.get("order_number", "")
 
         return {
             "contract": contract,
@@ -326,7 +320,7 @@ class InvoicePostProcessor:
         header_total_with_vat = self.clean_number_str(header_amounts.get("total_with_vat", 0))
 
         return {
-            "currency": header_amounts.get("currency", "UAH").replace("грн.", "UAH").strip(),
+            "currency": header_amounts.get("currency", "").strip(),
             "subtotal_without_vat": header_total_no_vat if header_total_no_vat > 0 else calc_subtotal,
             "vat_amount": header_vat,
             "total_with_vat": header_total_with_vat,

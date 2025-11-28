@@ -447,7 +447,7 @@ class TestEngine:
                 "description": "Название исполнителя"
             })
 
-        # 3.2. ЄДРПОУ исполнителя
+        # 3.2. Performer tax ID comparison
         exp_perf_edrpou = str(exp_performer.get('edrpou', '')).strip()
         act_perf_edrpou = str(act_performer.get('edrpou', '')).strip()
         if exp_perf_edrpou and act_perf_edrpou and exp_perf_edrpou != act_perf_edrpou:
@@ -456,7 +456,7 @@ class TestEngine:
                 "type": "mismatch",
                 "expected": exp_perf_edrpou,
                 "actual": act_perf_edrpou,
-                "description": "ЄДРПОУ исполнителя"
+                "description": "Performer tax ID mismatch"
             })
 
         # 3.3. Банк исполнителя (может быть в bank_name или bank_account.bank_name, с нормализацией кавычек)
@@ -531,7 +531,7 @@ class TestEngine:
                 "description": "Bank name mismatch"
             })
 
-        # 5. Проверка текстовых блоков (raw_block) - для поиска ошибок типа "59 вместо 559"
+        # 5. Compare raw_block text fields
         exp_raw = str(exp_performer.get('raw_block', '')).lower()
         act_raw = str(act_performer.get('raw_block', '')).lower()
 
