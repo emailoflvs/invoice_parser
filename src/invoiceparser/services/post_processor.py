@@ -90,7 +90,7 @@ class InvoicePostProcessor:
         # 2. Обработка Items (сохраняем как есть + column_mapping)
         tables = items_json.get("tables", [])
         final_invoice["line_items"] = self._normalize_line_items(tables)
-        
+
         # Сохраняем column_mapping из первой таблицы (если есть)
         if tables and isinstance(tables[0], dict):
             final_invoice["_column_mapping"] = tables[0].get("column_mapping", {})
@@ -204,14 +204,14 @@ class InvoicePostProcessor:
 
             # Сохраняем column_mapping для финального JSON (если нужно)
             # Используем данные от Gemini напрямую без преобразований
-            
+
             for raw_item in raw_items:
                 if not isinstance(raw_item, dict):
                     continue
 
                 # Просто копируем данные как есть
                 clean_item = dict(raw_item)
-                
+
                 # Добавляем все items без фильтрации
                 if clean_item:
                     all_items.append(clean_item)

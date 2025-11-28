@@ -298,79 +298,26 @@ class TestEngine:
             exp = expected_items[i]
             act = actual_items[i]
 
-            # Сравниваем критичные поля
-            # Field comparison with quote normalization
-            exp_article_orig = str(exp.get('article', '')).strip()
-            act_article_orig = str(act.get('article', '')).strip()
-            exp_article = self._normalize_quotes(exp_article_orig)
-            act_article = self._normalize_quotes(act_article_orig)
-            if exp_article != act_article:
-                differences.append({
-                    "path": f"items[{i}].article",
-                    "type": "mismatch",
-                    "expected": exp_article_orig,  # Оригинал для отображения
-                    "actual": act_article_orig,
-                    "line": i + 1
-                })
-
-            # 2. Наименование (с нормализацией кавычек)
-            exp_name_orig = str(exp.get('product_name', '')).strip()
-            act_name_orig = str(act.get('product_name', '')).strip()
-            exp_name = self._normalize_quotes(exp_name_orig)
-            act_name = self._normalize_quotes(act_name_orig)
-            if exp_name != act_name:
-                differences.append({
-                    "path": f"items[{i}].product_name",
-                    "type": "mismatch",
-                    "expected": exp_name_orig,  # Оригинал для отображения
-                    "actual": act_name_orig,
-                    "line": i + 1
-                })
-
-            # 3. Количество (с точностью до 0.01)
-            try:
-                exp_qty = float(exp.get('quantity', 0))
-                act_qty = float(act.get('quantity', 0))
-                if abs(exp_qty - act_qty) > 0.01:
+            # Универсальное сравнение всех полей
+            # Объединяем ключи из обоих объектов
+            all_keys = set(exp.keys()) | set(act.keys())
+            
+            for key in all_keys:
+                exp_value = exp.get(key, '')
+                act_value = act.get(key, '')
+                
+                # Нормализуем для сравнения
+                exp_str = self._normalize_quotes(str(exp_value).strip())
+                act_str = self._normalize_quotes(str(act_value).strip())
+                
+                if exp_str != act_str:
                     differences.append({
-                        "path": f"items[{i}].quantity",
+                        "path": f"items[{i}].{key}",
                         "type": "mismatch",
-                        "expected": exp_qty,
-                        "actual": act_qty,
+                        "expected": str(exp_value).strip(),
+                        "actual": str(act_value).strip(),
                         "line": i + 1
                     })
-            except (ValueError, TypeError):
-                pass
-
-            # 4. Цена (с точностью до 0.01)
-            try:
-                exp_price = float(exp.get('price_no_vat', 0))
-                act_price = float(act.get('price_no_vat', 0))
-                if abs(exp_price - act_price) > 0.01:
-                    differences.append({
-                        "path": f"items[{i}].price_no_vat",
-                        "type": "mismatch",
-                        "expected": exp_price,
-                        "actual": act_price,
-                        "line": i + 1
-                    })
-            except (ValueError, TypeError):
-                pass
-
-            # 5. Сумма (с точностью до 0.01)
-            try:
-                exp_sum = float(exp.get('sum_no_vat', 0))
-                act_sum = float(act.get('sum_no_vat', 0))
-                if abs(exp_sum - act_sum) > 0.01:
-                    differences.append({
-                        "path": f"items[{i}].sum_no_vat",
-                        "type": "mismatch",
-                        "expected": exp_sum,
-                        "actual": act_sum,
-                        "line": i + 1
-                    })
-            except (ValueError, TypeError):
-                pass
 
         return differences
 
@@ -672,25 +619,8 @@ class TestEngine:
             normalized['items'] = data['items']
         elif 'line_items' in data:
             # Маппинг line_items -> items
-            normalized['items'] = []
-            for item in data['line_items']:
-                mapped_item = {}
-                # Маппинг полей из line_items
-                if 'row_number' in item:
-                    mapped_item['id'] = item['row_number']
-                if 'ukt_zed_code' in item:
-                    mapped_item['article'] = str(item['ukt_zed_code']).strip()
-                if 'item_name' in item:
-                    mapped_item['product_name'] = str(item['item_name']).strip()
-                if 'quantity' in item:
-                    mapped_item['quantity'] = item['quantity']
-                if 'unit' in item:
-                    mapped_item['unit'] = item['unit']
-                if 'price_without_vat' in item:
-                    mapped_item['price_no_vat'] = item['price_without_vat']
-                if 'sum_without_vat' in item:
-                    mapped_item['sum_no_vat'] = item['sum_without_vat']
-                normalized['items'].append(mapped_item)
+            # Берем items как есть, без маппинга
+            normalized['items'] = data['line_items']
 
         # Копируем остальные поля верхнего уровня
         for key in ['document_info', 'parties', 'contract_reference', 'totals', 'signatures', 'references', 'annotations']:
