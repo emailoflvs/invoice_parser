@@ -124,55 +124,13 @@ class CLIApp:
                 # Новая структура: данные на верхнем уровне как в examples/invoice.json
                 data = result['data']
                 
-                invoice_number = 'N/A'
-                date_val = 'N/A'
-                supplier = 'N/A'
-                total = 'N/A'
+                # Просто показываем что данные получены, без жестко заданных полей
                 items_count = 0
+                if isinstance(data, dict) and 'line_items' in data:
+                    items_count = len(data['line_items'])
                 
-                if isinstance(data, dict):
-                    # Новая структура: document_info на верхнем уровне
-                    doc_info = data.get('document_info', {})
-                    if isinstance(doc_info, dict):
-                        invoice_number = doc_info.get('number', 'N/A')
-                        date_val = doc_info.get('date_iso', doc_info.get('date_raw', 'N/A'))
-                    
-                    # parties на верхнем уровне
-                    parties = data.get('parties', {})
-                    if isinstance(parties, dict):
-                        # Проверяем supplier или performer
-                        supplier_data = parties.get('supplier', parties.get('performer', {}))
-                        if isinstance(supplier_data, dict):
-                            supplier = supplier_data.get('name', supplier_data.get('full_name', 'N/A'))
-                    
-                    # totals на верхнем уровне
-                    totals = data.get('totals', {})
-                    if isinstance(totals, dict):
-                        total = totals.get('total_with_vat', 'N/A')
-                    # Fallback на старую структуру amounts
-                    elif 'amounts' in data:
-                        amounts = data.get('amounts', {})
-                        if isinstance(amounts, dict):
-                            total = amounts.get('total_with_vat', 'N/A')
-                    
-                    # line_items на верхнем уровне
-                    if 'line_items' in data:
-                        line_items = data.get('line_items', [])
-                        items_count = len(line_items) if isinstance(line_items, list) else 0
-                    # Fallback на старую структуру tables
-                    elif 'tables' in data:
-                        tables = data.get('tables', [])
-                        if isinstance(tables, list) and len(tables) > 0:
-                            if isinstance(tables[0], list):
-                                items_count = len(tables[0])
-                            elif isinstance(tables[0], dict) and 'line_items' in tables[0]:
-                                items_count = len(tables[0]['line_items'])
-                
-                print(f"Invoice Number: {invoice_number}")
-                print(f"Date: {date_val}")
-                print(f"Supplier: {supplier}")
-                print(f"Total Amount: {total}")
-                print(f"Items: {items_count}")
+                print(f"✓ Parsed successfully")
+                print(f"Items found: {items_count}")
                 
                 # Вывод результатов теста если есть
                 if test_results:

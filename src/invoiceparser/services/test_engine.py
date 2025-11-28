@@ -301,15 +301,15 @@ class TestEngine:
             # Универсальное сравнение всех полей
             # Объединяем ключи из обоих объектов
             all_keys = set(exp.keys()) | set(act.keys())
-            
+
             for key in all_keys:
                 exp_value = exp.get(key, '')
                 act_value = act.get(key, '')
-                
+
                 # Нормализуем для сравнения
                 exp_str = self._normalize_quotes(str(exp_value).strip())
                 act_str = self._normalize_quotes(str(act_value).strip())
-                
+
                 if exp_str != act_str:
                     differences.append({
                         "path": f"items[{i}].{key}",

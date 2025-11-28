@@ -116,71 +116,17 @@ class InvoicePostProcessor:
         return final_invoice
 
     def _normalize_document_info(self, doc_info: Dict[str, Any]) -> Dict[str, Any]:
-        """Нормализация информации о документе"""
-        return {
-            "type": doc_info.get("type", ""),
-            "number": str(doc_info.get("number", "")).strip(),
-            "date_raw": doc_info.get("date_raw", doc_info.get("date", "")),
-            "date_iso": doc_info.get("date_iso", ""),
-            "place_of_issue": doc_info.get("place_of_issue", ""),
-            "currency": doc_info.get("currency", "")
-        }
+        """Возвращает document_info как есть"""
+        return dict(doc_info)
 
     def _normalize_parties(self, raw_parties: Dict[str, Any]) -> Dict[str, Any]:
-        """Приводит структуру сторон к единому виду"""
-        normalized = {}
-
-        # Маппинг ролей
-        role_map = {
-            "performer": "supplier",
-            "supplier": "supplier",
-            "customer": "buyer",
-            "buyer": "buyer"
-        }
-
-        for key, data in raw_parties.items():
-            if not isinstance(data, dict):
-                continue
-
-            target_key = role_map.get(key, key)
-
-            # Извлекаем данные
-            name = data.get("name", data.get("full_name", ""))
-
-            # details может быть dict или данные на верхнем уровне
-            if "details" in data and isinstance(data["details"], dict):
-                details = data["details"]
-            else:
-                details = data
-
-            normalized[target_key] = {
-                "role": data.get("role", ""),
-                "name": name,
-                "details": {
-                    "edrpou": details.get("edrpou", details.get("tax_id", "")),
-                    "ipn": details.get("ipn", details.get("vat_id", "")),
-                    "bank_account": details.get("bank_account", ""),
-                    "bank_name": details.get("bank_name", ""),
-                    "address": details.get("address", ""),
-                    "phone": details.get("phone", details.get("contact", ""))
-                }
-            }
-
-        return normalized
+        """Возвращает parties как есть"""
+        # Берем данные как есть, без маппинга ролей
+        return dict(raw_parties)
 
     def _normalize_references(self, contract_ref: Dict[str, Any]) -> Dict[str, Any]:
-        """Нормализация ссылок на договоры/заказы"""
-        contract = contract_ref.get("contract", contract_ref.get("contract_number", ""))
-        order = contract_ref.get("order", contract_ref.get("order_number", ""))
-
-        # Используем данные как есть, без форматирования
-        if not order:
-            order = contract_ref.get("order_number", "")
-
-        return {
-            "contract": contract,
-            "order": order
-        }
+        """Возвращает references как есть"""
+        return dict(contract_ref)
 
     def _normalize_line_items(self, tables: List) -> List[Dict[str, Any]]:
         """
@@ -240,22 +186,9 @@ class InvoicePostProcessor:
         return final_map
 
     def _calculate_totals(self, items: List[Dict[str, Any]], header_amounts: Dict[str, Any]) -> Dict[str, Any]:
-        """Считает итоги"""
-        # Считаем по строкам
-        calc_subtotal = sum(item.get("sum_without_vat", 0.0) for item in items)
-
-        # Берем из шапки (приоритет)
-        header_total_no_vat = self.clean_number_str(header_amounts.get("total_without_vat", 0))
-        header_vat = self.clean_number_str(header_amounts.get("vat_amount", 0))
-        header_total_with_vat = self.clean_number_str(header_amounts.get("total_with_vat", 0))
-
-        return {
-            "currency": header_amounts.get("currency", "").strip(),
-            "subtotal_without_vat": header_total_no_vat if header_total_no_vat > 0 else calc_subtotal,
-            "vat_amount": header_vat,
-            "total_with_vat": header_total_with_vat,
-            "total_items_count": len(items)
-        }
+        """Возвращает totals как есть из header"""
+        # Берем данные как есть, без вычислений и жестко заданных ключей
+        return dict(header_amounts)
 
     def _extract_amounts_in_words(self, other_fields: Any, fields: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Извлекает суммы прописью"""
