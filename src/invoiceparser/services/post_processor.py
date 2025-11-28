@@ -59,6 +59,7 @@ class InvoicePostProcessor:
         "sum_field": "sum_without_vat",
         "amount_total": "sum_without_vat",
         "amount_without_vat_field": "sum_without_vat",
+        "total_price_field": "sum_without_vat",
 
         # НДС
         "vat_rate_field": "vat_rate",
@@ -282,8 +283,8 @@ class InvoicePostProcessor:
                         logger.warning(f"Неизвестный заголовок '{raw_header}' - сохраняем как есть")
                         clean_item[raw_header] = str(value).strip()
 
-                # Добавляем, если есть минимально необходимые данные
-                if "item_name" in clean_item or "sum_without_vat" in clean_item:
+                # Добавляем все items (даже с неизвестными заголовками)
+                if clean_item:  # Добавляем если есть хоть какие-то данные
                     all_items.append(clean_item)
 
         return all_items
