@@ -13,58 +13,7 @@ class InvoicePostProcessor:
     Класс для превращения сырых ответов Gemini в идеальную структуру Invoice
     """
 
-    # Маппинг АБСТРАКТНЫХ РОЛЕЙ (из column_mapping) в целевые ключи JSON
-    # НЕТ КОНКРЕТНЫХ ЗАГОЛОВКОВ - только универсальные роли
-    ABSTRACT_TO_TARGET_MAP = {
-        # Индексы/номера строк
-        "row_index": "row_number",
-        "index_field": "row_number",
-        "line_number": "row_number",
-        "line_number_field": "row_number",
-
-        # Коды товаров/артикулы
-        "product_code": "ukt_zed_code",
-        "product_code_field": "ukt_zed_code",
-        "product_article_field": "ukt_zed_code",
-        "article_code": "ukt_zed_code",
-        "sku_code": "ukt_zed_code",
-        "item_code": "ukt_zed_code",
-        "ukt_zed_field": "ukt_zed_code",
-
-        # Наименования
-        "product_description": "item_name",
-        "product_description_field": "item_name",
-        "item_description": "item_name",
-        "product_name": "item_name",
-        "item_name_field": "item_name",
-
-        # Количество
-        "quantity_field": "quantity",
-        "qty_field": "quantity",
-        "amount_field": "quantity",
-
-        # Единицы измерения
-        "unit_field": "unit",
-        "measure_field": "unit",
-        "uom_field": "unit",
-
-        # Цены
-        "price_field": "price_without_vat",
-        "unit_price_field": "price_without_vat",
-        "single_price": "price_without_vat",
-        "price_without_vat_field": "price_without_vat",
-
-        # Суммы
-        "total_field": "sum_without_vat",
-        "sum_field": "sum_without_vat",
-        "amount_total": "sum_without_vat",
-        "amount_without_vat_field": "sum_without_vat",
-        "total_price_field": "sum_without_vat",
-
-        # НДС
-        "vat_rate_field": "vat_rate",
-        "tax_rate": "vat_rate"
-    }
+    # НЕТ статического маппинга - используем только column_mapping от Gemini!
 
     @staticmethod
     def clean_number_str(value: Any) -> float:
@@ -138,9 +87,13 @@ class InvoicePostProcessor:
             header_json.get("contract_reference", {})
         )
 
-        # 2. Обработка Items (трансформация таблицы)
+        # 2. Обработка Items (сохраняем как есть + column_mapping)
         tables = items_json.get("tables", [])
         final_invoice["line_items"] = self._normalize_line_items(tables)
+        
+        # Сохраняем column_mapping из первой таблицы (если есть)
+        if tables and isinstance(tables[0], dict):
+            final_invoice["_column_mapping"] = tables[0].get("column_mapping", {})
 
         # 3. Totals
         final_invoice["totals"] = self._calculate_totals(
@@ -249,42 +202,18 @@ class InvoicePostProcessor:
                 # Старый формат без column_mapping
                 raw_items = table
 
-            # Создаем финальную карту: СЫРОЙ_ЗАГОЛОВОК -> ЦЕЛЕВОЙ_КЛЮЧ
-            raw_to_target_map = self._create_final_column_map(column_mapping)
-
-            logger.debug(f"Column mapping для таблицы: {raw_to_target_map}")
-
+            # Сохраняем column_mapping для финального JSON (если нужно)
+            # Используем данные от Gemini напрямую без преобразований
+            
             for raw_item in raw_items:
                 if not isinstance(raw_item, dict):
                     continue
 
-                clean_item = {}
-
-                # Проходим по каждому полю в строке
-                for raw_header, value in raw_item.items():
-                    # Находим целевой ключ через карту
-                    target_key = raw_to_target_map.get(raw_header)
-
-                    if target_key:
-                        # Конвертируем типы
-                        if target_key == "row_number":
-                            clean_item[target_key] = self.clean_int_str(value)
-                        elif target_key == "quantity":
-                            qty, unit = self.extract_unit_from_quantity(str(value))
-                            clean_item[target_key] = qty
-                            if unit and "unit" not in clean_item:
-                                clean_item["unit"] = unit
-                        elif target_key in ["price_without_vat", "sum_without_vat"]:
-                            clean_item[target_key] = self.clean_number_str(value)
-                        else:
-                            clean_item[target_key] = str(value).strip()
-                    else:
-                        # Если ключ не найден в маппинге, сохраняем как есть
-                        logger.warning(f"Неизвестный заголовок '{raw_header}' - сохраняем как есть")
-                        clean_item[raw_header] = str(value).strip()
-
-                # Добавляем все items (даже с неизвестными заголовками)
-                if clean_item:  # Добавляем если есть хоть какие-то данные
+                # Просто копируем данные как есть
+                clean_item = dict(raw_item)
+                
+                # Добавляем все items без фильтрации
+                if clean_item:
                     all_items.append(clean_item)
 
         return all_items
