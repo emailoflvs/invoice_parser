@@ -75,6 +75,11 @@ class CLIApp:
             type=str,
             help='Output directory (default: from config)'
         )
+        parse_parser.add_argument(
+            '--compare-with',
+            type=str,
+            help='Path to reference JSON file for comparison (test mode)'
+        )
 
         # Команда test
         test_parser = subparsers.add_parser('test', help='Run tests against examples')
@@ -98,56 +103,94 @@ class CLIApp:
         """
         document_path = Path(args.path)
 
+        if not document_path.exists():
+            print(f"✗ Error: Document not found: {document_path}")
+            sys.exit(1)
+
+        compare_with = None
+        if args.compare_with:
+            compare_with = Path(args.compare_with)
+            if not compare_with.exists():
+                print(f"✗ Error: Reference file not found: {compare_with}")
+                sys.exit(1)
+            if self.config.mode.upper() != 'TEST':
+                print(f"⚠️  Warning: --compare-with specified, but MODE != TEST. Testing will be skipped.")
+                print(f"   Set MODE=TEST in .env to enable testing.\n")
+                compare_with = None  # Игнорируем параметр, если не TEST режим
+
         print(f"\n{'=' * 60}")
         print(f"Parsing document: {document_path}")
+        print(f"Model: {self.config.gemini_model}")
+        if compare_with:
+            print(f"Reference file for comparison: {compare_with}")
+        if self.config.mode.upper() == 'TEST':
+            print(f"Mode: TEST - comparison will be performed")
         print(f"{'=' * 60}\n")
 
         try:
             # Обработка документа
-            result = self.orchestrator.process_document(document_path)
+            result = self.orchestrator.process_document(document_path, compare_with=compare_with)
 
             # Вывод результата
             if result["success"]:
                 elapsed_time = result.get('elapsed_time', 0)
-                
-                # Проверяем наличие результатов тестирования
+
+                # Проверяем наличие результатов тестирования и выводим сразу
                 test_results = result.get('test_results')
                 if test_results and test_results.get('status') == 'tested':
                     error_count = test_results.get('errors', 0)
+                    print(f"✓ Document parsed successfully (took {elapsed_time:.2f}s)")
+                    print(f"\n{'=' * 60}")
                     if error_count == 0:
-                        print(f"✓ Document parsed successfully (took {elapsed_time:.2f}s) - 0 errors\n")
+                        print(f"✅ TEST PASSED: 0 errors")
                     else:
-                        print(f"✓ Document parsed successfully (took {elapsed_time:.2f}s) - {error_count} errors found\n")
+                        print(f"❌ TEST FAILED: {error_count} errors found")
+                    print(f"{'=' * 60}\n")
                 else:
                     print(f"✓ Document parsed successfully (took {elapsed_time:.2f}s)\n")
-                
-                # Новая структура: данные на верхнем уровне как в examples/invoice.json
+
+                # Новая структура: данные на верхнем уровне
                 data = result['data']
-                
+
                 # Просто показываем что данные получены, без жестко заданных полей
                 items_count = 0
                 if isinstance(data, dict) and 'line_items' in data:
                     items_count = len(data['line_items'])
-                
+
                 print(f"✓ Parsed successfully")
                 print(f"Items found: {items_count}")
-                
+
                 # Вывод результатов теста если есть
                 if test_results:
-                    print(f"\n--- Test Results ---")
+                    print(f"\n{'=' * 60}")
+                    print("TEST RESULTS")
+                    print(f"{'=' * 60}")
                     if test_results.get('status') == 'tested':
                         error_count = test_results.get('errors', 0)
+                        reference_file = test_results.get('reference_file_name', 'unknown')
+                        total_items = test_results.get('total_items', 0)
+
+                        print(f"Reference file: {reference_file}")
+                        print(f"Total items in reference: {total_items}")
+                        print()
+
                         if error_count == 0:
                             print(f"✅ All data matched - 0 errors")
                         else:
-                            print(f"❌ Found {error_count} errors:")
-                            for sample in test_results.get('sample_errors', []):
-                                print(f"   • {sample}")
+                            print(f"❌ Found {error_count} errors:\n")
+                            all_errors = test_results.get('all_errors', test_results.get('sample_errors', []))
+                            for idx, error in enumerate(all_errors, 1):
+                                print(f"  {idx}. {error}")
+
+                            if error_count > len(all_errors):
+                                print(f"\n  ... and {error_count - len(all_errors)} more errors (see JSON file for details)")
                     elif test_results.get('status') == 'no_reference':
                         print(f"ℹ️  No reference file found - skipped testing")
+                        print(f"   Expected: {test_results.get('message', 'Unknown')}")
                     else:
                         print(f"⚠️  Test error: {test_results.get('message', 'Unknown')}")
-                
+                    print(f"{'=' * 60}")
+
                 # Показываем имя сохраненного файла
                 output_file = result.get('output_file')
                 if output_file:
@@ -199,7 +242,7 @@ class CLIApp:
                 from datetime import datetime
                 timestamp = datetime.now().strftime("%d%m%H%M")
                 failed_count = results.get('failed', 0)
-                # Формат: invoice_26112152_3errors.json
+                # Формат имени файла: {имя}_{timestamp}_{количество_ошибок}errors.json
                 test_name = "test" if results.get('total', 0) > 1 else Path(results['tests'][0]['document']).stem
                 report_path = self.config.output_dir / f"{test_name}_{timestamp}_{failed_count}errors.json"
 

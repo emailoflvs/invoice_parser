@@ -46,12 +46,13 @@ class Orchestrator:
         self.json_exporter = JSONExporter(config)
         self.excel_exporter = ExcelExporter(config)
 
-    def process_document(self, document_path: Path) -> Dict[str, Any]:
+    def process_document(self, document_path: Path, compare_with: Optional[Path] = None) -> Dict[str, Any]:
         """
         Обработка документа
 
         Args:
             document_path: Путь к документу
+            compare_with: Опциональный путь к эталонному JSON файлу для сравнения
 
         Returns:
             Результат обработки
@@ -78,10 +79,10 @@ class Orchestrator:
             else:
                 raise ProcessingError(f"Unsupported file format: {file_extension}")
 
-            # Тестирование если MODE=TEST
+            # Тестирование только если MODE=TEST
             test_result = None
             if self.config.mode.upper() == 'TEST':
-                test_result = self._run_test_for_document(document_path, result)
+                test_result = self._run_test_for_document(document_path, result, compare_with)
                 # Добавляем результаты теста в данные
                 result['test_results'] = test_result
 
@@ -155,13 +156,14 @@ class Orchestrator:
 
         return self._parse_with_gemini(processed_image)
 
-    def _run_test_for_document(self, document_path: Path, parsed_data: Dict[str, Any]) -> Dict[str, Any]:
+    def _run_test_for_document(self, document_path: Path, parsed_data: Dict[str, Any], compare_with: Optional[Path] = None) -> Dict[str, Any]:
         """
         Запуск теста для одного документа
 
         Args:
             document_path: Путь к исходному документу
             parsed_data: Распарсенные данные
+            compare_with: Опциональный путь к эталонному JSON файлу
 
         Returns:
             Результаты теста
@@ -170,15 +172,21 @@ class Orchestrator:
             TestEngine = _lazy_import_test_engine()
             test_engine = TestEngine(self.config)
 
-            # Ищем эталонный JSON
-            expected_path = self.config.examples_dir / f"{document_path.stem}.json"
+            # Определяем путь к эталонному JSON
+            if compare_with is not None:
+                # Используем явно указанный путь
+                expected_path = Path(compare_with)
+            else:
+                # Ищем автоматически по имени файла
+                expected_path = self.config.examples_dir / f"{document_path.stem}.json"
 
             if not expected_path.exists():
                 logger.info(f"No reference file for {document_path.name} - skipping test")
                 return {
                     "status": "no_reference",
-                    "message": f"No reference file found: {expected_path.name}",
-                    "errors": 0
+                    "message": f"No reference file found: {expected_path}",
+                    "errors": 0,
+                    "model": self.config.gemini_model
                 }
 
             # Загружаем эталон
@@ -202,30 +210,40 @@ class Orchestrator:
             differences = header_differences + item_differences
             error_count = len(differences)
 
-            # Формируем краткий список ошибок для вывода (первые 5)
-            sample_errors = []
-            for diff in differences[:5]:
+            # Формируем список всех ошибок для вывода
+            all_errors = []
+            sample_errors = []  # Первые 10 для краткого вывода
+
+            for idx, diff in enumerate(differences):
                 line = diff.get('line', '?')
                 path = diff.get('path', '').split('.')[-1]
                 expected = diff.get('expected', 'N/A')
                 actual = diff.get('actual', 'N/A')
 
-                # Укорачиваем значения
-                exp_str = str(expected)[:30] + '...' if len(str(expected)) > 30 else str(expected)
-                act_str = str(actual)[:30] + '...' if len(str(actual)) > 30 else str(actual)
+                # Укорачиваем значения для краткого вывода
+                exp_str = str(expected)[:50] + '...' if len(str(expected)) > 50 else str(expected)
+                act_str = str(actual)[:50] + '...' if len(str(actual)) > 50 else str(actual)
 
                 # Используем технические названия как есть
                 field_name = path
 
-                sample_errors.append(f"строка {line}: {field_name}: {exp_str} vs {act_str}")
+                error_msg = f"строка {line}: {field_name}: {exp_str} vs {act_str}"
+                all_errors.append(error_msg)
+
+                # Первые 10 для краткого вывода
+                if idx < 10:
+                    sample_errors.append(error_msg)
 
             return {
                 "status": "tested",
-                "reference_file": expected_path.name,
+                "reference_file": str(expected_path),
+                "reference_file_name": expected_path.name,
                 "errors": error_count,
                 "total_items": len(expected_normalized.get('items', [])),
-                "sample_errors": sample_errors,
-                "all_differences": differences  # Полный список для JSON
+                "sample_errors": sample_errors,  # Первые 10 для краткого вывода
+                "all_errors": all_errors,  # Все ошибки в текстовом формате
+                "all_differences": differences,  # Полный список для JSON
+                "model": self.config.gemini_model
             }
 
         except Exception as e:
@@ -233,7 +251,8 @@ class Orchestrator:
             return {
                 "status": "error",
                 "message": str(e),
-                "errors": -1
+                "errors": -1,
+                "model": self.config.gemini_model
             }
 
     def _parse_with_gemini(
@@ -317,17 +336,9 @@ class Orchestrator:
             if "header" in header_data and isinstance(header_data["header"], dict):
                 header_data = header_data["header"]
 
-            # МАГИЯ: Post-processing через InvoicePostProcessor
-            # Превращаем сырые данные Gemini в финальную структуру
+            # Post-processing: передаем данные как есть
             logger.info("Post-processing parsed data...")
-            result = self.post_processor.process(
-                {"document_info": header_data.get("document_info", {}),
-                 "parties": header_data.get("parties", {}),
-                 "contract_reference": header_data.get("contract_reference", {}),
-                 "amounts": header_data.get("amounts", {}),
-                 "other_fields": header_data.get("other_fields", {})},
-                items_data
-            )
+            result = self.post_processor.process(header_data, items_data)
 
             # Добавляем служебные данные
             result["_meta"] = {
@@ -337,7 +348,15 @@ class Orchestrator:
                 "processing_time_seconds": 0  # Будет обновлено позже
             }
 
-            items_count = len(result.get("line_items", []))
+            # Динамически ищем items для логирования
+            items_count = 0
+            for key, value in result.items():
+                if isinstance(value, list) and len(value) > 0:
+                    # Если это список dict - вероятно это items
+                    if isinstance(value[0], dict):
+                        items_count = len(value)
+                        break
+
             logger.info(f"Parsing completed: {items_count} items found")
 
             return result
@@ -400,7 +419,8 @@ class Orchestrator:
                         "errors": test_results.get('errors', 0),
                         "reference_file": test_results.get('reference_file', 'N/A'),
                         "sample_errors": test_results.get('sample_errors', []),
-                        "all_errors": all_errors  # Полный список всех ошибок
+                        "all_errors": all_errors,  # Полный список всех ошибок
+                        "model": test_results.get('model', self.config.gemini_model)
                     }
                 }
 

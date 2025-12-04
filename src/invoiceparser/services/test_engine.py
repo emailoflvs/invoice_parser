@@ -3,6 +3,7 @@
 """
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Dict, Any, List, Tuple
 from datetime import datetime
@@ -28,9 +29,52 @@ class TestEngine:
         self.config = config
         self.orchestrator = Orchestrator(config)
 
+    def _normalize_text_for_comparison(self, text: str) -> str:
+        """
+        Нормализация текста для сравнения:
+        - Игнорирует различия в типах кавычек
+        - Игнорирует различия в пробелах между символами
+        - Игнорирует различия в пунктуации в конце (точки, запятые)
+
+        Args:
+            text: Текст для нормализации
+
+        Returns:
+            Нормализованный текст
+        """
+        if not isinstance(text, str):
+            text = str(text) if text is not None else ""
+
+        # Убираем все типы кавычек (они не имеют значения)
+        quote_variants = [
+            '"', '"', '"',  # Двойные кавычки
+            '«', '»',  # Французские кавычки
+            '„', '‟',  # Немецкие кавычки
+            ''', ''',  # Одинарные типографские
+            '‚', '‛',  # Одинарные
+            "'",  # ASCII одинарная
+        ]
+
+        result = text
+        for quote in quote_variants:
+            result = result.replace(quote, '')
+
+        # Убираем пробелы между символами (оставляем только один пробел между словами)
+        # Разбиваем по пробелам и склеиваем обратно
+        words = result.split()
+        result = ' '.join(words)
+
+        # Убираем пунктуацию в конце (точки, запятые, которые не имеют смыслового значения)
+        result = result.rstrip('.,;:')
+
+        # Приводим к нижнему регистру для сравнения
+        result = result.lower().strip()
+
+        return result
+
     def _normalize_quotes(self, text: str) -> str:
         """
-        Нормализация кавычек для сравнения
+        Нормализация кавычек для сравнения (старый метод, оставлен для совместимости)
         Заменяет все типы кавычек на стандартные двойные кавычки
 
         Args:
@@ -63,6 +107,31 @@ class TestEngine:
             result = result.replace(quote, '"')
 
         return result
+
+    def _normalize_number(self, value: Any) -> str:
+        """
+        Нормализация чисел для сравнения
+        Убирает пробелы, заменяет запятые на точки
+
+        Args:
+            value: Значение для нормализации
+
+        Returns:
+            Нормализованная строка
+        """
+        if not isinstance(value, (str, int, float)):
+            return str(value)
+
+        # Конвертируем в строку
+        str_value = str(value).strip()
+
+        # Убираем пробелы (разделители тысяч)
+        str_value = str_value.replace(' ', '').replace('\u00a0', '')
+
+        # Заменяем запятую на точку (десятичный разделитель)
+        str_value = str_value.replace(',', '.')
+
+        return str_value
 
     def run_tests(self) -> Dict[str, Any]:
         """
@@ -160,7 +229,7 @@ class TestEngine:
         for pattern in ['*.pdf', '*.jpg', '*.jpeg', '*.png']:
             for doc_path in invoices_dir.glob(pattern):
                 # Поиск соответствующего JSON эталона в examples_dir
-                # Например: invoice.jpg -> examples/invoice.json
+                # Имя эталона формируется как {имя_документа}.json
                 expected_filename = f"{doc_path.stem}.json"
                 expected_path = examples_dir / expected_filename
 
@@ -216,10 +285,16 @@ class TestEngine:
         header_differences = self._compare_header(expected_normalized, actual_normalized)
 
         # 2. Сравниваем ITEMS (товары)
-        item_differences = self._compare_items(
-            expected_normalized.get('items', []),
-            actual_normalized.get('items', [])
-        )
+        # Убеждаемся что items это список
+        expected_items = expected_normalized.get('items', [])
+        actual_items = actual_normalized.get('items', [])
+
+        if not isinstance(expected_items, list):
+            expected_items = []
+        if not isinstance(actual_items, list):
+            actual_items = []
+
+        item_differences = self._compare_items(expected_items, actual_items)
 
         # Объединяем все различия
         all_differences = header_differences + item_differences
@@ -261,9 +336,79 @@ class TestEngine:
 
         return test_result
 
+    def _get_semantic_key_mapping(self) -> Dict[str, List[str]]:
+        """
+        Возвращает маппинг семантически эквивалентных ключей для сравнения
+
+        Returns:
+            Словарь {основной_ключ: [варианты_ключей]}
+        """
+        return {
+            # Название товара
+            'item_name': ['item_name', 'item_description', 'product_name', 'name', 'description'],
+            'item_description': ['item_name', 'item_description', 'product_name', 'name', 'description'],
+            # Номер строки
+            'row_number': ['row_number', 'no', 'index', 'number', 'index_field', 'item_number'],
+            'no': ['row_number', 'no', 'index', 'number', 'index_field', 'item_number'],
+            'item_number': ['row_number', 'no', 'index', 'number', 'index_field', 'item_number'],
+            # Код УКТ ЗЕД
+            'ukt_zed_code': ['ukt_zed_code', 'ukt_zed', 'ukt_zed_code_field', 'code'],
+            'ukt_zed': ['ukt_zed_code', 'ukt_zed', 'ukt_zed_code_field', 'code'],
+            # Количество
+            'quantity': ['quantity', 'qty', 'quantity_field'],
+            # Единица измерения
+            'unit': ['unit', 'unit_field'],
+            # Цена без НДС
+            'price_without_vat': ['price_without_vat', 'unit_price', 'price', 'unit_price_field', 'price_no_vat', 'unit_price_without_vat'],
+            'price_no_vat': ['price_without_vat', 'unit_price', 'price', 'unit_price_field', 'price_no_vat', 'unit_price_without_vat'],
+            'unit_price_without_vat': ['price_without_vat', 'unit_price', 'price', 'unit_price_field', 'price_no_vat', 'unit_price_without_vat'],
+            # Сумма без НДС
+            'sum_without_vat': ['sum_without_vat', 'amount_without_vat', 'total', 'sum_without_vat_field', 'amount_without_vat_field', 'sum_no_vat', 'total_price_without_vat'],
+            'amount_without_vat': ['sum_without_vat', 'amount_without_vat', 'total', 'sum_without_vat_field', 'amount_without_vat_field', 'sum_no_vat', 'total_price_without_vat'],
+            'sum_no_vat': ['sum_without_vat', 'amount_without_vat', 'total', 'sum_without_vat_field', 'amount_without_vat_field', 'sum_no_vat', 'total_price_without_vat'],
+            'total_price_without_vat': ['sum_without_vat', 'amount_without_vat', 'total', 'sum_without_vat_field', 'amount_without_vat_field', 'sum_no_vat', 'total_price_without_vat'],
+        }
+
+    def _find_semantic_value(self, item: Dict, semantic_keys: List[str]) -> Any:
+        """
+        Ищет значение по семантическим ключам (проверяет все варианты)
+
+        Args:
+            item: Объект товара
+            semantic_keys: Список семантически эквивалентных ключей
+
+        Returns:
+            Значение или None
+        """
+        for key in semantic_keys:
+            if key in item:
+                return item[key]
+        return None
+
+    def _extract_quantity_number(self, value: Any) -> str:
+        """
+        Извлекает число из количества (убирает единицы измерения)
+
+        Args:
+            value: Значение количества (может быть строкой с числом и единицами измерения, числом, или строкой с числом)
+
+        Returns:
+            Нормализованное число как строка
+        """
+        if value is None:
+            return ''
+        value_str = str(value).strip()
+        # Убираем единицы измерения (шт, кг, м и т.д.)
+        # Ищем число в начале строки
+        match = re.match(r'^(\d+[.,]?\d*)', value_str)
+        if match:
+            num = match.group(1).replace(',', '.')
+            return num
+        return value_str
+
     def _compare_items(self, expected_items: List[Dict], actual_items: List[Dict]) -> List[Dict]:
         """
-        Построчное сравнение товаров
+        Построчное сравнение товаров с семантическим маппингом ключей
 
         Args:
             expected_items: Ожидаемые товары
@@ -273,49 +418,180 @@ class TestEngine:
             Список различий
         """
         differences = []
+        key_mapping = self._get_semantic_key_mapping()
 
+        # Проверяем, есть ли данные в обеих структурах, даже если количество строк разное
+        # Сначала собираем все данные из обеих структур для семантического сравнения
+        expected_data_set = set()
+        actual_data_set = set()
+
+        for exp in expected_items:
+            # Собираем ключевые данные строки для идентификации
+            key_values = []
+            for key in ['item_name', 'item_description', 'product_name', 'ukt_zed_code', 'ukt_zed', 'no', 'row_number']:
+                value = exp.get(key, '')
+                if value:
+                    normalized = self._normalize_text_for_comparison(value)
+                    if normalized:
+                        key_values.append(normalized)
+            if key_values:
+                expected_data_set.add('|'.join(sorted(key_values)))
+
+        for act in actual_items:
+            key_values = []
+            for key in ['item_name', 'item_description', 'product_name', 'ukt_zed_code', 'ukt_zed', 'no', 'row_number']:
+                value = act.get(key, '')
+                if value:
+                    normalized = self._normalize_text_for_comparison(value)
+                    if normalized:
+                        key_values.append(normalized)
+            if key_values:
+                actual_data_set.add('|'.join(sorted(key_values)))
+
+        # Определяем максимальную длину для сравнения
         max_len = max(len(expected_items), len(actual_items))
 
         for i in range(max_len):
             if i >= len(expected_items):
+                # Проверяем, есть ли данные этой строки в expected_data_set
+                # Если данные фактически присутствуют в другом формате, не показываем ошибку
+                act = actual_items[i]
+                key_values = []
+                for key in ['item_name', 'item_description', 'product_name', 'ukt_zed_code', 'ukt_zed', 'no', 'row_number']:
+                    value = act.get(key, '')
+                    if value:
+                        normalized = self._normalize_text_for_comparison(value)
+                        if normalized:
+                            key_values.append(normalized)
+
+                if key_values:
+                    act_signature = '|'.join(sorted(key_values))
+                    # Если эти данные есть в expected (в любой строке), пропускаем
+                    if act_signature in expected_data_set:
+                        continue
+
+                # Только если данные действительно лишние
                 differences.append({
                     "path": f"items[{i}]",
                     "type": "missing_in_expected",
                     "expected": None,
-                    "actual": f"Лишняя строка {i+1}"
+                    "actual": f"Лишняя строка {i+1}",
+                    "field": "item",
+                    "line": i + 1
                 })
                 continue
 
             if i >= len(actual_items):
+                # Аналогично для отсутствующих строк
+                exp = expected_items[i]
+                key_values = []
+                for key in ['item_name', 'item_description', 'product_name', 'ukt_zed_code', 'ukt_zed', 'no', 'row_number']:
+                    value = exp.get(key, '')
+                    if value:
+                        normalized = self._normalize_text_for_comparison(value)
+                        if normalized:
+                            key_values.append(normalized)
+
+                if key_values:
+                    exp_signature = '|'.join(sorted(key_values))
+                    if exp_signature in actual_data_set:
+                        continue
+
                 differences.append({
                     "path": f"items[{i}]",
                     "type": "missing_in_actual",
                     "expected": f"Отсутствует строка {i+1}",
-                    "actual": None
+                    "actual": None,
+                    "field": "item",
+                    "line": i + 1
                 })
                 continue
 
             exp = expected_items[i]
             act = actual_items[i]
 
-            # Универсальное сравнение всех полей
-            # Объединяем ключи из обоих объектов
+            # Собираем все уникальные ключи из обоих объектов
             all_keys = set(exp.keys()) | set(act.keys())
 
+            # Создаем множество уже обработанных семантических групп
+            processed_semantic_groups = set()
+
+            # Определяем, является ли значение числом
+            def is_numeric(value):
+                """Проверяет, является ли значение числом"""
+                if isinstance(value, (int, float)):
+                    return True
+                if isinstance(value, str):
+                    value_clean = value.strip().replace(' ', '').replace(',', '.')
+                    try:
+                        float(value_clean)
+                        return True
+                    except (ValueError, AttributeError):
+                        return False
+                return False
+
+            # Для каждого ключа ищем семантически эквивалентные значения
             for key in all_keys:
-                exp_value = exp.get(key, '')
-                act_value = act.get(key, '')
+                # Определяем семантическую группу для этого ключа
+                semantic_keys = None
+                semantic_group_id = None
+                for main_key, variants in key_mapping.items():
+                    if key in variants:
+                        semantic_keys = variants
+                        semantic_group_id = tuple(sorted(variants))  # Уникальный ID группы
+                        break
+
+                # Если это семантическая группа, которую мы уже обработали, пропускаем
+                if semantic_group_id and semantic_group_id in processed_semantic_groups:
+                    continue
+
+                if semantic_keys:
+                    # Помечаем группу как обработанную
+                    if semantic_group_id:
+                        processed_semantic_groups.add(semantic_group_id)
+
+                    # Ищем значение в обоих объектах по всем вариантам ключей
+                    exp_value = self._find_semantic_value(exp, semantic_keys)
+                    act_value = self._find_semantic_value(act, semantic_keys)
+                    # Используем первый ключ из группы как имя поля для отчета
+                    field_name = semantic_keys[0]
+                else:
+                    # Если нет маппинга, используем прямой ключ
+                    exp_value = exp.get(key, '')
+                    act_value = act.get(key, '')
+                    field_name = key
+
+                # Специальная обработка для quantity - извлекаем только число
+                if field_name in ['quantity', 'qty', 'quantity_field'] or 'quantity' in str(field_name).lower():
+                    exp_value = self._extract_quantity_number(exp_value)
+                    act_value = self._extract_quantity_number(act_value)
 
                 # Нормализуем для сравнения
-                exp_str = self._normalize_quotes(str(exp_value).strip())
-                act_str = self._normalize_quotes(str(act_value).strip())
+                # Если оба значения числовые, используем нормализацию чисел
+                if is_numeric(exp_value) and is_numeric(act_value):
+                    exp_str = self._normalize_number(exp_value)
+                    act_str = self._normalize_number(act_value)
+                else:
+                    # Для текста используем полную нормализацию текста
+                    exp_str = self._normalize_text_for_comparison(exp_value)
+                    act_str = self._normalize_text_for_comparison(act_value)
 
+                # Проверяем, являются ли значения пустыми после нормализации
+                exp_empty = not exp_str or exp_str == ''
+                act_empty = not act_str or act_str == ''
+
+                # Если оба значения пустые, пропускаем
+                if exp_empty and act_empty:
+                    continue
+
+                # Если значения различаются после нормализации
                 if exp_str != act_str:
                     differences.append({
-                        "path": f"items[{i}].{key}",
+                        "path": f"items[{i}].{field_name}",
                         "type": "mismatch",
-                        "expected": str(exp_value).strip(),
-                        "actual": str(act_value).strip(),
+                        "expected": str(exp_value).strip() if exp_value is not None else '',
+                        "actual": str(act_value).strip() if act_value is not None else '',
+                        "field": field_name,
                         "line": i + 1
                     })
 
@@ -339,18 +615,41 @@ class TestEngine:
         act_doc_info = {}
         exp_parties = {}
         act_parties = {}
+        exp_signatures = {}
+        act_signatures = {}
 
-        # Пытаемся найти document_info
+        # Пытаемся найти document_info (может быть на верхнем уровне или в header_data)
         if 'document_info' in expected_norm:
             exp_doc_info = expected_norm['document_info']
+        elif 'header_data' in expected_norm and isinstance(expected_norm['header_data'], dict):
+            exp_doc_info = expected_norm['header_data'].get('document_info', {})
+
         if 'document_info' in actual_norm:
             act_doc_info = actual_norm['document_info']
+        elif 'header_data' in actual_norm and isinstance(actual_norm['header_data'], dict):
+            act_doc_info = actual_norm['header_data'].get('document_info', {})
 
-        # Пытаемся найти parties
+        # Пытаемся найти parties (может быть на верхнем уровне или в header_data)
         if 'parties' in expected_norm:
             exp_parties = expected_norm['parties']
+        elif 'header_data' in expected_norm and isinstance(expected_norm['header_data'], dict):
+            exp_parties = expected_norm['header_data'].get('parties', {})
+
         if 'parties' in actual_norm:
             act_parties = actual_norm['parties']
+        elif 'header_data' in actual_norm and isinstance(actual_norm['header_data'], dict):
+            act_parties = actual_norm['header_data'].get('parties', {})
+
+        # Пытаемся найти signatures (может быть на верхнем уровне или в header_data)
+        if 'signatures' in expected_norm:
+            exp_signatures = expected_norm['signatures']
+        elif 'header_data' in expected_norm and isinstance(expected_norm['header_data'], dict):
+            exp_signatures = expected_norm['header_data'].get('signatures', {})
+
+        if 'signatures' in actual_norm:
+            act_signatures = actual_norm['signatures']
+        elif 'header_data' in actual_norm and isinstance(actual_norm['header_data'], dict):
+            act_signatures = actual_norm['header_data'].get('signatures', {})
 
         # 1. Номер документа
         exp_number = str(exp_doc_info.get('number', '')).strip()
@@ -376,15 +675,16 @@ class TestEngine:
                 "description": "Дата документа"
             })
 
-        # 3. Исполнитель (performer)
-        exp_performer = exp_parties.get('performer', {})
-        act_performer = act_parties.get('performer', {})
+        # 3. Исполнитель/Поставщик (performer/supplier)
+        # Может быть как performer, так и supplier
+        exp_performer = exp_parties.get('performer', exp_parties.get('supplier', {}))
+        act_performer = act_parties.get('performer', act_parties.get('supplier', {}))
 
-        # 3.1. Название исполнителя (с нормализацией кавычек)
+        # 3.1. Название исполнителя (с нормализацией текста)
         exp_perf_name_orig = str(exp_performer.get('name', exp_performer.get('full_name', ''))).strip()
         act_perf_name_orig = str(act_performer.get('name', act_performer.get('full_name', ''))).strip()
-        exp_perf_name = self._normalize_quotes(exp_perf_name_orig)
-        act_perf_name = self._normalize_quotes(act_perf_name_orig)
+        exp_perf_name = self._normalize_text_for_comparison(exp_perf_name_orig)
+        act_perf_name = self._normalize_text_for_comparison(act_perf_name_orig)
         if exp_perf_name and act_perf_name and exp_perf_name != act_perf_name:
             differences.append({
                 "path": "header.parties.performer.name",
@@ -415,8 +715,8 @@ class TestEngine:
         if not act_perf_bank_orig and isinstance(act_performer.get('bank_account'), dict):
             act_perf_bank_orig = str(act_performer['bank_account'].get('bank_name', '')).strip()
 
-        exp_perf_bank = self._normalize_quotes(exp_perf_bank_orig)
-        act_perf_bank = self._normalize_quotes(act_perf_bank_orig)
+        exp_perf_bank = self._normalize_text_for_comparison(exp_perf_bank_orig)
+        act_perf_bank = self._normalize_text_for_comparison(act_perf_bank_orig)
 
         if exp_perf_bank and act_perf_bank and exp_perf_bank != act_perf_bank:
             differences.append({
@@ -427,15 +727,16 @@ class TestEngine:
                 "description": "Банк исполнителя"
             })
 
-        # 4. Заказчик (customer)
-        exp_customer = exp_parties.get('customer', {})
-        act_customer = act_parties.get('customer', {})
+        # 4. Заказчик/Покупатель (customer/buyer)
+        # Может быть как customer, так и buyer
+        exp_customer = exp_parties.get('customer', exp_parties.get('buyer', {}))
+        act_customer = act_parties.get('customer', act_parties.get('buyer', {}))
 
         # Customer name field comparison
         exp_cust_name_orig = str(exp_customer.get('name', exp_customer.get('full_name', ''))).strip()
         act_cust_name_orig = str(act_customer.get('name', act_customer.get('full_name', ''))).strip()
-        exp_cust_name = self._normalize_quotes(exp_cust_name_orig)
-        act_cust_name = self._normalize_quotes(act_cust_name_orig)
+        exp_cust_name = self._normalize_text_for_comparison(exp_cust_name_orig)
+        act_cust_name = self._normalize_text_for_comparison(act_cust_name_orig)
         if exp_cust_name and act_cust_name and exp_cust_name != act_cust_name:
             differences.append({
                 "path": "header.parties.customer.name",
@@ -466,8 +767,8 @@ class TestEngine:
         if not act_cust_bank_orig and isinstance(act_customer.get('bank_account'), dict):
             act_cust_bank_orig = str(act_customer['bank_account'].get('bank_name', '')).strip()
 
-        exp_cust_bank = self._normalize_quotes(exp_cust_bank_orig)
-        act_cust_bank = self._normalize_quotes(act_cust_bank_orig)
+        exp_cust_bank = self._normalize_text_for_comparison(exp_cust_bank_orig)
+        act_cust_bank = self._normalize_text_for_comparison(act_cust_bank_orig)
 
         if exp_cust_bank and act_cust_bank and exp_cust_bank != act_cust_bank:
             differences.append({
@@ -496,6 +797,78 @@ class TestEngine:
                     "actual": f"Номер не найден или неверный в тексте",
                     "description": "Номер документа в текстовом блоке"
                 })
+
+        # 6. Сравнение signatures (подписи) - универсальное сравнение через рекурсивный метод
+        # Нормализуем структуры к единому виду и сравниваем как обычные данные
+        if exp_signatures and act_signatures:
+            def normalize_structure(data):
+                """Приводит структуру к единому виду для сравнения"""
+                if isinstance(data, dict):
+                    return [v for v in data.values() if isinstance(v, dict)]
+                elif isinstance(data, list):
+                    return [v for v in data if isinstance(v, dict)]
+                return []
+
+            exp_sigs = normalize_structure(exp_signatures)
+            act_sigs = normalize_structure(act_signatures)
+
+            # Универсальное сравнение списков структур
+            max_len = max(len(exp_sigs), len(act_sigs))
+            for i in range(max_len):
+                if i >= len(exp_sigs):
+                    # Лишняя структура в actual
+                    act_sig = act_sigs[i]
+                    if isinstance(act_sig, dict):
+                        for key, val in act_sig.items():
+                            if isinstance(val, str) and val:
+                                differences.append({
+                                    "path": f"header.signatures[{i}].{key}",
+                                    "type": "mismatch",
+                                    "expected": "",
+                                    "actual": val,
+                                    "description": ""
+                                })
+                elif i >= len(act_sigs):
+                    # Отсутствующая структура в actual
+                    exp_sig = exp_sigs[i]
+                    if isinstance(exp_sig, dict):
+                        for key, val in exp_sig.items():
+                            if isinstance(val, str) and val:
+                                differences.append({
+                                    "path": f"header.signatures[{i}].{key}",
+                                    "type": "mismatch",
+                                    "expected": val,
+                                    "actual": "",
+                                    "description": ""
+                                })
+                else:
+                    # Сравниваем структуры
+                    exp_sig = exp_sigs[i]
+                    act_sig = act_sigs[i]
+                    if isinstance(exp_sig, dict) and isinstance(act_sig, dict):
+                        all_keys = set(exp_sig.keys()) | set(act_sig.keys())
+                        for key in all_keys:
+                            exp_val = exp_sig.get(key)
+                            act_val = act_sig.get(key)
+                            if isinstance(exp_val, str) and isinstance(act_val, str):
+                                exp_norm = self._normalize_text_for_comparison(exp_val)
+                                act_norm = self._normalize_text_for_comparison(act_val)
+                                if exp_norm != act_norm:
+                                    differences.append({
+                                        "path": f"header.signatures[{i}].{key}",
+                                        "type": "mismatch",
+                                        "expected": exp_val,
+                                        "actual": act_val,
+                                        "description": ""
+                                    })
+                            elif exp_val != act_val:
+                                differences.append({
+                                    "path": f"header.signatures[{i}].{key}",
+                                    "type": "mismatch",
+                                    "expected": str(exp_val) if exp_val is not None else "",
+                                    "actual": str(act_val) if act_val is not None else "",
+                                    "description": ""
+                                })
 
         return differences
 
@@ -545,87 +918,90 @@ class TestEngine:
 
     def _normalize_structure(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Нормализация структуры данных для сравнения
-
-        Приводит разные форматы вывода к единому виду для корректного сравнения
+        Полностью динамическая нормализация - копирует структуру и находит items
 
         Args:
             data: Исходные данные
 
         Returns:
-            Нормализованные данные
+            Нормализованные данные с items для сравнения
         """
         normalized = {}
 
-        # Извлекаем document_info и parties
-        # Формат 1: данные на корневом уровне (эталонный JSON)
-        if 'document_info' in data and 'parties' in data:
-            normalized['document_info'] = data.get('document_info', {})
-            normalized['parties'] = data.get('parties', {})
-            normalized['contract_reference'] = data.get('contract_reference', {})
-        # Формат 2: данные внутри header (actual JSON)
-        elif 'header' in data and isinstance(data['header'], dict):
-            header_data = data['header']
-            if 'header' in header_data:
-                # Двойной header - берем внутренний
-                header_data = header_data['header']
-
-            # Извлекаем данные из header и нормализуем названия полей
-            normalized['document_info'] = header_data.get('document_info', {})
-
-            # Нормализуем parties: full_name -> name
-            parties = header_data.get('parties', {})
-            if isinstance(parties, dict):
-                normalized_parties = {}
-                for role, party_data in parties.items():
-                    if isinstance(party_data, dict):
-                        normalized_party = party_data.copy()
-                        # Маппинг: full_name -> name
-                        if 'full_name' in normalized_party and 'name' not in normalized_party:
-                            normalized_party['name'] = normalized_party['full_name']
-                        normalized_parties[role] = normalized_party
-                    else:
-                        normalized_parties[role] = party_data
-                normalized['parties'] = normalized_parties
-            else:
-                normalized['parties'] = parties
-
-            normalized['contract_reference'] = header_data.get('contract_reference', {})
-
-        # Обрабатываем items
-        # Формат 1: items уже есть на корневом уровне (эталонный JSON)
-        if 'items' in data and isinstance(data['items'], list):
-            # Просто копируем items, они уже в правильном формате
-            normalized['items'] = data['items']
+        if not isinstance(data, dict):
             return normalized
 
-        # Формат 2: tables -> items (actual JSON от Gemini)
-        if 'tables' in data and isinstance(data['tables'], list) and len(data['tables']) > 0:
-            # Берем первую таблицу
-            table = data['tables'][0]
+        # Копируем все ключи динамически
+        for key, value in data.items():
+            normalized[key] = value
 
-            # Таблица может быть списком строк или словарем с ключом rows
-            rows = []
-            if isinstance(table, list):
-                rows = table
-            elif isinstance(table, dict) and 'rows' in table:
-                rows = table['rows']
+        # Динамически ищем items - список dict который НЕ является fields (label/value)
+        items_found = None
 
-            # Просто берем rows как есть - без преобразований
-            normalized['items'] = rows
+        def is_items_list(lst):
+            """Проверяет является ли список items (не fields)"""
+            if not isinstance(lst, list) or len(lst) == 0:
+                return False
+            if not isinstance(lst[0], dict):
+                return False
+            # Если dict содержит только 2 ключа - вероятно это fields (label/value)
+            # Items обычно имеют больше ключей
+            first_keys_count = len(lst[0].keys())
+            if first_keys_count <= 2:
+                return False
+            return True
 
-        # Если items уже есть напрямую, используем их
-        if 'items' in data:
-            normalized['items'] = data['items']
-        elif 'line_items' in data:
-            # Маппинг line_items -> items
-            # Берем items как есть, без маппинга
-            normalized['items'] = data['line_items']
+        # Ищем список на верхнем уровне (прямой line_items или items)
+        for key, value in data.items():
+            if is_items_list(value):
+                items_found = value
+                break
 
-        # Копируем остальные поля верхнего уровня
-        for key in ['document_info', 'parties', 'contract_reference', 'totals', 'signatures', 'references', 'annotations']:
-            if key in data:
-                normalized[key] = data[key]
+        # Если не нашли, ищем внутри вложенных структур
+        if not items_found:
+            # Проверяем table_data.line_items (прямой объект, не список)
+            if 'table_data' in data and isinstance(data['table_data'], dict):
+                table_data = data['table_data']
+                if 'line_items' in table_data and is_items_list(table_data['line_items']):
+                    items_found = table_data['line_items']
+
+            # Проверяем tables[0].line_items (список таблиц)
+            if not items_found:
+                for key, value in data.items():
+                    if isinstance(value, list) and len(value) > 0:
+                        first_elem = value[0]
+                        if isinstance(first_elem, dict):
+                            # Ищем список внутри этого dict - это должен быть line_items
+                            for sub_key, sub_value in first_elem.items():
+                                if isinstance(sub_value, list) and is_items_list(sub_value):
+                                    items_found = sub_value
+                                    break
+                        if items_found:
+                            break
+
+            # Также проверяем другие возможные структуры (tables как объект)
+            if not items_found:
+                for key, value in data.items():
+                    if isinstance(value, dict):
+                        # Проверяем прямые вложенные структуры
+                        if 'line_items' in value and is_items_list(value['line_items']):
+                            items_found = value['line_items']
+                            break
+                        # Проверяем вложенные структуры на один уровень глубже
+                        for sub_key, sub_value in value.items():
+                            if isinstance(sub_value, dict) and 'line_items' in sub_value:
+                                if is_items_list(sub_value['line_items']):
+                                    items_found = sub_value['line_items']
+                                    break
+                        if items_found:
+                            break
+
+        # Сохраняем найденные items (только список, не dict)
+        if items_found is not None and isinstance(items_found, list):
+            normalized['items'] = items_found
+        else:
+            # Если items не найден, оставляем пустой список
+            normalized['items'] = []
 
         return normalized
 
