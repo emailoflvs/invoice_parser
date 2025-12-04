@@ -28,6 +28,8 @@ class GeminiClient:
         """
         self.config = config
         self._configure_api()
+        # Thread-local storage для cache bypass ID (для безопасности при параллельных запросах)
+        self._thread_local = threading.local()
 
     def _configure_api(self):
         """Настройка Gemini API"""
@@ -40,7 +42,7 @@ class GeminiClient:
     def _get_generation_config(self, max_tokens: Optional[int] = None, use_seed: bool = True) -> Dict[str, Any]:
         """
         Получить конфигурацию генерации
-        
+
         ЛОГИКА:
         - temperature=0 для детерминированности (стабильные результаты)
         - seed=0 для дополнительной стабильности
@@ -55,13 +57,13 @@ class GeminiClient:
         """
         # Берём из config или переопределяем
         tokens = max_tokens if max_tokens is not None else self.config.image_max_output_tokens
-        
+
         config = {
             "temperature": self.config.image_temperature,  # Должно быть 0 для стабильности
             "top_p": self.config.image_top_p,
             "max_output_tokens": tokens,
         }
-        
+
         # Примечание: seed не поддерживается в текущей версии google-generativeai
         # Для детерминированности достаточно temperature=0 + уникальный ID в промпте
 
@@ -79,7 +81,7 @@ class GeminiClient:
     ) -> str:
         """
         Парсинг документа с использованием vision модели
-        
+
         ЛОГИКА ИЗ СТАРОГО ПРОЕКТА:
         - Прямой вызов API (без threading)
         - Логирование времени выполнения
@@ -122,19 +124,19 @@ class GeminiClient:
             import time
             cache_bypass_id = str(uuid.uuid4())
             cache_bypass_timestamp = str(int(time.time() * 1000000))
-            
+
             # System instruction для cache bypass - Gemini игнорирует это при парсинге
             system_instruction = f"[Internal ID: {cache_bypass_id}][Timestamp: {cache_bypass_timestamp}]"
-            
+
             # Создание модели с правильными настройками из config
             model = genai.GenerativeModel(
                 model_name=self.config.gemini_model,
                 generation_config=self._get_generation_config(max_tokens=max_tokens),
                 system_instruction=system_instruction  # Cache bypass БЕЗ изменения промпта!
             )
-            
-            # Сохраняем ID для проверки
-            self._last_cache_bypass_id = cache_bypass_id
+
+            # Сохраняем ID для проверки (thread-safe)
+            self._thread_local.cache_bypass_id = cache_bypass_id
 
             # Формирование контента для запроса
             content = [prompt] + images
@@ -144,11 +146,11 @@ class GeminiClient:
 
             # ЛОГИКА ИЗ СТАРОГО ПРОЕКТА: Прямой вызов без таймаута
             import time
-            
+
             start_time = time.time()
             response = model.generate_content(content)
             elapsed = time.time() - start_time
-            
+
             logger.info(f"Response received in {elapsed:.2f}s")
 
             if not response or not response.text:
@@ -197,7 +199,7 @@ class GeminiClient:
                 raise GeminiAPIError(f"Empty prompt in file: {prompt_file_path}")
 
             logger.info(f"Loaded prompt from: {prompt_file_path}")
-            
+
             # Cache bypass теперь через system_instruction в parse_document_with_vision
             # Промпт остается чистым для стабильного качества парсинга
 
@@ -228,63 +230,64 @@ class GeminiClient:
         except Exception as e:
             logger.error(f"Connection test failed: {e}")
             return False
-    
+
     def verify_cache_bypass(self, parsed_json: Dict[str, Any]) -> bool:
         """
         Проверка, что ответ не из кеша
         Теперь через system_instruction, поэтому просто логируем ID
-        
+
         Args:
             parsed_json: Распарсенный JSON ответ
-            
+
         Returns:
             True (всегда, т.к. system_instruction гарантирует уникальность)
         """
-        if hasattr(self, '_last_cache_bypass_id'):
-            logger.info(f"✅ CACHE BYPASS via system_instruction: {self._last_cache_bypass_id[:16]}...")
+        # Используем thread-local storage для безопасности при параллельных запросах
+        if hasattr(self._thread_local, 'cache_bypass_id'):
+            logger.info(f"✅ CACHE BYPASS via system_instruction: {self._thread_local.cache_bypass_id[:16]}...")
         else:
             logger.warning("⚠️ Cache bypass ID not found (old request?)")
-        
+
         return True  # system_instruction гарантирует уникальность запроса
-    
+
     def parse_json_response(self, raw_text: str, debug_name: str = "response") -> Dict[str, Any]:
         """
         Парсинг JSON ответа с обработкой ошибок
-        
+
         ЛОГИКА ИЗ СТАРОГО ПРОЕКТА:
         - Правильная очистка от markdown (startswith/endswith)
         - Детальное логирование ошибок
         - Сохранение debug файла при ошибках
         - Проверка cache-bypass
-        
+
         Args:
             raw_text: Сырой ответ от Gemini
             debug_name: Имя для debug файла
-            
+
         Returns:
             Распарсенный JSON
-            
+
         Raises:
             GeminiAPIError: При ошибке парсинга
         """
         import json
-        
+
         # Очистка от markdown (логика из старого проекта)
         text = raw_text.strip()
-        
+
         if text.startswith("```json"):
             text = text[7:]  # Удаляем ```json
         if text.endswith("```"):
             text = text[:-3]  # Удаляем ```
-        
+
         text = text.strip()
-        
+
         try:
             parsed = json.loads(text)
-            
+
             # Проверяем cache-bypass
             self.verify_cache_bypass(parsed)
-            
+
             return parsed
         except json.JSONDecodeError as e:
             # ЛОГИКА ИЗ СТАРОГО ПРОЕКТА: детальное логирование
@@ -292,7 +295,7 @@ class GeminiClient:
             logger.error(f"Raw text length: {len(text)} characters")
             logger.error(f"First 200 chars: {text[:200]}")
             logger.error(f"Last 200 chars: {text[-200:]}")
-            
+
             # Сохраняем для отладки
             debug_path = Path(self.config.output_dir) / f"debug_gemini_{debug_name}.txt"
             try:
@@ -303,5 +306,5 @@ class GeminiClient:
                 logger.error(f"Full response saved to: {debug_path}")
             except Exception as save_error:
                 logger.error(f"Failed to save debug response: {save_error}")
-            
+
             raise GeminiAPIError(f"Invalid JSON received from model: {e}")

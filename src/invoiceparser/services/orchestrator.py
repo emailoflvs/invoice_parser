@@ -263,10 +263,9 @@ class Orchestrator:
         """
         Парсинг документа с помощью Gemini
 
-        ЛОГИКА ИЗ СТАРОГО ПРОЕКТА:
-        - Возвращаем простой dict (без Pydantic!)
-        - Структура как в старом gemini_parser.py
-        - Используем публичный метод parse_json_response
+        Поддерживает два режима:
+        - PARALLEL (по умолчанию): header и items парсятся одновременно
+        - SEQUENTIAL: header парсится первым, затем items
 
         Args:
             main_image: Основное изображение (первая страница)
@@ -276,36 +275,59 @@ class Orchestrator:
             Распарсенные данные в формате dict
         """
         import time
+        from concurrent.futures import ThreadPoolExecutor
 
-        logger.info("Starting Gemini parsing")
+        mode = "PARALLEL" if self.config.parallel_parsing else "SEQUENTIAL"
+        logger.info(f"Starting Gemini parsing ({mode} mode)")
 
         try:
-            # Парсинг header (первый запрос)
-            logger.info("Parsing header...")
-            header_response = self.gemini_client.parse_with_prompt_file(
-                image_path=main_image,
-                prompt_file_path=self.config.prompt_header_path,
-                max_tokens=None  # Используем значение из config (90000)
-            )
+            # Функция для парсинга header
+            def parse_header():
+                logger.info("Parsing header...")
+                start = time.time()
+                response = self.gemini_client.parse_with_prompt_file(
+                    image_path=main_image,
+                    prompt_file_path=self.config.prompt_header_path,
+                    max_tokens=None  # Используем значение из config (90000)
+                )
+                elapsed = time.time() - start
+                logger.info(f"Header parsed successfully in {elapsed:.2f}s")
+                return self.gemini_client.parse_json_response(response, "header")
 
-            logger.info("Header parsed successfully")
+            # Функция для парсинга items
+            def parse_items():
+                logger.info("Parsing items...")
+                start = time.time()
+                response = self.gemini_client.parse_with_prompt_file(
+                    image_path=main_image,
+                    prompt_file_path=self.config.prompt_items_path,
+                    additional_images=additional_images,
+                    max_tokens=None  # Используем значение из config (90000)
+                )
+                elapsed = time.time() - start
+                logger.info(f"Items parsed successfully in {elapsed:.2f}s")
+                return self.gemini_client.parse_json_response(response, "items")
 
-            # Парсинг JSON из ответа (используем публичный метод!)
-            header_data = self.gemini_client.parse_json_response(header_response, "header")
+            # Выбор режима выполнения
+            total_start = time.time()
 
-            # Парсинг items (второй запрос)
-            logger.info("Parsing items...")
-            items_response = self.gemini_client.parse_with_prompt_file(
-                image_path=main_image,
-                prompt_file_path=self.config.prompt_items_path,
-                additional_images=additional_images,
-                max_tokens=None  # Используем значение из config (90000)
-            )
+            if self.config.parallel_parsing:
+                # ПАРАЛЛЕЛЬНОЕ выполнение обоих запросов
+                with ThreadPoolExecutor(max_workers=2) as executor:
+                    # Запускаем оба запроса одновременно
+                    header_future = executor.submit(parse_header)
+                    items_future = executor.submit(parse_items)
 
-            logger.info("Items parsed successfully")
+                    # Ожидаем завершения обоих
+                    header_data = header_future.result()
+                    items_data = items_future.result()
+            else:
+                # ПОСЛЕДОВАТЕЛЬНОЕ выполнение
+                header_data = parse_header()
+                items_data = parse_items()
 
-            # Парсинг JSON из ответа
-            items_data = self.gemini_client.parse_json_response(items_response, "items")
+            total_elapsed = time.time() - total_start
+            logger.info(f"Parsing completed in {total_elapsed:.2f}s ({mode} mode)")
 
             # INFO: Логируем структуру items_data
             logger.info(f"items_data keys: {items_data.keys() if isinstance(items_data, dict) else type(items_data)}")

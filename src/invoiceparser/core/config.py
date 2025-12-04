@@ -7,25 +7,26 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Config(BaseSettings):
     """Конфигурация приложения"""
-    
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=True,
         extra="ignore"
     )
-    
+
     # Основные настройки
     mode: Literal["NORMAL", "TEST"] = Field(alias="MODE")
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = Field(alias="LOG_LEVEL")
-    
+    parallel_parsing: bool = Field(alias="PARALLEL_PARSING", default=True)  # True = параллельно, False = последовательно
+
     # Директории
     invoices_dir: Path = Field(alias="INVOICES_DIR")
     output_dir: Path = Field(alias="OUTPUT_DIR")
     logs_dir: Path = Field(alias="LOGS_DIR")
     temp_dir: Path = Field(alias="TEMP_DIR")
     examples_dir: Path = Field(alias="EXAMPLES_DIR")
-    
+
     # Gemini API
     gemini_api_key: str = Field(alias="GEMINI_API_KEY")
     gemini_model: str = Field(alias="GEMINI_MODEL")
@@ -34,7 +35,7 @@ class Config(BaseSettings):
     prompts_dir: Path = Field(alias="PROMPTS_DIR")
     prompt_header_path: Path = Field(alias="PROMPT_HEADER_PATH")
     prompt_items_path: Path = Field(alias="PROMPT_ITEMS_PATH")
-    
+
     # Настройки изображений
     enable_image_enhancement: bool = Field(alias="ENABLE_IMAGE_ENHANCEMENT")
     image_upscale_factor: float = Field(alias="IMAGE_UPSCALE_FACTOR")
@@ -56,22 +57,22 @@ class Config(BaseSettings):
     image_temperature: float = Field(alias="IMAGE_TEMPERATURE")
     image_top_p: float = Field(alias="IMAGE_TOP_P")
     image_max_output_tokens: int = Field(alias="IMAGE_MAX_OUTPUT_TOKENS")
-    
+
     # Настройки PDF
     pdf_processing_mode: Literal["DIRECT", "IMAGE_BASED", "HYBRID"] = Field(alias="PDF_PROCESSING_MODE")
     pdf_image_dpi: int = Field(alias="PDF_IMAGE_DPI")
     pdf_max_pages: int = Field(alias="PDF_MAX_PAGES")
     pdf_text_threshold: int = Field(alias="PDF_TEXT_THRESHOLD")
-    
+
     # Настройки экспорта
     export_excel_enabled: bool = Field(alias="EXPORT_EXCEL_ENABLED")
     export_crm_enabled: bool = Field(alias="EXPORT_CRM_ENABLED")
-    
+
     @classmethod
     def load(cls) -> "Config":
         """
         Загрузка конфигурации из .env файла
-        
+
         Returns:
             Экземпляр конфигурации
         """
