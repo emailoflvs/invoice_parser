@@ -68,6 +68,11 @@ class Config(BaseSettings):
     export_excel_enabled: bool = Field(alias="EXPORT_EXCEL_ENABLED")
     export_crm_enabled: bool = Field(alias="EXPORT_CRM_ENABLED")
 
+    # Настройки Web API
+    web_host: str = Field(alias="WEB_HOST", default="0.0.0.0")
+    web_port: int = Field(alias="WEB_PORT", default=8000)
+    web_auth_token: str = Field(alias="WEB_AUTH_TOKEN", default="")
+
     @classmethod
     def load(cls) -> "Config":
         """

@@ -6,7 +6,9 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 from fastapi import FastAPI, UploadFile, File, HTTPException, Header, Depends
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from ..core.config import Config
@@ -46,6 +48,21 @@ class WebAPI:
             description="AI-powered document parsing API",
             version="1.0.0"
         )
+
+        # Настройка CORS
+        self.app.add_middleware(
+            CORSMiddleware,
+            allow_origins=["*"],  # В продакшене указать конкретные домены
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+
+        # Подключение статических файлов
+        static_dir = Path(__file__).parent.parent.parent.parent / "static"
+        if static_dir.exists():
+            self.app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+            logger.info(f"Static files mounted from: {static_dir}")
 
         self._setup_routes()
 
@@ -123,20 +140,58 @@ class WebAPI:
                     )
 
             except Exception as e:
+                error_message = str(e)
                 logger.error(f"Failed to process upload: {e}", exc_info=True)
-                raise HTTPException(status_code=500, detail=str(e))
+
+                # Определяем код ошибки и тип
+                error_type = "UNKNOWN_ERROR"
+                status_code = 500
+
+                if "API_QUOTA_EXCEEDED" in error_message:
+                    error_type = "QUOTA_EXCEEDED"
+                    status_code = 429
+                elif "API_AUTH_ERROR" in error_message:
+                    error_type = "AUTH_ERROR"
+                    status_code = 401
+                elif "API_ACCESS_DENIED" in error_message:
+                    error_type = "ACCESS_DENIED"
+                    status_code = 403
+                elif "API_TIMEOUT" in error_message:
+                    error_type = "TIMEOUT"
+                    status_code = 504
+                elif "NETWORK_ERROR" in error_message:
+                    error_type = "NETWORK_ERROR"
+                    status_code = 503
+
+                # Извлекаем только читаемую часть сообщения (после двоеточия)
+                if ": " in error_message:
+                    error_message = error_message.split(": ", 1)[1]
+
+                raise HTTPException(
+                    status_code=status_code,
+                    detail={
+                        "error_type": error_type,
+                        "message": error_message
+                    }
+                )
 
         @self.app.get("/")
         async def root():
-            """Root endpoint"""
-            return {
-                "name": "InvoiceParser API",
-                "version": "1.0.0",
-                "endpoints": {
-                    "health": "/health",
-                    "parse": "/parse (POST)"
+            """Root endpoint - returns web interface"""
+            static_dir = Path(__file__).parent.parent.parent.parent / "static"
+            index_file = static_dir / "index.html"
+
+            if index_file.exists():
+                return FileResponse(index_file)
+            else:
+                return {
+                    "name": "InvoiceParser API",
+                    "version": "1.0.0",
+                    "endpoints": {
+                        "health": "/health",
+                        "parse": "/parse (POST)"
+                    }
                 }
-            }
 
     def _verify_token(self, token: Optional[str]) -> bool:
         """

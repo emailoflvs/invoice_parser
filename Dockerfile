@@ -20,6 +20,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Копируем исходный код
 COPY src/ /app/src/
 COPY prompts/ /app/prompts/
+COPY static/ /app/static/
 
 # Создаём необходимые директории
 RUN mkdir -p /app/invoices /app/output/temp /app/logs /app/examples

@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoice Parser - Integration Example</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            max-width: 900px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #1e1e1e;
+            color: #d4d4d4;
+        }
+        h1 {
+            color: #4ec9b0;
+        }
+        pre {
+            background: #252526;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            border-left: 4px solid #4ec9b0;
+        }
+        .keyword { color: #569cd6; }
+        .string { color: #ce9178; }
+        .comment { color: #6a9955; }
+        .function { color: #dcdcaa; }
+        .section {
+            margin-bottom: 40px;
+        }
+        .note {
+            background: #2d2d30;
+            padding: 15px;
+            border-left: 4px solid #f48771;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>📚 Invoice Parser API - Integration Examples</h1>
+
+    <div class="section">
+        <h2>1. JavaScript / Fetch API</h2>
+        <pre><code><span class="comment">// Простой пример загрузки и парсинга документа</span>
+
+<span class="keyword">async function</span> <span class="function">parseInvoice</span>(file, authToken) {
+  <span class="comment">// Создаём FormData</span>
+  <span class="keyword">const</span> formData = <span class="keyword">new</span> FormData();
+  formData.append(<span class="string">'file'</span>, file);
+
+  <span class="keyword">try</span> {
+    <span class="comment">// Отправляем запрос</span>
+    <span class="keyword">const</span> response = <span class="keyword">await</span> fetch(<span class="string">'http://localhost:8000/parse'</span>, {
+      method: <span class="string">'POST'</span>,
+      headers: {
+        <span class="string">'Authorization'</span>: <span class="string">`Bearer ${authToken}`</span>
+      },
+      body: formData
+    });
+
+    <span class="keyword">if</span> (!response.ok) {
+      <span class="keyword">throw new</span> Error(<span class="string">`HTTP error! status: ${response.status}`</span>);
+    }
+
+    <span class="comment">// Получаем результат</span>
+    <span class="keyword">const</span> data = <span class="keyword">await</span> response.json();
+
+    <span class="keyword">if</span> (data.success) {
+      console.log(<span class="string">'Parsed data:'</span>, data.data);
+      <span class="keyword">return</span> data.data;
+    } <span class="keyword">else</span> {
+      <span class="keyword">throw new</span> Error(data.error);
+    }
+  } <span class="keyword">catch</span> (error) {
+    console.error(<span class="string">'Parse error:'</span>, error);
+    <span class="keyword">throw</span> error;
+  }
+}
+
+<span class="comment">// Использование</span>
+<span class="keyword">const</span> fileInput = document.querySelector(<span class="string">'#fileInput'</span>);
+fileInput.addEventListener(<span class="string">'change'</span>, <span class="keyword">async</span> (e) => {
+  <span class="keyword">const</span> file = e.target.files[0];
+  <span class="keyword">const</span> result = <span class="keyword">await</span> parseInvoice(file, <span class="string">'your_token_here'</span>);
+  console.log(result);
+});</code></pre>
+    </div>
+
+    <div class="section">
+        <h2>2. Python / Requests</h2>
+        <pre><code><span class="keyword">import</span> requests
+
+<span class="keyword">def</span> <span class="function">parse_invoice</span>(file_path, auth_token):
+    <span class="string">"""Парсинг инвойса через API"""</span>
+
+    url = <span class="string">'http://localhost:8000/parse'</span>
+    headers = {
+        <span class="string">'Authorization'</span>: <span class="string">f'Bearer {auth_token}'</span>
+    }
+
+    <span class="keyword">with</span> open(file_path, <span class="string">'rb'</span>) <span class="keyword">as</span> f:
+        files = {<span class="string">'file'</span>: f}
+        response = requests.post(url, headers=headers, files=files)
+
+    <span class="keyword">if</span> response.status_code == <span class="number">200</span>:
+        data = response.json()
+        <span class="keyword">if</span> data[<span class="string">'success'</span>]:
+            <span class="keyword">return</span> data[<span class="string">'data'</span>]
+        <span class="keyword">else</span>:
+            <span class="keyword">raise</span> Exception(data[<span class="string">'error'</span>])
+    <span class="keyword">else</span>:
+        <span class="keyword">raise</span> Exception(<span class="string">f'HTTP {response.status_code}'</span>)
+
+<span class="comment"># Использование</span>
+result = parse_invoice(<span class="string">'invoice.pdf'</span>, <span class="string">'your_token_here'</span>)
+print(result)</code></pre>
+    </div>
+
+    <div class="section">
+        <h2>3. cURL</h2>
+        <pre><code><span class="comment"># Простой запрос через cURL</span>
+
+curl -X POST http://localhost:8000/parse \
+  -H <span class="string">"Authorization: Bearer your_token_here"</span> \
+  -F <span class="string">"file=@invoice.pdf"</span> \
+  | jq .
+
+<span class="comment"># С сохранением результата в файл</span>
+curl -X POST http://localhost:8000/parse \
+  -H <span class="string">"Authorization: Bearer your_token_here"</span> \
+  -F <span class="string">"file=@invoice.pdf"</span> \
+  -o result.json
+
+<span class="comment"># Health check</span>
+curl http://localhost:8000/health</code></pre>
+    </div>
+
+    <div class="section">
+        <h2>4. React Hook Example</h2>
+        <pre><code><span class="keyword">import</span> { useState } <span class="keyword">from</span> <span class="string">'react'</span>;
+
+<span class="keyword">function</span> <span class="function">useInvoiceParser</span>(authToken) {
+  <span class="keyword">const</span> [loading, setLoading] = useState(<span class="keyword">false</span>);
+  <span class="keyword">const</span> [error, setError] = useState(<span class="keyword">null</span>);
+  <span class="keyword">const</span> [data, setData] = useState(<span class="keyword">null</span>);
+
+  <span class="keyword">const</span> parseInvoice = <span class="keyword">async</span> (file) => {
+    setLoading(<span class="keyword">true</span>);
+    setError(<span class="keyword">null</span>);
+
+    <span class="keyword">const</span> formData = <span class="keyword">new</span> FormData();
+    formData.append(<span class="string">'file'</span>, file);
+
+    <span class="keyword">try</span> {
+      <span class="keyword">const</span> response = <span class="keyword">await</span> fetch(<span class="string">'http://localhost:8000/parse'</span>, {
+        method: <span class="string">'POST'</span>,
+        headers: {
+          <span class="string">'Authorization'</span>: <span class="string">`Bearer ${authToken}`</span>
+        },
+        body: formData
+      });
+
+      <span class="keyword">const</span> result = <span class="keyword">await</span> response.json();
+
+      <span class="keyword">if</span> (result.success) {
+        setData(result.data);
+      } <span class="keyword">else</span> {
+        setError(result.error);
+      }
+    } <span class="keyword">catch</span> (err) {
+      setError(err.message);
+    } <span class="keyword">finally</span> {
+      setLoading(<span class="keyword">false</span>);
+    }
+  };
+
+  <span class="keyword">return</span> { parseInvoice, loading, error, data };
+}
+
+<span class="comment">// Использование в компоненте</span>
+<span class="keyword">function</span> <span class="function">InvoiceUploader</span>() {
+  <span class="keyword">const</span> { parseInvoice, loading, error, data } = useInvoiceParser(<span class="string">'your_token'</span>);
+
+  <span class="keyword">const</span> handleFileChange = (e) => {
+    <span class="keyword">const</span> file = e.target.files[0];
+    <span class="keyword">if</span> (file) parseInvoice(file);
+  };
+
+  <span class="keyword">return</span> (
+    <span class="string">&lt;div&gt;</span>
+      <span class="string">&lt;input type="file" onChange={handleFileChange} /&gt;</span>
+      {loading && <span class="string">&lt;p&gt;Loading...&lt;/p&gt;</span>}
+      {error && <span class="string">&lt;p&gt;Error: {error}&lt;/p&gt;</span>}
+      {data && <span class="string">&lt;pre&gt;{JSON.stringify(data, null, 2)}&lt;/pre&gt;</span>}
+    <span class="string">&lt;/div&gt;</span>
+  );
+}</code></pre>
+    </div>
+
+    <div class="section">
+        <h2>5. Response Format</h2>
+        <pre><code>{
+  <span class="string">"success"</span>: <span class="keyword">true</span>,
+  <span class="string">"data"</span>: {
+    <span class="string">"invoice_number"</span>: <span class="string">"INV-001"</span>,
+    <span class="string">"invoice_date"</span>: <span class="string">"2024-01-15"</span>,
+    <span class="string">"supplier_name"</span>: <span class="string">"Company A"</span>,
+    <span class="string">"customer_name"</span>: <span class="string">"Company B"</span>,
+    <span class="string">"currency"</span>: <span class="string">"USD"</span>,
+    <span class="string">"items"</span>: [
+      {
+        <span class="string">"description"</span>: <span class="string">"Product 1"</span>,
+        <span class="string">"quantity"</span>: 10,
+        <span class="string">"unit"</span>: <span class="string">"pcs"</span>,
+        <span class="string">"unit_price"</span>: 50.00,
+        <span class="string">"total_price"</span>: 500.00
+      }
+    ],
+    <span class="string">"subtotal"</span>: 500.00,
+    <span class="string">"tax_amount"</span>: 100.00,
+    <span class="string">"total_amount"</span>: 600.00
+  },
+  <span class="string">"processed_at"</span>: <span class="string">"2024-01-15T10:30:00"</span>
+}</code></pre>
+    </div>
+
+    <div class="note">
+        <strong>⚠️ Важно:</strong>
+        <ul>
+            <li>Замените <code>your_token_here</code> на ваш реальный токен</li>
+            <li>В production используйте HTTPS</li>
+            <li>Настройте CORS для вашего домена</li>
+            <li>Реализуйте rate limiting для защиты от злоупотреблений</li>
+        </ul>
+    </div>
+
+    <div class="section">
+        <h2>📞 Контакты</h2>
+        <p>Для получения токена доступа и технической поддержки обращайтесь к администратору системы.</p>
+    </div>
+</body>
+</html>
+

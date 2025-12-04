@@ -28,6 +28,7 @@ python-telegram-bot==20.7
 fastapi==0.108.0
 uvicorn==0.25.0
 python-multipart==0.0.6
+aiofiles==23.2.1
 
 # Email
 imapclient==2.3.1

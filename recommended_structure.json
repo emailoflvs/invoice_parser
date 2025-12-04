@@ -1,0 +1,113 @@
+{
+  "document_info": {
+    "document_type": "Видаткова накладна",
+    "document_number": "755",
+    "document_date": "25 березня 2025 р.",
+    "document_date_normalized": "2025-03-25",
+    "location": "м. Біла Церква",
+    "currency": "UAH"
+  },
+  "parties": {
+    "supplier": {
+      "name": "ТОВАРИСТВО З ОБМЕЖЕНОЮ ВІДПОВІДАЛЬНІСТЮ \"ТЕХНО - ПРИВІД\"",
+      "details": {
+        "address": "09500, КИЇВСЬКА ОБЛ., ТАРАЩАНСЬКИЙ РАЙОН, МІСТО ТАРАЩА, ПРОВУЛОК Б. ХМЕЛЬНИЦЬКОГО, БУДИНОК 9-А",
+        "phone": "(044) 221-18-89",
+        "edrpou": "37483556",
+        "ipn": "374835510226",
+        "vat_id": null,
+        "bank_accounts": [
+          {
+            "account_number": "UA303006140000026009500048334",
+            "bank_name": "ПАТ \"КРЕДІ АГРІКОЛЬ БАНК\""
+          }
+        ]
+      }
+    },
+    "buyer": {
+      "name": "ТОВАРИСТВО З ОБМЕЖЕНОЮ ВІДПОВІДАЛЬНІСТЮ \"ІНФОРМАЦІЙНА КОМПАНІЯ \"ІНТЕРА\"\"",
+      "details": {
+        "address": "51400, Дніпропетровська обл., м. Павлоград, вул. Войнової, будинок 18, кв. 30",
+        "edrpou": "37562915",
+        "ipn": "375629104106",
+        "bank_accounts": [
+          {
+             "account_number": "UA143052990000026000000010878",
+             "bank_name": "ПАТ КБ \"ПРИВАТБАНК\""
+          }
+        ]
+      }
+    },
+    "consignee": null,
+    "payer": null
+  },
+  "references": {
+    "contract_number": "№ 18.02.2025 р. 3.00,00",
+    "order_number": "Замовлення покупця № 826 від 21 березня 2025 р."
+  },
+  "totals": {
+    "total_excluding_vat": 18266.64,
+    "vat_amount": 3653.33,
+    "total_with_vat": 21919.97,
+    "currency": "UAH"
+  },
+  "amounts_in_words": {
+    "total": "Двадцять одна тисяча дев'ятсот дев'ятнадцять гривень 97 копійок",
+    "vat": "Три тисячі шістсот п'ятдесят три гривні 33 копійки"
+  },
+  "signatures": [
+    {
+      "role": "Відпустив(ла)",
+      "name": "Воловодовська Галина Василівна",
+      "is_signed": true,
+      "is_stamped": true,
+      "stamp_content": "ТЕХНО ПРИВІД Україна",
+      "handwritten_date": null
+    },
+    {
+      "role": "Отримав(ла)",
+      "name": "Пасько В. М. менеджер",
+      "is_signed": true,
+      "is_stamped": true,
+      "stamp_content": "ІНФОРМАЦІЙНА КОМПАНІЯ ІНТЕРА"
+    }
+  ],
+  "other_fields": [
+    {
+      "label_raw": "Всього найменувань",
+      "value_raw": "2, на суму 21 919,97 грн.",
+      "type": "items_summary"
+    }
+  ],
+  "table_data": {
+    "column_mapping": {
+      "line_number": "№",
+      "ukt_zed": "УКТ ЗЕД",
+      "product_name": "Товар",
+      "quantity": "Кількість",
+      "unit": "Од.",
+      "price_excluding_vat": "Ціна без ПДВ",
+      "amount_excluding_vat": "Сума без ПДВ"
+    },
+    "line_items": [
+      {
+        "line_number": 1,
+        "ukt_zed": "8501 51 00 90",
+        "product_name": "Мотор-редуктор CMRV 40 1/20 kw 0.37/2/71B14 MR",
+        "quantity": 2,
+        "unit": "шт",
+        "price_excluding_vat": 4341.66,
+        "amount_excluding_vat": 8683.32
+      },
+      {
+        "line_number": 2,
+        "ukt_zed": "8501 51 00 90",
+        "product_name": "Мотор-редуктор CMRV 40 1/30 kw 0.37/4/B14 + реактивный кронштейн",
+        "quantity": 2,
+        "unit": "шт",
+        "price_excluding_vat": 4791.66,
+        "amount_excluding_vat": 9583.32
+      }
+    ]
+  }
+}

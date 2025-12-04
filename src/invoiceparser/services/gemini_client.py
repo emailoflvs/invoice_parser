@@ -162,8 +162,22 @@ class GeminiClient:
             return raw_text
 
         except Exception as e:
+            error_message = str(e)
             logger.error(f"Gemini API error: {e}", exc_info=True)
-            raise GeminiAPIError(f"Failed to parse document: {e}")
+
+            # Определяем тип ошибки для более понятного сообщения
+            if "quota" in error_message.lower() or "429" in error_message:
+                raise GeminiAPIError("API_QUOTA_EXCEEDED: You have exceeded your Gemini API quota. Please check your plan and billing details at https://ai.google.dev/gemini-api/docs/rate-limits")
+            elif "401" in error_message or "unauthorized" in error_message.lower():
+                raise GeminiAPIError("API_AUTH_ERROR: Invalid or missing Gemini API key. Please check your GEMINI_API_KEY in the .env file")
+            elif "403" in error_message or "forbidden" in error_message.lower():
+                raise GeminiAPIError("API_ACCESS_DENIED: Access denied. Please ensure your API key has proper permissions")
+            elif "timeout" in error_message.lower():
+                raise GeminiAPIError("API_TIMEOUT: Request timed out. The document may be too large or the API is slow. Please try again")
+            elif "network" in error_message.lower() or "connection" in error_message.lower():
+                raise GeminiAPIError("NETWORK_ERROR: Network connection error. Please check your internet connection")
+            else:
+                raise GeminiAPIError(f"Failed to parse document: {e}")
 
     def parse_with_prompt_file(
         self,

@@ -1,0 +1,89 @@
+Creating invoice_parser_app_run ... 
+Creating invoice_parser_app_run ... done
+2025-12-03 21:35:47 - invoiceparser.infra.logging_setup - INFO - Logging initialized. Level: INFO, File: /app/logs/invoiceparser_20251203.log
+2025-12-03 21:35:47 - invoiceparser.services.gemini_client - INFO - Gemini API configured with model: gemini-2.5-pro, delay between requests: 10s
+2025-12-03 21:35:47 - invoiceparser.services.gemini_client - INFO - Gemini API configured with model: gemini-2.5-pro, delay between requests: 10s
+
+============================================================
+Parsing document: /app/invoices/invoice.jpg
+Model: gemini-2.5-pro
+Reference file for comparison: /app/examples/gemini_thinking_2_prompts_v6/invoice_gemini_thinking_2_prompts_v6.json
+Mode: TEST - comparison will be performed
+============================================================
+
+2025-12-03 21:35:47 - invoiceparser.services.orchestrator - INFO - Starting document processing: /app/invoices/invoice.jpg
+2025-12-03 21:35:47 - invoiceparser.services.orchestrator - INFO - Processing image: /app/invoices/invoice.jpg
+2025-12-03 21:35:47 - invoiceparser.preprocessing.image_preprocessor - INFO - Processing image: /app/invoices/invoice.jpg
+2025-12-03 21:35:47 - invoiceparser.preprocessing.image_preprocessor - INFO - Loaded image: (1938, 1304), mode: RGB
+2025-12-03 21:35:57 - invoiceparser.preprocessing.image_preprocessor - INFO - Image preprocessed: /app/output/temp/preprocessed_invoice.png
+2025-12-03 21:35:57 - invoiceparser.services.orchestrator - INFO - Image preprocessed: /app/output/temp/preprocessed_invoice.png
+2025-12-03 21:35:57 - invoiceparser.services.orchestrator - INFO - Starting Gemini parsing
+2025-12-03 21:35:57 - invoiceparser.services.orchestrator - INFO - Parsing header...
+2025-12-03 21:35:57 - invoiceparser.services.gemini_client - INFO - Loaded prompt from: /app/prompts/header.txt
+2025-12-03 21:35:57 - invoiceparser.services.gemini_client - INFO - Loaded main image: /app/output/temp/preprocessed_invoice.png
+2025-12-03 21:35:57 - invoiceparser.services.gemini_client - INFO - Sending request to Gemini with 1 image(s)
+2025-12-03 21:35:57 - invoiceparser.services.gemini_client - INFO - Cache-bypass via system_instruction: 7ecac570-dbd0-49...
+2025-12-03 21:36:25 - invoiceparser.services.gemini_client - INFO - Response received in 27.71s
+2025-12-03 21:36:25 - invoiceparser.services.gemini_client - INFO - Received response from Gemini (2593 chars)
+2025-12-03 21:36:25 - invoiceparser.services.orchestrator - INFO - Header parsed successfully
+2025-12-03 21:36:25 - invoiceparser.services.gemini_client - INFO - ✅ CACHE BYPASS via system_instruction: 7ecac570-dbd0-49...
+2025-12-03 21:36:25 - invoiceparser.services.orchestrator - INFO - Parsing items...
+2025-12-03 21:36:25 - invoiceparser.services.gemini_client - INFO - Loaded prompt from: /app/prompts/items.txt
+2025-12-03 21:36:25 - invoiceparser.services.gemini_client - INFO - Loaded main image: /app/output/temp/preprocessed_invoice.png
+2025-12-03 21:36:25 - invoiceparser.services.gemini_client - INFO - Sending request to Gemini with 1 image(s)
+2025-12-03 21:36:25 - invoiceparser.services.gemini_client - INFO - Cache-bypass via system_instruction: c4287e76-89c8-44...
+2025-12-03 21:36:46 - invoiceparser.services.gemini_client - INFO - Response received in 21.71s
+2025-12-03 21:36:46 - invoiceparser.services.gemini_client - INFO - Received response from Gemini (825 chars)
+2025-12-03 21:36:46 - invoiceparser.services.orchestrator - INFO - Items parsed successfully
+2025-12-03 21:36:46 - invoiceparser.services.gemini_client - INFO - ✅ CACHE BYPASS via system_instruction: c4287e76-89c8-44...
+2025-12-03 21:36:46 - invoiceparser.services.orchestrator - INFO - items_data keys: dict_keys(['column_mapping', 'line_items'])
+2025-12-03 21:36:46 - invoiceparser.services.orchestrator - INFO - Post-processing parsed data...
+2025-12-03 21:36:46 - invoiceparser.services.orchestrator - INFO - Parsing completed: 2 items found
+2025-12-03 21:36:46 - invoiceparser.services.gemini_client - INFO - Gemini API configured with model: gemini-2.5-pro, delay between requests: 10s
+2025-12-03 21:36:46 - invoiceparser.exporters.json_exporter - INFO - JSON exported successfully: invoice_gemini-2-5-pro_03122136_20errors.json
+2025-12-03 21:36:46 - invoiceparser.services.orchestrator - INFO - Exported to JSON with test results: /app/output/invoice_gemini-2-5-pro_03122136_20errors.json
+2025-12-03 21:36:46 - invoiceparser.services.orchestrator - INFO - Document processing completed: /app/invoices/invoice.jpg (took 59.45s)
+✓ Document parsed successfully (took 59.45s)
+
+============================================================
+❌ TEST FAILED: 20 errors found
+============================================================
+
+✓ Parsed successfully
+Items found: 2
+
+============================================================
+TEST RESULTS
+============================================================
+Reference file: invoice_gemini_thinking_2_prompts_v6.json
+Total items in reference: 1
+
+❌ Found 20 errors:
+
+  1. строка ?: is_stamped: False vs 
+  2. строка ?: handwritten_date:  vs 
+  3. строка ?: signature_present:  vs True
+  4. строка ?: role: водій/експедитор vs Бухгалтер
+  5. строка ?: stamp_content:  vs 
+  6. строка ?: is_signed: True vs 
+  7. строка ?: signer_role_raw:  vs Від постачальника*
+  8. строка ?: stamp_present:  vs True
+  9. строка ?: name: Курчанов Сергій Владиславович vs Воловодовська Галина Василівна
+  10. строка ?: signer_role_raw:  vs Отримав(ла)
+  11. строка 1: line_number:  vs 1
+  12. строка 1: is_stamped: False vs 
+  13. строка 1: item_name: Курчанов Сергій Владиславович vs Мотор-редуктор CMRV 40 1/20 kw 0.37/2/71B14 MR
+  14. строка 1: role: водій/експедитор vs 
+  15. строка 1: is_signed: True vs 
+  16. строка 1: total_amount_without_vat:  vs 8683,32
+  17. строка 1: quantity:  vs 2
+  18. строка 1: ukt_zed_code:  vs 8501 51 00 90
+  19. строка 1: price_without_vat:  vs 4341,66
+  20. строка 2: items[1]: None vs Лишняя строка 2
+============================================================
+
+Results saved to: invoice_gemini-2-5-pro_03122136_20errors.json
+Total processing time: 59.45s
+
+============================================================
+

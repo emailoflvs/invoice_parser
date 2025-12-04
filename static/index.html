@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoice Parser - AI-powered документ парсер</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <i class="fas fa-file-invoice"></i>
+                <h1>Invoice Parser</h1>
+            </div>
+            <p class="subtitle">AI-powered документ парсинг с использованием Gemini</p>
+        </header>
+
+        <!-- Upload Section -->
+        <div class="upload-section" id="uploadSection">
+            <div class="upload-card">
+                <div class="upload-icon">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                </div>
+                <h2>Загрузите документ</h2>
+                <p class="upload-description">Поддерживаемые форматы: PDF, JPG, JPEG, PNG, TIFF, BMP</p>
+
+                <div class="upload-area" id="uploadArea">
+                    <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png,.tiff,.bmp" hidden>
+                    <div class="upload-content">
+                        <i class="fas fa-file-upload"></i>
+                        <p>Перетащите файл сюда или <span class="browse-link">выберите файл</span></p>
+                    </div>
+                </div>
+
+                <div class="file-info" id="fileInfo" style="display: none;">
+                    <div class="file-details">
+                        <i class="fas fa-file"></i>
+                        <div class="file-name-size">
+                            <span class="file-name" id="fileName"></span>
+                            <span class="file-size" id="fileSize"></span>
+                        </div>
+                    </div>
+                    <button class="btn-remove" id="removeFile">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+
+                <button class="btn-primary" id="parseBtn" disabled>
+                    <i class="fas fa-magic"></i>
+                    Распознать документ
+                </button>
+            </div>
+        </div>
+
+        <!-- Progress Section -->
+        <div class="progress-section" id="progressSection" style="display: none;">
+            <div class="progress-card">
+                <div class="progress-icon">
+                    <div class="spinner"></div>
+                </div>
+                <h3>Обработка документа...</h3>
+                <p class="progress-text">Пожалуйста, подождите. AI анализирует ваш документ</p>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <p class="progress-percentage" id="progressPercentage">0%</p>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div class="results-section" id="resultsSection" style="display: none;">
+            <div class="results-header">
+                <h2>
+                    <i class="fas fa-check-circle success-icon"></i>
+                    Результаты парсинга
+                </h2>
+                <button class="btn-secondary" id="newParseBtn">
+                    <i class="fas fa-plus"></i>
+                    Загрузить новый документ
+                </button>
+            </div>
+
+            <div class="results-grid">
+                <!-- Header Information -->
+                <div class="result-card">
+                    <div class="result-card-header">
+                        <i class="fas fa-info-circle"></i>
+                        <h3>Информация о документе</h3>
+                    </div>
+                    <div class="result-card-body" id="headerInfo">
+                        <!-- Динамически заполняется через JS -->
+                    </div>
+                </div>
+
+                <!-- Items Table -->
+                <div class="result-card full-width">
+                    <div class="result-card-header">
+                        <i class="fas fa-list"></i>
+                        <h3>Товары и услуги</h3>
+                    </div>
+                    <div class="result-card-body">
+                        <div class="table-container">
+                            <table class="items-table" id="itemsTable">
+                                <!-- Динамически заполняется через JS -->
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Summary -->
+                <div class="result-card">
+                    <div class="result-card-header">
+                        <i class="fas fa-calculator"></i>
+                        <h3>Итого</h3>
+                    </div>
+                    <div class="result-card-body" id="summaryInfo">
+                        <!-- Динамически заполняется через JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="actions-section">
+                <button class="btn-action" id="downloadJsonBtn">
+                    <i class="fas fa-download"></i>
+                    Скачать JSON
+                </button>
+                <button class="btn-action" id="copyJsonBtn">
+                    <i class="fas fa-copy"></i>
+                    Копировать JSON
+                </button>
+            </div>
+
+            <!-- Raw JSON -->
+            <div class="json-viewer">
+                <div class="json-viewer-header">
+                    <h4>RAW JSON</h4>
+                    <button class="btn-toggle" id="toggleJsonBtn">
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                </div>
+                <pre class="json-content" id="jsonContent" style="display: none;"></pre>
+            </div>
+        </div>
+
+        <!-- Error Section -->
+        <div class="error-section" id="errorSection" style="display: none;">
+            <div class="error-card">
+                <i class="fas fa-exclamation-triangle"></i>
+                <h3>Ошибка</h3>
+                <p id="errorMessage"></p>
+                <button class="btn-primary" id="retryBtn">
+                    <i class="fas fa-redo"></i>
+                    Попробовать снова
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal (для токена) -->
+    <div class="modal" id="settingsModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>
+                    <i class="fas fa-cog"></i>
+                    Настройки
+                </h3>
+                <button class="modal-close" id="closeModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="authToken">
+                        <i class="fas fa-key"></i>
+                        Authorization Token
+                    </label>
+                    <input type="password" id="authToken" placeholder="Введите токен авторизации">
+                    <small>Токен требуется для доступа к API</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="cancelSettings">Отмена</button>
+                <button class="btn-primary" id="saveSettings">Сохранить</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Button -->
+    <button class="btn-settings" id="settingsBtn" title="Настройки">
+        <i class="fas fa-cog"></i>
+    </button>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>
+
