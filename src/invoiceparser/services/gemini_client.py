@@ -163,21 +163,28 @@ class GeminiClient:
 
         except Exception as e:
             error_message = str(e)
-            logger.error(f"Gemini API error: {e}", exc_info=True)
+            logger.error(f"AI API error: {e}", exc_info=True)
+            logger.error(f"Full error details: {error_message}", exc_info=True)
 
-            # Определяем тип ошибки для более понятного сообщения
+            # Определяем тип ошибки - технический код для логов, пользовательское сообщение для клиента
             if "quota" in error_message.lower() or "429" in error_message:
-                raise GeminiAPIError("API_QUOTA_EXCEEDED: You have exceeded your Gemini API quota. Please check your plan and billing details at https://ai.google.dev/gemini-api/docs/rate-limits")
+                logger.error("ERROR_CODE: E001 - API quota exceeded")
+                raise GeminiAPIError("ERROR_E001|Service temporarily unavailable due to high load. Please try again later.")
             elif "401" in error_message or "unauthorized" in error_message.lower():
-                raise GeminiAPIError("API_AUTH_ERROR: Invalid or missing Gemini API key. Please check your GEMINI_API_KEY in the .env file")
+                logger.error("ERROR_CODE: E002 - API authentication error")
+                raise GeminiAPIError("ERROR_E002|Service configuration error. Please contact support.")
             elif "403" in error_message or "forbidden" in error_message.lower():
-                raise GeminiAPIError("API_ACCESS_DENIED: Access denied. Please ensure your API key has proper permissions")
+                logger.error("ERROR_CODE: E003 - API access denied")
+                raise GeminiAPIError("ERROR_E003|Service configuration error. Please contact support.")
             elif "timeout" in error_message.lower():
-                raise GeminiAPIError("API_TIMEOUT: Request timed out. The document may be too large or the API is slow. Please try again")
+                logger.error("ERROR_CODE: E004 - Request timeout")
+                raise GeminiAPIError("ERROR_E004|Request timeout. Please try again with a smaller document.")
             elif "network" in error_message.lower() or "connection" in error_message.lower():
-                raise GeminiAPIError("NETWORK_ERROR: Network connection error. Please check your internet connection")
+                logger.error("ERROR_CODE: E005 - Network error")
+                raise GeminiAPIError("ERROR_E005|Network connection error. Please check your connection and try again.")
             else:
-                raise GeminiAPIError(f"Failed to parse document: {e}")
+                logger.error(f"ERROR_CODE: E099 - Unknown error: {error_message}")
+                raise GeminiAPIError(f"ERROR_E099|Unable to process document. Please try again or contact support.")
 
     def parse_with_prompt_file(
         self,

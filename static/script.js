@@ -127,14 +127,15 @@ function handleFile(file) {
     const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
 
     if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(fileExtension)) {
-        showError('Неподдерживаемый формат файла. Пожалуйста, загрузите PDF, JPG, PNG, TIFF или BMP.');
+        showError('📄 Unsupported file format. Please upload PDF, JPG, PNG, TIFF or BMP files only.');
         return;
     }
 
     // Проверка размера файла (макс 50MB)
     const maxSize = 50 * 1024 * 1024;
     if (file.size > maxSize) {
-        showError('Файл слишком большой. Максимальный размер: 50MB');
+        const sizeMB = (file.size / 1024 / 1024).toFixed(1);
+        showError(`📄 File is too large (${sizeMB}MB). Maximum file size is 50MB. Please use a smaller file.`);
         return;
     }
 
@@ -169,7 +170,7 @@ function formatFileSize(bytes) {
 // Parsing
 async function parseDocument() {
     if (!state.selectedFile) {
-        showError('Пожалуйста, выберите файл');
+        showError('📄 Please select a file first');
         return;
     }
 
@@ -201,30 +202,42 @@ async function parseDocument() {
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
             const errorInfo = typeof errorData.detail === 'object' ? errorData.detail : { message: errorData.detail };
-
+            
             // Обработка различных типов ошибок
             let userMessage = '';
-
+            
             if (response.status === 401) {
-                userMessage = '🔐 Authentication Error: Invalid authorization token. Please check your settings and ensure you have entered the correct WEB_AUTH_TOKEN.';
+                userMessage = '🔐 Invalid authorization. Please check your credentials.';
                 // Открываем модальное окно настроек
                 setTimeout(() => showModal(), 1000);
-            } else if (response.status === 429 || errorInfo.error_type === 'QUOTA_EXCEEDED') {
-                userMessage = '⚠️ API Quota Exceeded: You have exceeded your Gemini API quota. Please check your plan and billing details at https://ai.google.dev/gemini-api/docs/rate-limits. Free tier has 50 requests per day limit.';
-            } else if (errorInfo.error_type === 'AUTH_ERROR') {
-                userMessage = '🔑 API Key Error: Invalid or missing Gemini API key. Please check your GEMINI_API_KEY in the .env file and restart the application.';
-            } else if (errorInfo.error_type === 'ACCESS_DENIED') {
-                userMessage = '🚫 Access Denied: Your API key does not have proper permissions. Please verify your Gemini API key at https://aistudio.google.com/app/apikey';
-            } else if (errorInfo.error_type === 'TIMEOUT' || response.status === 504) {
-                userMessage = '⏱️ Request Timeout: The request took too long. The document may be too large or complex. Please try again or use a smaller file.';
-            } else if (errorInfo.error_type === 'NETWORK_ERROR' || response.status === 503) {
-                userMessage = '🌐 Network Error: Cannot connect to the API. Please check your internet connection and try again.';
+            } else if (errorInfo.error_code) {
+                // Новый формат с кодами ошибок
+                const code = errorInfo.error_code;
+                const message = errorInfo.message || 'Unknown error';
+                
+                // Добавляем эмодзи в зависимости от типа ошибки
+                let emoji = '❌';
+                if (code === 'E001') emoji = '⚠️';  // Service unavailable
+                else if (code === 'E004') emoji = '⏱️';  // Timeout
+                else if (code === 'E005') emoji = '🌐';  // Network
+                else if (code.startsWith('E00')) emoji = '⚙️';  // Config errors
+                
+                userMessage = `${emoji} ${message}`;
+                
+                // Добавляем код ошибки только для технических проблем (не показываем клиенту детали)
+                if (['E002', 'E003', 'E099'].includes(code)) {
+                    userMessage += ` [${code}]`;
+                }
             } else if (response.status === 400) {
-                userMessage = `📄 Invalid Request: ${errorInfo.message || 'Unsupported file format or invalid file'}`;
+                // Ошибки валидации - показываем как есть
+                userMessage = `📄 ${errorInfo.message || 'Invalid file format or file is too large'}`;
+            } else if (response.status === 413) {
+                userMessage = '📄 File is too large. Maximum file size is 50MB.';
             } else {
-                userMessage = errorInfo.message || `❌ Error: HTTP ${response.status}. Please try again or contact support.`;
+                // Другие HTTP ошибки
+                userMessage = errorInfo.message || `Unable to process request. Please try again or contact support.`;
             }
-
+            
             throw new Error(userMessage);
         }
 
@@ -234,12 +247,12 @@ async function parseDocument() {
             state.parsedData = data;
             displayResults(data);
         } else {
-            throw new Error(data.error || '❌ Parsing Error: Failed to parse the document. Please try again.');
+            throw new Error(data.error || '❌ Failed to parse the document. Please try again.');
         }
 
     } catch (error) {
         console.error('Parse error:', error);
-        showError(error.message || '❌ Unexpected Error: An error occurred while processing the document. Please try again.');
+        showError(error.message || '❌ An error occurred while processing your document. Please try again or contact support.');
     }
 }
 
@@ -395,7 +408,7 @@ function downloadJson() {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 
-    showToast('JSON файл скачан');
+    showToast('JSON file downloaded');
 }
 
 function copyJson() {
@@ -403,10 +416,10 @@ function copyJson() {
 
     const dataStr = JSON.stringify(state.parsedData, null, 2);
     navigator.clipboard.writeText(dataStr).then(() => {
-        showToast('JSON скопирован в буфер обмена');
+        showToast('JSON copied to clipboard');
     }).catch(err => {
         console.error('Failed to copy:', err);
-        showToast('Ошибка при копировании', true);
+        showToast('Failed to copy', true);
     });
 }
 
@@ -498,14 +511,14 @@ function hideModal() {
 function saveSettings() {
     const token = elements.authTokenInput.value.trim();
     if (!token) {
-        showToast('Пожалуйста, введите токен авторизации', true);
+        showToast('Please enter your authorization token', true);
         return;
     }
 
     state.authToken = token;
     localStorage.setItem('authToken', token);
     hideModal();
-    showToast('Настройки сохранены');
+    showToast('Settings saved successfully');
 }
 
 // Keyboard shortcuts

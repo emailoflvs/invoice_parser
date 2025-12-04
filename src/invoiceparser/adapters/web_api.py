@@ -101,19 +101,38 @@ class WebAPI:
             file_ext = Path(file.filename).suffix.lower()
 
             if file_ext not in allowed_extensions:
+                logger.warning(f"Rejected file with unsupported extension: {file_ext}")
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Unsupported file format: {file_ext}"
+                    detail={
+                        "error_code": "INVALID_FORMAT",
+                        "message": f"Unsupported file format. Please upload PDF, JPG, PNG, TIFF or BMP files only."
+                    }
                 )
 
             # Сохранение файла во временную директорию
             try:
+                # Читаем содержимое файла
+                content = await file.read()
+                
+                # Проверка размера файла (50MB)
+                max_size = 50 * 1024 * 1024
+                if len(content) > max_size:
+                    size_mb = len(content) / 1024 / 1024
+                    logger.warning(f"Rejected file: too large ({size_mb:.1f}MB)")
+                    raise HTTPException(
+                        status_code=413,
+                        detail={
+                            "error_code": "FILE_TOO_LARGE",
+                            "message": f"File is too large ({size_mb:.1f}MB). Maximum file size is 50MB."
+                        }
+                    )
+                
                 with tempfile.NamedTemporaryFile(
                     delete=False,
                     suffix=file_ext,
                     dir=self.config.temp_dir
                 ) as tmp_file:
-                    content = await file.read()
                     tmp_file.write(content)
                     tmp_path = Path(tmp_file.name)
 
@@ -142,36 +161,38 @@ class WebAPI:
             except Exception as e:
                 error_message = str(e)
                 logger.error(f"Failed to process upload: {e}", exc_info=True)
-
-                # Определяем код ошибки и тип
-                error_type = "UNKNOWN_ERROR"
+                
+                # Парсим код ошибки и сообщение (формат: ERROR_CODE|User Message)
+                error_code = "E099"
+                user_message = "Unable to process document. Please try again or contact support."
+                
+                if "|" in error_message:
+                    parts = error_message.split("|", 1)
+                    if len(parts) == 2:
+                        error_code = parts[0].replace("ERROR_", "")
+                        user_message = parts[1]
+                        logger.info(f"Sending user message: {user_message} (Internal code: {error_code})")
+                else:
+                    # Для других исключений
+                    logger.error(f"Unformatted error: {error_message}")
+                    user_message = str(e)
+                
+                # Определяем HTTP статус код на основе кода ошибки
                 status_code = 500
-
-                if "API_QUOTA_EXCEEDED" in error_message:
-                    error_type = "QUOTA_EXCEEDED"
-                    status_code = 429
-                elif "API_AUTH_ERROR" in error_message:
-                    error_type = "AUTH_ERROR"
-                    status_code = 401
-                elif "API_ACCESS_DENIED" in error_message:
-                    error_type = "ACCESS_DENIED"
-                    status_code = 403
-                elif "API_TIMEOUT" in error_message:
-                    error_type = "TIMEOUT"
-                    status_code = 504
-                elif "NETWORK_ERROR" in error_message:
-                    error_type = "NETWORK_ERROR"
-                    status_code = 503
-
-                # Извлекаем только читаемую часть сообщения (после двоеточия)
-                if ": " in error_message:
-                    error_message = error_message.split(": ", 1)[1]
-
+                if error_code == "E001":  # Quota
+                    status_code = 503  # Service Unavailable
+                elif error_code in ["E002", "E003"]:  # Config errors
+                    status_code = 500  # Internal Server Error
+                elif error_code == "E004":  # Timeout
+                    status_code = 504  # Gateway Timeout
+                elif error_code == "E005":  # Network
+                    status_code = 503  # Service Unavailable
+                
                 raise HTTPException(
                     status_code=status_code,
                     detail={
-                        "error_type": error_type,
-                        "message": error_message
+                        "error_code": error_code,
+                        "message": user_message
                     }
                 )
 
