@@ -73,6 +73,10 @@ class Config(BaseSettings):
     web_port: int = Field(alias="WEB_PORT", default=8000)
     web_auth_token: str = Field(alias="WEB_AUTH_TOKEN", default="")
 
+    # Настройки Telegram Bot
+    telegram_bot_token: str = Field(alias="TELEGRAM_BOT_TOKEN", default="")
+    telegram_allowed_user_ids: str = Field(alias="TELEGRAM_ALLOWED_USER_IDS", default="")
+
     @classmethod
     def load(cls) -> "Config":
         """
