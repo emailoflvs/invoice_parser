@@ -257,3 +257,5 @@ For persistent issues, include:
 - Docker container status: `docker-compose ps`
 - Environment details (OS, Docker version)
 
+
+

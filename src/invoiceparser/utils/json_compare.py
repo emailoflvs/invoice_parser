@@ -31,30 +31,30 @@ def compare_values(expected: Any, actual: Any, tolerance: Decimal = Decimal('0.0
         return True
     if expected is None or actual is None:
         return False
-    
+
     # Нормализуем оба значения
     exp_norm = normalize_value(expected)
     act_norm = normalize_value(actual)
-    
+
     # Сравнение чисел с допуском
     if isinstance(exp_norm, Decimal) and isinstance(act_norm, Decimal):
         return abs(exp_norm - act_norm) <= tolerance
-    
+
     # Сравнение строк
     if isinstance(exp_norm, str) and isinstance(act_norm, str):
         return exp_norm == act_norm
-    
+
     return exp_norm == act_norm
 
 def compare_json(expected: Dict[str, Any], actual: Dict[str, Any], path: str = "") -> Dict[str, Any]:
     """
     Сравнение двух JSON структур
-    
+
     Args:
         expected: Ожидаемая структура
         actual: Фактическая структура
         path: Текущий путь в структуре (для сообщений об ошибках)
-        
+
     Returns:
         Словарь с результатами сравнения:
         - match: bool - совпадают ли структуры
@@ -66,13 +66,13 @@ def compare_json(expected: Dict[str, Any], actual: Dict[str, Any], path: str = "
         'model', 'timestamp', 'source_file', 'pages',
         'raw_block'  # Только технические поля, данные не игнорируем
     }
-    
+
     differences = []
     match = True
-    
+
     def _compare_recursive(exp: Any, act: Any, current_path: str):
         nonlocal match
-        
+
         if isinstance(exp, dict) and isinstance(act, dict):
             # Сравнение словарей
             all_keys = set(exp.keys()) | set(act.keys())
@@ -80,7 +80,7 @@ def compare_json(expected: Dict[str, Any], actual: Dict[str, Any], path: str = "
                 # Пропускаем служебные поля
                 if key in IGNORED_FIELDS:
                     continue
-                    
+
                 new_path = f"{current_path}.{key}" if current_path else key
                 if key not in exp:
                     differences.append({
@@ -100,7 +100,7 @@ def compare_json(expected: Dict[str, Any], actual: Dict[str, Any], path: str = "
                     match = False
                 else:
                     _compare_recursive(exp[key], act[key], new_path)
-                    
+
         elif isinstance(exp, list) and isinstance(act, list):
             # Сравнение списков
             max_len = max(len(exp), len(act))
@@ -136,16 +136,16 @@ def compare_json(expected: Dict[str, Any], actual: Dict[str, Any], path: str = "
                     "actual": act
                 })
                 match = False
-    
+
     _compare_recursive(expected, actual, path)
-    
+
     # Вычисление точности
     total_fields = _count_fields(expected)
     if total_fields > 0:
         accuracy = 1.0 - (len(differences) / total_fields)
     else:
         accuracy = 1.0 if match else 0.0
-    
+
     return {
         "match": match,
         "accuracy": max(0.0, min(1.0, accuracy)),

@@ -108,7 +108,7 @@ class InvoiceHeader(BaseModel):
     total_amount: Optional[Decimal] = None
     total_vat: Optional[Decimal] = None
     currency: Optional[str] = None
-    
+
     class Config:
         populate_by_name = True
         extra = "allow"
@@ -117,6 +117,6 @@ class InvoiceData(BaseModel):
     """Данные счета (упрощенная версия ParseResult)"""
     header: InvoiceHeader
     items: list[DocumentItem]
-    
+
     class Config:
         extra = "allow"

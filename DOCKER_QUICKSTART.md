@@ -136,3 +136,5 @@ docker-compose exec app pip list
 docker-compose exec app ls -la /app/
 ```
 
+
+
