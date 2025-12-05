@@ -44,8 +44,8 @@ class WebAPI:
         self.config = config
         self.orchestrator = Orchestrator(config)
         self.app = FastAPI(
-            title="InvoiceParser API",
-            description="AI-powered document parsing API",
+            title="Анализ документов API",
+            description="API для обработки и анализа счетов и накладных",
             version="1.0.0"
         )
 
@@ -106,7 +106,7 @@ class WebAPI:
                     status_code=400,
                     detail={
                         "error_code": "INVALID_FORMAT",
-                        "message": f"Unsupported file format. Please upload PDF, JPG, PNG, TIFF or BMP files only."
+                        "message": f"Неподдерживаемый формат файла. Загрузите PDF, JPG, PNG, TIFF или BMP."
                     }
                 )
 
@@ -114,7 +114,7 @@ class WebAPI:
             try:
                 # Читаем содержимое файла
                 content = await file.read()
-                
+
                 # Проверка размера файла (50MB)
                 max_size = 50 * 1024 * 1024
                 if len(content) > max_size:
@@ -124,10 +124,10 @@ class WebAPI:
                         status_code=413,
                         detail={
                             "error_code": "FILE_TOO_LARGE",
-                            "message": f"File is too large ({size_mb:.1f}MB). Maximum file size is 50MB."
+                            "message": f"Файл слишком большой ({size_mb:.1f}МБ). Максимальный размер: 50МБ."
                         }
                     )
-                
+
                 with tempfile.NamedTemporaryFile(
                     delete=False,
                     suffix=file_ext,
@@ -161,11 +161,11 @@ class WebAPI:
             except Exception as e:
                 error_message = str(e)
                 logger.error(f"Failed to process upload: {e}", exc_info=True)
-                
+
                 # Парсим код ошибки и сообщение (формат: ERROR_CODE|User Message)
                 error_code = "E099"
                 user_message = "Unable to process document. Please try again or contact support."
-                
+
                 if "|" in error_message:
                     parts = error_message.split("|", 1)
                     if len(parts) == 2:
@@ -176,7 +176,7 @@ class WebAPI:
                     # Для других исключений
                     logger.error(f"Unformatted error: {error_message}")
                     user_message = str(e)
-                
+
                 # Определяем HTTP статус код на основе кода ошибки
                 status_code = 500
                 if error_code == "E001":  # Quota
@@ -187,7 +187,7 @@ class WebAPI:
                     status_code = 504  # Gateway Timeout
                 elif error_code == "E005":  # Network
                     status_code = 503  # Service Unavailable
-                
+
                 raise HTTPException(
                     status_code=status_code,
                     detail={

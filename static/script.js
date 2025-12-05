@@ -127,7 +127,7 @@ function handleFile(file) {
     const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
 
     if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(fileExtension)) {
-        showError('📄 Unsupported file format. Please upload PDF, JPG, PNG, TIFF or BMP files only.');
+        showError('📄 Неподдерживаемый формат файла. Загрузите PDF, JPG, PNG, TIFF или BMP.');
         return;
     }
 
@@ -135,7 +135,7 @@ function handleFile(file) {
     const maxSize = 50 * 1024 * 1024;
     if (file.size > maxSize) {
         const sizeMB = (file.size / 1024 / 1024).toFixed(1);
-        showError(`📄 File is too large (${sizeMB}MB). Maximum file size is 50MB. Please use a smaller file.`);
+        showError(`📄 Файл слишком большой (${sizeMB}МБ). Максимальный размер: 50МБ.`);
         return;
     }
 
@@ -170,7 +170,7 @@ function formatFileSize(bytes) {
 // Parsing
 async function parseDocument() {
     if (!state.selectedFile) {
-        showError('📄 Please select a file first');
+        showError('📄 Пожалуйста, выберите файл');
         return;
     }
 
@@ -207,13 +207,13 @@ async function parseDocument() {
             let userMessage = '';
             
             if (response.status === 401) {
-                userMessage = '🔐 Invalid authorization. Please check your credentials.';
+                userMessage = '🔐 Неверная авторизация. Проверьте токен в настройках.';
                 // Открываем модальное окно настроек
                 setTimeout(() => showModal(), 1000);
             } else if (errorInfo.error_code) {
                 // Новый формат с кодами ошибок
                 const code = errorInfo.error_code;
-                const message = errorInfo.message || 'Unknown error';
+                const message = errorInfo.message || 'Неизвестная ошибка';
                 
                 // Добавляем эмодзи в зависимости от типа ошибки
                 let emoji = '❌';
@@ -230,12 +230,12 @@ async function parseDocument() {
                 }
             } else if (response.status === 400) {
                 // Ошибки валидации - показываем как есть
-                userMessage = `📄 ${errorInfo.message || 'Invalid file format or file is too large'}`;
+                userMessage = `📄 ${errorInfo.message || 'Неверный формат файла или слишком большой размер'}`;
             } else if (response.status === 413) {
-                userMessage = '📄 File is too large. Maximum file size is 50MB.';
+                userMessage = '📄 Файл слишком большой. Максимальный размер: 50МБ.';
             } else {
                 // Другие HTTP ошибки
-                userMessage = errorInfo.message || `Unable to process request. Please try again or contact support.`;
+                userMessage = errorInfo.message || `Не удалось обработать запрос. Попробуйте снова или свяжитесь с поддержкой.`;
             }
             
             throw new Error(userMessage);
@@ -247,12 +247,12 @@ async function parseDocument() {
             state.parsedData = data;
             displayResults(data);
         } else {
-            throw new Error(data.error || '❌ Failed to parse the document. Please try again.');
+            throw new Error(data.error || '❌ Не удалось обработать документ. Попробуйте снова.');
         }
 
     } catch (error) {
         console.error('Parse error:', error);
-        showError(error.message || '❌ An error occurred while processing your document. Please try again or contact support.');
+        showError(error.message || '❌ Произошла ошибка при обработке документа. Попробуйте снова или свяжитесь с поддержкой.');
     }
 }
 
@@ -408,7 +408,7 @@ function downloadJson() {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 
-    showToast('JSON file downloaded');
+    showToast('Файл скачан');
 }
 
 function copyJson() {
@@ -416,10 +416,10 @@ function copyJson() {
 
     const dataStr = JSON.stringify(state.parsedData, null, 2);
     navigator.clipboard.writeText(dataStr).then(() => {
-        showToast('JSON copied to clipboard');
+        showToast('Скопировано в буфер обмена');
     }).catch(err => {
         console.error('Failed to copy:', err);
-        showToast('Failed to copy', true);
+        showToast('Ошибка копирования', true);
     });
 }
 
@@ -511,14 +511,14 @@ function hideModal() {
 function saveSettings() {
     const token = elements.authTokenInput.value.trim();
     if (!token) {
-        showToast('Please enter your authorization token', true);
+        showToast('Пожалуйста, введите токен авторизации', true);
         return;
     }
 
     state.authToken = token;
     localStorage.setItem('authToken', token);
     hideModal();
-    showToast('Settings saved successfully');
+    showToast('Настройки сохранены');
 }
 
 // Keyboard shortcuts

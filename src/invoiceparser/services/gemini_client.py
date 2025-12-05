@@ -169,22 +169,22 @@ class GeminiClient:
             # Определяем тип ошибки - технический код для логов, пользовательское сообщение для клиента
             if "quota" in error_message.lower() or "429" in error_message:
                 logger.error("ERROR_CODE: E001 - API quota exceeded")
-                raise GeminiAPIError("ERROR_E001|Service temporarily unavailable due to high load. Please try again later.")
+                raise GeminiAPIError("ERROR_E001|Сервис временно недоступен из-за высокой нагрузки. Попробуйте позже.")
             elif "401" in error_message or "unauthorized" in error_message.lower():
                 logger.error("ERROR_CODE: E002 - API authentication error")
-                raise GeminiAPIError("ERROR_E002|Service configuration error. Please contact support.")
+                raise GeminiAPIError("ERROR_E002|Ошибка конфигурации сервиса. Обратитесь в поддержку.")
             elif "403" in error_message or "forbidden" in error_message.lower():
                 logger.error("ERROR_CODE: E003 - API access denied")
-                raise GeminiAPIError("ERROR_E003|Service configuration error. Please contact support.")
+                raise GeminiAPIError("ERROR_E003|Ошибка конфигурации сервиса. Обратитесь в поддержку.")
             elif "timeout" in error_message.lower():
                 logger.error("ERROR_CODE: E004 - Request timeout")
-                raise GeminiAPIError("ERROR_E004|Request timeout. Please try again with a smaller document.")
+                raise GeminiAPIError("ERROR_E004|Превышено время ожидания. Попробуйте использовать документ меньшего размера.")
             elif "network" in error_message.lower() or "connection" in error_message.lower():
                 logger.error("ERROR_CODE: E005 - Network error")
-                raise GeminiAPIError("ERROR_E005|Network connection error. Please check your connection and try again.")
+                raise GeminiAPIError("ERROR_E005|Ошибка сетевого подключения. Проверьте соединение и попробуйте снова.")
             else:
                 logger.error(f"ERROR_CODE: E099 - Unknown error: {error_message}")
-                raise GeminiAPIError(f"ERROR_E099|Unable to process document. Please try again or contact support.")
+                raise GeminiAPIError(f"ERROR_E099|Не удалось обработать документ. Попробуйте снова или обратитесь в поддержку.")
 
     def parse_with_prompt_file(
         self,
