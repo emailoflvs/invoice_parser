@@ -185,8 +185,7 @@ class Orchestrator:
                 return {
                     "status": "no_reference",
                     "message": f"No reference file found: {expected_path}",
-                    "errors": 0,
-                    "model": self.config.gemini_model
+                    "errors": 0
                 }
 
             # Загружаем эталон
@@ -242,8 +241,7 @@ class Orchestrator:
                 "total_items": len(expected_normalized.get('items', [])),
                 "sample_errors": sample_errors,  # Первые 10 для краткого вывода
                 "all_errors": all_errors,  # Все ошибки в текстовом формате
-                "all_differences": differences,  # Полный список для JSON
-                "model": self.config.gemini_model
+                "all_differences": differences  # Полный список для JSON
             }
 
         except Exception as e:
@@ -251,8 +249,7 @@ class Orchestrator:
             return {
                 "status": "error",
                 "message": str(e),
-                "errors": -1,
-                "model": self.config.gemini_model
+                "errors": -1
             }
 
     def _parse_with_gemini(
@@ -362,10 +359,9 @@ class Orchestrator:
             logger.info("Post-processing parsed data...")
             result = self.post_processor.process(header_data, items_data)
 
-            # Добавляем служебные данные
+            # Добавляем служебные данные (без упоминания модели для клиента)
             result["_meta"] = {
                 "source_file": str(main_image),
-                "model": self.config.gemini_model,
                 "timestamp": datetime.now().isoformat(),
                 "processing_time_seconds": 0  # Будет обновлено позже
             }
@@ -384,8 +380,9 @@ class Orchestrator:
             return result
 
         except Exception as e:
-            logger.error(f"Gemini parsing failed: {e}", exc_info=True)
-            raise GeminiAPIError(f"Failed to parse document with Gemini: {e}")
+            logger.error(f"Document processing failed: {e}", exc_info=True)
+            # Не передаем детали клиенту - только общее сообщение
+            raise GeminiAPIError(f"ERROR_E001|Сервис временно недоступен из-за высокой нагрузки. Попробуйте позже.")
 
 
     def _export_results(self, document_path: Path, invoice_data: Dict[str, Any]) -> Optional[Path]:
@@ -441,8 +438,7 @@ class Orchestrator:
                         "errors": test_results.get('errors', 0),
                         "reference_file": test_results.get('reference_file', 'N/A'),
                         "sample_errors": test_results.get('sample_errors', []),
-                        "all_errors": all_errors,  # Полный список всех ошибок
-                        "model": test_results.get('model', self.config.gemini_model)
+                        "all_errors": all_errors  # Полный список всех ошибок
                     }
                 }
 

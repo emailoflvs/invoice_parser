@@ -202,10 +202,10 @@ async function parseDocument() {
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
             const errorInfo = typeof errorData.detail === 'object' ? errorData.detail : { message: errorData.detail };
-            
+
             // Обработка различных типов ошибок
             let userMessage = '';
-            
+
             if (response.status === 401) {
                 userMessage = '🔐 Неверная авторизация. Проверьте токен в настройках.';
                 // Открываем модальное окно настроек
@@ -214,16 +214,16 @@ async function parseDocument() {
                 // Новый формат с кодами ошибок
                 const code = errorInfo.error_code;
                 const message = errorInfo.message || 'Неизвестная ошибка';
-                
+
                 // Добавляем эмодзи в зависимости от типа ошибки
                 let emoji = '❌';
                 if (code === 'E001') emoji = '⚠️';  // Service unavailable
                 else if (code === 'E004') emoji = '⏱️';  // Timeout
                 else if (code === 'E005') emoji = '🌐';  // Network
                 else if (code.startsWith('E00')) emoji = '⚙️';  // Config errors
-                
+
                 userMessage = `${emoji} ${message}`;
-                
+
                 // Добавляем код ошибки только для технических проблем (не показываем клиенту детали)
                 if (['E002', 'E003', 'E099'].includes(code)) {
                     userMessage += ` [${code}]`;
@@ -237,7 +237,7 @@ async function parseDocument() {
                 // Другие HTTP ошибки
                 userMessage = errorInfo.message || `Не удалось обработать запрос. Попробуйте снова или свяжитесь с поддержкой.`;
             }
-            
+
             throw new Error(userMessage);
         }
 
