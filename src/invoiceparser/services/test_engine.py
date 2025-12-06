@@ -798,9 +798,9 @@ class TestEngine:
                     "description": "Номер документа в текстовом блоке"
                 })
 
-        # 6. Сравнение signatures (подписи) - универсальное сравнение через рекурсивный метод
+        # 6. Сравнение signatures (подписи) - ОТКЛЮЧЕНО
         # Нормализуем структуры к единому виду и сравниваем как обычные данные
-        if exp_signatures and act_signatures:
+        if False and exp_signatures and act_signatures:
             def normalize_structure(data):
                 """Приводит структуру к единому виду для сравнения"""
                 if isinstance(data, dict):

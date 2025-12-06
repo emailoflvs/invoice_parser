@@ -13,7 +13,7 @@ The document may be a poor quality scan, have broken grid lines, or be highly de
 === CRITICAL RULE: NO EXAMPLES ===
 You are strictly FORBIDDEN to use hallucinated data or external examples. Extract ONLY what is visible on the image.
 
-=== TEXT PROCESSING & MERGE LOGIC (FROM V2) ===
+=== TEXT PROCESSING & MERGE LOGIC ===
 When a single cell's content spans multiple visual lines, you must merge them into a single string using this PRECISE LOGIC:
 1. **Numbers/Codes:** If the last character of Line A and the first character of Line B are digits or punctuation (e.g., "123" and "456", or "AB-" and "123"), merge them **WITHOUT SPACE**.
    - *Goal:* Reassemble broken Part Numbers, SKUs, and Prices.

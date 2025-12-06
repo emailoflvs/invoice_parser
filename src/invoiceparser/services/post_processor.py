@@ -1,6 +1,7 @@
 """
 Post-процессор - объединяет данные от Gemini в целевую структуру
 """
+import re
 import logging
 from typing import Dict, Any
 
@@ -62,15 +63,15 @@ class InvoicePostProcessor:
 
     def _normalize_totals(self, totals: Dict[str, Any]):
         """Преобразует строки в числа в totals"""
-        numeric_keys = ["total", "vat", "total_with_vat", "subtotal"]
-        for key in numeric_keys:
-            if key in totals:
-                val = totals[key]
-                # Если это уже число, пропускаем
-                if isinstance(val, (int, float)):
-                    continue
+        # Обрабатываем все ключи динамически, проверяя содержимое
+        for key, val in totals.items():
+            # Если это уже число, пропускаем
+            if isinstance(val, (int, float)):
+                continue
 
-                if isinstance(val, str):
+            if isinstance(val, str):
+                # Проверяем, является ли строка числом по содержимому
+                if self._is_numeric_string(val):
                     try:
                         totals[key] = self._parse_number(val)
                     except ValueError:
@@ -78,27 +79,19 @@ class InvoicePostProcessor:
 
     def _normalize_line_items(self, items: list):
         """Пытается преобразовать числовые поля в строках таблицы"""
-        numeric_keys = ["quantity", "price", "amount", "price_excluding_vat", "amount_excluding_vat", "price_with_vat"]
-
+        # Обрабатываем все поля динамически, проверяя содержимое
         for item in items:
             if not isinstance(item, dict):
                 continue
 
             for key, val in item.items():
-                # Проверяем, похоже ли название ключа на числовое поле
-                is_numeric = any(nk in key for nk in numeric_keys)
-
-                if is_numeric and isinstance(val, str):
-                    try:
-                        # Пытаемся сконвертировать, но аккуратно
-                        # Если в строке есть буквы (кроме e/E для экспоненты), пропускаем
-                        import re
-                        if re.search(r'[a-zA-Zа-яА-Я]', val):
-                            continue
-
-                        item[key] = self._parse_number(val)
-                    except ValueError:
-                        pass # Не страшно, оставляем как строку
+                if isinstance(val, str):
+                    # Проверяем, является ли строка числом по содержимому
+                    if self._is_numeric_string(val):
+                        try:
+                            item[key] = self._parse_number(val)
+                        except ValueError:
+                            pass  # Не страшно, оставляем как строку
 
     def _parse_number(self, val: str) -> float:
         """Парсит строку в число, обрабатывая разделители"""
@@ -122,3 +115,24 @@ class InvoicePostProcessor:
                 clean_val = clean_val.replace(".", "").replace(",", ".")
 
         return float(clean_val)
+
+    def _is_numeric_string(self, val: str) -> bool:
+        """Проверяет, является ли строка числом по содержимому"""
+        if not val or not isinstance(val, str):
+            return False
+
+        # Убираем пробелы и неразрывные пробелы
+        clean_val = val.replace(" ", "").replace("\u00a0", "")
+
+        if not clean_val:
+            return False
+
+        # Если в строке есть буквы (кроме e/E для экспоненты), это не число
+        if re.search(r'[a-df-zA-DF-Z]', clean_val):  # Исключаем только e/E
+            return False
+
+        # Проверяем, что остались только цифры, запятые, точки, e/E и знаки +/-
+        if re.match(r'^[+-]?[\d.,eE]+$', clean_val):
+            return True
+
+        return False

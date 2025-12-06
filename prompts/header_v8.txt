@@ -42,26 +42,15 @@ The response MUST contain the following root objects:
 3. "references":
    - An object for related documents (contracts, orders). Keys: normalized snake_case.
 
-4. "signatures":
-   - TYPE: ARRAY of objects.
-   - Extract ALL signature zones.
-   - FIELDS:
-     - "role": (string) Printed role of the signer.
-     - "name": (string) Printed name.
-     - "is_signed": (boolean) True if handwritten signature present.
-     - "is_stamped": (boolean) True if stamp present.
-     - "stamp_content": (string) Text inside stamp.
-     - "handwritten_date": (string) Handwritten date near signature.
-
-5. "totals":
+4. "totals":
    - An object containing final numerical summary data.
    - Keys: Use short, standard English business terms.
    - Values: NUMBER TYPES (float), using DOT as separator. Remove spaces.
 
-6. "amounts_in_words":
+5. "amounts_in_words":
    - An object for textual representations of amounts.
 
-7. "other_fields":
+6. "other_fields":
    - TYPE: ARRAY of objects for any text not fitting above.
    - FIELDS:
      - "label": (string) Original label text.
