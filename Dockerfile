@@ -12,7 +12,6 @@ WORKDIR /app
 
 # Копируем файлы зависимостей
 COPY requirements.txt .
-COPY pyproject.toml .
 
 # Устанавливаем Python зависимости
 RUN pip install --no-cache-dir -r requirements.txt

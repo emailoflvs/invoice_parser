@@ -91,6 +91,25 @@ class WebAPI:
                 "version": "1.0.0"
             }
 
+        @self.app.get("/api/validate-frontend")
+        async def validate_frontend():
+            """
+            Проверка совместимости API с фронтендом
+            
+            Проверяет структуру данных, которую ожидает получить фронтенд
+            """
+            from invoiceparser.utils.frontend_validator import validate_api_structure
+            
+            results = validate_api_structure()
+            
+            return {
+                "success": results["success"],
+                "checks": results["checks"],
+                "errors": results["errors"],
+                "warnings": results["warnings"],
+                "summary": results["summary"]
+            }
+
         @self.app.post("/parse", response_model=ParseResponse)
         async def parse_document(
             file: UploadFile = File(...),

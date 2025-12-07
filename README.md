@@ -16,13 +16,13 @@ cp env.example .env
 nano .env  # Добавьте GEMINI_API_KEY и WEB_AUTH_TOKEN
 
 # 2. Запуск
-bash docker-start.sh
+docker-compose up -d
 
 # 3. Откройте браузер
 # http://localhost:8000
 ```
 
-**Подробнее:** [Быстрый старт с Docker](QUICKSTART_DOCKER.md) | [Docker руководство](DOCKER_GUIDE.md)
+**Подробнее:** См. `docker-compose.yml` и `Dockerfile`
 
 ### 🌐 Локальный запуск (альтернатива)
 
@@ -94,6 +94,33 @@ cat output/dnipromash_result.json
 - 🔒 Безопасной авторизацией
 
 **Подробности:** См. [static/README.md](static/README.md)
+
+---
+
+## 🧪 Автоматическая проверка совместимости с фронтендом
+
+### Через веб-интерфейс (рекомендуется):
+Откройте: **http://localhost:8000/static/test-frontend.html**
+
+### Через API:
+```bash
+curl http://localhost:8000/api/validate-frontend
+```
+
+### Через CLI:
+```bash
+# Локально
+python3 -m src.invoiceparser.utils.frontend_validator
+
+# В Docker
+docker-compose exec app python -m invoiceparser.utils.frontend_validator
+```
+
+**Проверяется автоматически:**
+- ✅ Структура ответов API (`/parse`, `/save`)
+- ✅ Наличие обязательных полей
+- ✅ Формат данных для редактируемых полей
+- ✅ Структуру товаров для таблицы
 
 ---
 
