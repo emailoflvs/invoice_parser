@@ -25,6 +25,20 @@ class ParseResponse(BaseModel):
     processed_at: str
 
 
+class SaveRequest(BaseModel):
+    """Модель запроса на сохранение данных"""
+    original_filename: str
+    data: dict
+
+
+class SaveResponse(BaseModel):
+    """Модель ответа на сохранение"""
+    success: bool
+    filename: str
+    message: Optional[str] = None
+    error: Optional[str] = None
+
+
 class HealthResponse(BaseModel):
     """Модель ответа health check"""
     status: str
@@ -196,6 +210,61 @@ class WebAPI:
                     }
                 )
 
+        @self.app.post("/save", response_model=SaveResponse)
+        async def save_edited_data(
+            save_request: SaveRequest,
+            token: Optional[str] = Header(None, alias="Authorization")
+        ):
+            """
+            Save edited document data to JSON file
+
+            Args:
+                save_request: Request with original filename and edited data
+                token: Authorization token
+
+            Returns:
+                Save result with new filename
+            """
+            # Проверка авторизации
+            if not self._verify_token(token):
+                raise HTTPException(status_code=401, detail="Unauthorized")
+
+            try:
+                import json
+                from datetime import datetime
+
+                # Создаем директорию output если её нет
+                output_dir = Path(self.config.output_dir)
+                output_dir.mkdir(parents=True, exist_ok=True)
+
+                # Генерируем имя файла
+                timestamp = datetime.now().strftime("%d%m%H%M")
+                base_name = Path(save_request.original_filename).stem
+                new_filename = f"{base_name}_saved_{timestamp}.json"
+                output_path = output_dir / new_filename
+
+                # Сохраняем данные
+                with open(output_path, 'w', encoding='utf-8') as f:
+                    json.dump(save_request.data, f, indent=2, ensure_ascii=False)
+
+                logger.info(f"Saved edited data to: {output_path}")
+
+                return SaveResponse(
+                    success=True,
+                    filename=new_filename,
+                    message=f"Данные успешно сохранены в файл {new_filename}"
+                )
+
+            except Exception as e:
+                logger.error(f"Failed to save data: {e}", exc_info=True)
+                raise HTTPException(
+                    status_code=500,
+                    detail={
+                        "error_code": "SAVE_ERROR",
+                        "message": f"Не удалось сохранить данные: {str(e)}"
+                    }
+                )
+
         @self.app.get("/")
         async def root():
             """Root endpoint - returns web interface"""
@@ -210,7 +279,8 @@ class WebAPI:
                     "version": "1.0.0",
                     "endpoints": {
                         "health": "/health",
-                        "parse": "/parse (POST)"
+                        "parse": "/parse (POST)",
+                        "save": "/save (POST)"
                     }
                 }
 

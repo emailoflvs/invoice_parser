@@ -691,6 +691,123 @@ body {
     }
 }
 
+/* Editable Data Section */
+.editable-section {
+    margin-bottom: 30px;
+    grid-column: 1 / -1;
+}
+
+.editable-data-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+    margin-bottom: 25px;
+}
+
+.editable-group {
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 15px;
+    background: #f8fafc;
+}
+
+.editable-group-title {
+    font-weight: 700;
+    color: var(--primary-color);
+    margin-bottom: 15px;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.editable-field {
+    margin-bottom: 15px;
+}
+
+.editable-field:last-child {
+    margin-bottom: 0;
+}
+
+.editable-label {
+    display: block;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+    font-size: 0.9rem;
+}
+
+.editable-input,
+.editable-textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 1rem;
+    font-family: inherit;
+    transition: all 0.3s ease;
+    background: white;
+}
+
+.editable-input:focus,
+.editable-textarea:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.editable-textarea {
+    min-height: 80px;
+    resize: vertical;
+}
+
+.editable-items-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+
+.editable-items-table th {
+    background: var(--primary-color);
+    color: white;
+    padding: 12px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.editable-items-table td {
+    padding: 8px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.editable-items-table input {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 0.95rem;
+}
+
+.editable-items-table input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+.save-section {
+    margin-top: 25px;
+    padding-top: 20px;
+    border-top: 2px solid var(--border-color);
+    display: flex;
+    justify-content: center;
+}
+
+.btn-save {
+    min-width: 250px;
+    font-size: 1.2rem;
+    padding: 18px 40px;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .header h1 {
@@ -729,6 +846,14 @@ body {
         width: 50px;
         height: 50px;
         font-size: 1.2rem;
+    }
+
+    .editable-data-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .btn-save {
+        min-width: 100%;
     }
 }
 

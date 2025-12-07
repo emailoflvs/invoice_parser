@@ -2,7 +2,9 @@
 const state = {
     selectedFile: null,
     authToken: localStorage.getItem('authToken') || '',
-    parsedData: null
+    parsedData: null,
+    originalFilename: null,
+    editedData: null
 };
 
 // Элементы DOM
@@ -23,6 +25,7 @@ const elements = {
     progressFill: document.getElementById('progressFill'),
     progressPercentage: document.getElementById('progressPercentage'),
 
+    editableData: document.getElementById('editableData'),
     headerInfo: document.getElementById('headerInfo'),
     itemsTable: document.getElementById('itemsTable'),
     summaryInfo: document.getElementById('summaryInfo'),
@@ -35,6 +38,7 @@ const elements = {
     downloadJsonBtn: document.getElementById('downloadJsonBtn'),
     copyJsonBtn: document.getElementById('copyJsonBtn'),
     toggleJsonBtn: document.getElementById('toggleJsonBtn'),
+    saveAndContinueBtn: document.getElementById('saveAndContinueBtn'),
 
     settingsBtn: document.getElementById('settingsBtn'),
     settingsModal: document.getElementById('settingsModal'),
@@ -77,6 +81,7 @@ function setupEventListeners() {
     elements.downloadJsonBtn.addEventListener('click', downloadJson);
     elements.copyJsonBtn.addEventListener('click', copyJson);
     elements.toggleJsonBtn.addEventListener('click', toggleJson);
+    elements.saveAndContinueBtn.addEventListener('click', saveAndContinue);
 
     // Settings
     elements.settingsBtn.addEventListener('click', showModal);
@@ -140,6 +145,7 @@ function handleFile(file) {
     }
 
     state.selectedFile = file;
+    state.originalFilename = file.name;
     displayFileInfo(file);
 }
 
@@ -290,11 +296,14 @@ function displayResults(data) {
 
         const parsedData = data.data;
 
+        // Display editable form
+        displayEditableData(parsedData);
+
         // Header information
         displayHeaderInfo(parsedData);
 
         // Items table
-        displayItemsTable(parsedData.items || []);
+        displayItemsTable(parsedData.line_items || parsedData.items || []);
 
         // Summary
         displaySummary(parsedData);
@@ -533,6 +542,402 @@ document.addEventListener('keydown', (e) => {
         saveSettings();
     }
 });
+
+// Field label mappings (Russian labels for fields)
+const fieldLabels = {
+    // Document Info
+    'document_type': 'Тип документа:',
+    'document_number': 'Номер документа:',
+    'document_date': 'Дата документа:',
+    'document_date_normalized': 'Дата (нормализованная):',
+    'location': 'Местоположение:',
+    'currency': 'Валюта:',
+
+    // Parties - Supplier
+    'name': 'Название:',
+    'account_number': 'Номер счета:',
+    'bank': 'Банк:',
+    'address': 'Адрес:',
+    'phone': 'Телефон:',
+    'edrpou': 'ЄДРПОУ:',
+    'ipn': 'ІПН:',
+
+    // References
+    'contract_number': 'Номер контракта:',
+    'basis_document': 'Основание:',
+
+    // Totals
+    'total': 'Сумма без НДС:',
+    'vat': 'НДС:',
+    'total_with_vat': 'Итого с НДС:',
+
+    // Amounts in words
+    'total_in_words': 'Сумма прописью:',
+    'vat_in_words': 'НДС прописью:',
+
+    // Line items
+    'line_number': '№',
+    'article': 'Артикул',
+    'product_name': 'Товары (роботи, послуги)',
+    'application_mode': 'Режим полімерізації',
+    'ukt_zed': 'Код УКТЗЕД',
+    'quantity': 'Кількість',
+    'price_excluding_vat': 'Ціна без ПДВ',
+    'amount_excluding_vat': 'Сума без ПДВ',
+
+    // Invoice fields (alternative)
+    'invoice_number': 'Номер счета:',
+    'invoice_date': 'Дата счета:',
+    'supplier_name': 'Поставщик:',
+    'customer_name': 'Покупатель:',
+    'description': 'Наименование',
+    'unit': 'Ед. изм.',
+    'unit_price': 'Цена',
+    'total_price': 'Сумма',
+    'subtotal': 'Сумма без НДС:',
+    'tax_amount': 'НДС:',
+    'total_amount': 'Итого:',
+
+    // Additional fields
+    'role': 'Роль:',
+    'is_signed': 'Подписано:',
+    'is_stamped': 'Печать:',
+    'stamp_content': 'Содержимое печати:',
+    'label_raw': 'Метка:',
+    'value_raw': 'Значение:'
+};
+
+// Display editable data form
+function displayEditableData(data) {
+    if (!elements.editableData) return;
+
+    let html = '<div class="editable-data-grid">';
+
+    // Helper function to get label from data or fallback
+    const getLabel = (obj, key) => {
+        // Check if object has _label for this key
+        const labelKey = key + '_label';
+        if (obj && obj[labelKey]) {
+            return obj[labelKey];
+        }
+        // Fallback to predefined labels
+        return fieldLabels[key] || key;
+    };
+
+    // Helper function to create editable field
+    const createField = (key, value, label, parentObj) => {
+        // Skip _label fields themselves
+        if (key.endsWith('_label')) return '';
+
+        const fieldId = `edit_${key}_${Math.random().toString(36).substr(2, 9)}`;
+        const displayLabel = label || getLabel(parentObj, key);
+        const fieldValue = value !== null && value !== undefined ? value : '';
+
+        // For boolean values
+        if (typeof value === 'boolean') {
+            return `
+                <div class="editable-field">
+                    <label class="editable-label" for="${fieldId}">${displayLabel}</label>
+                    <select id="${fieldId}" class="editable-input" data-key="${key}">
+                        <option value="true" ${value ? 'selected' : ''}>Да</option>
+                        <option value="false" ${!value ? 'selected' : ''}>Нет</option>
+                    </select>
+                </div>
+            `;
+        }
+
+        // For string/number values
+        if (typeof fieldValue === 'string' && fieldValue.length > 60) {
+            return `
+                <div class="editable-field">
+                    <label class="editable-label" for="${fieldId}">${displayLabel}</label>
+                    <textarea id="${fieldId}" class="editable-textarea" data-key="${key}">${escapeHtml(fieldValue)}</textarea>
+                </div>
+            `;
+        } else {
+            return `
+                <div class="editable-field">
+                    <label class="editable-label" for="${fieldId}">${displayLabel}</label>
+                    <input type="text" id="${fieldId}" class="editable-input" data-key="${key}" value="${escapeHtml(fieldValue)}">
+                </div>
+            `;
+        }
+    };
+
+    // Process document_info
+    if (data.document_info) {
+        html += '<div class="editable-group">';
+        html += '<div class="editable-group-title"><i class="fas fa-file-alt"></i> Информация о документе</div>';
+        for (const [key, value] of Object.entries(data.document_info)) {
+            if (typeof value === 'object') continue;
+            html += createField(key, value, null, data.document_info);
+        }
+        html += '</div>';
+    }
+
+    // Process parties (supplier and buyer)
+    if (data.parties) {
+        if (data.parties.supplier) {
+            html += '<div class="editable-group">';
+            html += '<div class="editable-group-title"><i class="fas fa-building"></i> Постачальник</div>';
+            for (const [key, value] of Object.entries(data.parties.supplier)) {
+                if (typeof value === 'object') continue;
+                html += createField(key, value, null, data.parties.supplier);
+            }
+            html += '</div>';
+        }
+
+        if (data.parties.buyer) {
+            html += '<div class="editable-group">';
+            html += '<div class="editable-group-title"><i class="fas fa-user"></i> Покупатель</div>';
+            for (const [key, value] of Object.entries(data.parties.buyer)) {
+                if (typeof value === 'object') continue;
+                html += createField(key, value, null, data.parties.buyer);
+            }
+            html += '</div>';
+        }
+    }
+
+    // Process references
+    if (data.references) {
+        html += '<div class="editable-group">';
+        html += '<div class="editable-group-title"><i class="fas fa-link"></i> Ссылки</div>';
+        for (const [key, value] of Object.entries(data.references)) {
+            if (typeof value === 'object') continue;
+            html += createField(key, value, null, data.references);
+        }
+        html += '</div>';
+    }
+
+    // Process totals
+    if (data.totals) {
+        html += '<div class="editable-group">';
+        html += '<div class="editable-group-title"><i class="fas fa-calculator"></i> Итоговые суммы</div>';
+        for (const [key, value] of Object.entries(data.totals)) {
+            if (typeof value === 'object') continue;
+            html += createField(key, value, null, data.totals);
+        }
+        html += '</div>';
+    }
+
+    html += '</div>';
+
+    // Process additional top-level fields (for simpler invoice structures)
+    const processedSections = ['document_info', 'parties', 'references', 'totals', 'amounts_in_words',
+                                'signatures', 'other_fields', 'line_items', 'items', 'column_mapping'];
+    const remainingFields = Object.entries(data).filter(([key]) => !processedSections.includes(key));
+
+    if (remainingFields.length > 0) {
+        html += '<div class="editable-group">';
+        html += '<div class="editable-group-title"><i class="fas fa-info-circle"></i> Дополнительная информация</div>';
+        for (const [key, value] of remainingFields) {
+            if (typeof value === 'object' || key.endsWith('_label')) continue;
+            html += createField(key, value, null, data);
+        }
+        html += '</div>';
+    }
+
+    // Process line_items as table
+    const items = data.line_items || data.items || [];
+    if (items.length > 0) {
+        html += '<div class="editable-group" style="grid-column: 1 / -1;">';
+        html += '<div class="editable-group-title"><i class="fas fa-list"></i> Товары и услуги</div>';
+        html += '<div class="table-container">';
+        html += '<table class="editable-items-table">';
+
+        // Table header
+        const firstItem = items[0];
+        html += '<thead><tr>';
+        for (const key of Object.keys(firstItem)) {
+            if (key.endsWith('_label')) continue;
+            const label = data.column_mapping?.[key] || getLabel(firstItem, key);
+            html += `<th>${label}</th>`;
+        }
+        html += '</tr></thead>';
+
+        // Table body
+        html += '<tbody>';
+        items.forEach((item, index) => {
+            html += '<tr>';
+            for (const [key, value] of Object.entries(item)) {
+                if (key.endsWith('_label')) continue;
+                const fieldId = `item_${index}_${key}`;
+                html += `<td><input type="text" id="${fieldId}" class="item-input" data-index="${index}" data-key="${key}" value="${escapeHtml(value || '')}"></td>`;
+            }
+            html += '</tr>';
+        });
+        html += '</tbody>';
+        html += '</table>';
+        html += '</div>';
+        html += '</div>';
+    }
+
+    elements.editableData.innerHTML = html;
+}
+
+// Collect edited data from form
+function collectEditedData() {
+    if (!state.parsedData) return null;
+
+    // Deep clone the original data
+    const editedData = JSON.parse(JSON.stringify(state.parsedData.data));
+
+    // Collect all edited fields
+    const inputs = document.querySelectorAll('.editable-input, .editable-textarea');
+    inputs.forEach(input => {
+        const key = input.dataset.key;
+        let value = input.value;
+
+        // Convert value types
+        if (input.tagName === 'SELECT') {
+            value = value === 'true';
+        } else if (!isNaN(value) && value !== '') {
+            // Try to preserve original number type
+            const originalValue = getOriginalValue(editedData, key);
+            if (typeof originalValue === 'number') {
+                value = parseFloat(value);
+            }
+        }
+
+        // Update in nested structure
+        updateNestedValue(editedData, key, value);
+    });
+
+    // Collect line items
+    const itemInputs = document.querySelectorAll('.item-input');
+    itemInputs.forEach(input => {
+        const index = parseInt(input.dataset.index);
+        const key = input.dataset.key;
+        let value = input.value;
+
+        // Try to preserve number types
+        if (editedData.line_items && editedData.line_items[index]) {
+            const originalValue = editedData.line_items[index][key];
+            if (typeof originalValue === 'number' && !isNaN(value)) {
+                value = parseFloat(value);
+            }
+            editedData.line_items[index][key] = value;
+        } else if (editedData.items && editedData.items[index]) {
+            const originalValue = editedData.items[index][key];
+            if (typeof originalValue === 'number' && !isNaN(value)) {
+                value = parseFloat(value);
+            }
+            editedData.items[index][key] = value;
+        }
+    });
+
+    return editedData;
+}
+
+// Get original value from nested object
+function getOriginalValue(obj, key) {
+    for (const [k, v] of Object.entries(obj)) {
+        if (k === key) {
+            return v;
+        }
+        if (typeof v === 'object' && v !== null && !Array.isArray(v)) {
+            const result = getOriginalValue(v, key);
+            if (result !== undefined) {
+                return result;
+            }
+        }
+    }
+    return undefined;
+}
+
+// Update nested value in object
+function updateNestedValue(obj, key, value) {
+    // Try to find and update the key in nested objects
+    for (const [k, v] of Object.entries(obj)) {
+        if (k === key) {
+            obj[k] = value;
+            return true;
+        }
+        if (typeof v === 'object' && v !== null && !Array.isArray(v)) {
+            if (updateNestedValue(v, key, value)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+// Save and continue function
+async function saveAndContinue() {
+    if (!state.parsedData || !state.originalFilename) {
+        showToast('Нет данных для сохранения', true);
+        return;
+    }
+
+    if (!state.authToken) {
+        showModal();
+        return;
+    }
+
+    try {
+        // Collect edited data
+        const editedData = collectEditedData();
+        state.editedData = editedData;
+
+        // Show loading state
+        elements.saveAndContinueBtn.disabled = true;
+        elements.saveAndContinueBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Сохранение...';
+
+        // Send to server
+        const response = await fetch('/save', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${state.authToken}`
+            },
+            body: JSON.stringify({
+                original_filename: state.originalFilename,
+                data: editedData
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || 'Не удалось сохранить данные');
+        }
+
+        const result = await response.json();
+
+        // Show success message
+        showToast(`✅ ${result.message || 'Данные успешно сохранены!'}`);
+
+        // Reset button
+        elements.saveAndContinueBtn.disabled = false;
+        elements.saveAndContinueBtn.innerHTML = '<i class="fas fa-save"></i> Сохранить и продолжить';
+
+        // Optional: reset to upload new document
+        setTimeout(() => {
+            if (confirm('Хотите загрузить новый документ?')) {
+                resetApp();
+            }
+        }, 1500);
+
+    } catch (error) {
+        console.error('Save error:', error);
+        showToast('❌ ' + error.message, true);
+
+        // Reset button
+        elements.saveAndContinueBtn.disabled = false;
+        elements.saveAndContinueBtn.innerHTML = '<i class="fas fa-save"></i> Сохранить и продолжить';
+    }
+}
+
+// Escape HTML to prevent XSS
+function escapeHtml(text) {
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    };
+    return String(text).replace(/[&<>"']/g, m => map[m]);
+}
 
 // Инициализация при загрузке
 document.addEventListener('DOMContentLoaded', init);
