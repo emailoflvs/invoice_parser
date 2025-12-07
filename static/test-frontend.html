@@ -70,9 +70,9 @@
     <div class="container">
         <h1>🧪 Тест совместимости API с фронтендом</h1>
         <p>Проверка структуры данных, которую ожидает фронтенд</p>
-        
+
         <button onclick="runValidation()">Запустить проверку</button>
-        
+
         <div id="results"></div>
     </div>
 
@@ -80,57 +80,57 @@
         async function runValidation() {
             const resultsDiv = document.getElementById('results');
             resultsDiv.innerHTML = '<p class="loading">⏳ Выполняется проверка...</p>';
-            
+
             try {
                 const response = await fetch('/api/validate-frontend');
                 const data = await response.json();
-                
+
                 let html = '<div class="summary">';
                 html += `<h3>📊 Результаты</h3>`;
                 html += `<p>Проверок пройдено: <strong>${data.summary.passed}/${data.summary.total_checks}</strong></p>`;
                 html += `<p>Ошибок: <strong>${data.summary.errors_count}</strong></p>`;
                 html += `<p>Предупреждений: <strong>${data.summary.warnings_count}</strong></p>`;
                 html += '</div>';
-                
+
                 data.checks.forEach(check => {
                     const status = check.passed ? 'passed' : 'failed';
                     const icon = check.passed ? '✅' : '❌';
-                    
+
                     html += `<div class="check ${status}">`;
                     html += `<strong>${icon} ${check.name}</strong>`;
-                    
+
                     if (check.errors && check.errors.length > 0) {
                         check.errors.forEach(error => {
                             html += `<div class="error">❌ ${error}</div>`;
                         });
                     }
-                    
+
                     if (check.warnings && check.warnings.length > 0) {
                         check.warnings.forEach(warning => {
                             html += `<div class="warning">⚠️ ${warning}</div>`;
                         });
                     }
-                    
+
                     if (check.message) {
                         html += `<div>ℹ️ ${check.message}</div>`;
                     }
-                    
+
                     html += '</div>';
                 });
-                
+
                 if (data.success) {
                     html += '<div class="check passed"><strong>✅ Все проверки пройдены! Фронтенд получит корректные данные.</strong></div>';
                 } else {
                     html += '<div class="check failed"><strong>❌ Обнаружены проблемы. Фронтенд может работать некорректно.</strong></div>';
                 }
-                
+
                 resultsDiv.innerHTML = html;
-                
+
             } catch (error) {
                 resultsDiv.innerHTML = `<div class="check failed"><strong>❌ Ошибка при проверке:</strong><br>${error.message}</div>`;
             }
         }
-        
+
         // Автоматически запускаем проверку при загрузке
         window.addEventListener('load', runValidation);
     </script>

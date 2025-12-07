@@ -95,13 +95,13 @@ class WebAPI:
         async def validate_frontend():
             """
             Проверка совместимости API с фронтендом
-            
+
             Проверяет структуру данных, которую ожидает получить фронтенд
             """
             from invoiceparser.utils.frontend_validator import validate_api_structure
-            
+
             results = validate_api_structure()
-            
+
             return {
                 "success": results["success"],
                 "checks": results["checks"],

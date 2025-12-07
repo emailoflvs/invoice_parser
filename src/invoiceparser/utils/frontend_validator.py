@@ -11,18 +11,18 @@ def validate_parse_response(data: Dict[str, Any]) -> Dict[str, Any]:
     """Проверка структуры ответа /parse"""
     errors = []
     warnings = []
-    
+
     # Обязательные поля верхнего уровня
     required_fields = ["success", "data", "processed_at"]
     for field in required_fields:
         if field not in data:
             errors.append(f"Отсутствует обязательное поле: {field}")
-    
+
     if "data" not in data or not isinstance(data["data"], dict):
         return {"errors": errors, "warnings": warnings}
-    
+
     data_obj = data["data"]
-    
+
     # Проверяем основные секции для редактируемых полей
     expected_sections = {
         "document_info": ["document_type", "document_number", "document_date", "currency"],
@@ -32,7 +32,7 @@ def validate_parse_response(data: Dict[str, Any]) -> Dict[str, Any]:
         },
         "totals": ["total", "vat", "total_with_vat"]
     }
-    
+
     # Проверяем document_info
     if "document_info" not in data_obj:
         warnings.append("Отсутствует секция document_info")
@@ -40,7 +40,7 @@ def validate_parse_response(data: Dict[str, Any]) -> Dict[str, Any]:
         for field in expected_sections["document_info"]:
             if field not in data_obj["document_info"]:
                 warnings.append(f"Поле document_info.{field} отсутствует")
-    
+
     # Проверяем parties
     if "parties" not in data_obj:
         warnings.append("Отсутствует секция parties")
@@ -49,11 +49,11 @@ def validate_parse_response(data: Dict[str, Any]) -> Dict[str, Any]:
             warnings.append("Отсутствует parties.supplier")
         if "buyer" not in data_obj["parties"]:
             warnings.append("Отсутствует parties.buyer")
-    
+
     # Проверяем товары (может быть line_items или items)
     if "line_items" not in data_obj and "items" not in data_obj:
         warnings.append("Отсутствуют товары (line_items или items)")
-    
+
     # Проверяем column_mapping для таблицы
     if "line_items" in data_obj and isinstance(data_obj["line_items"], list):
         if "column_mapping" not in data_obj:
@@ -64,7 +64,7 @@ def validate_parse_response(data: Dict[str, Any]) -> Dict[str, Any]:
             for key in data_obj.get("column_mapping", {}).keys():
                 if key not in first_item:
                     warnings.append(f"Ключ {key} из column_mapping отсутствует в line_items")
-    
+
     return {"errors": errors, "warnings": warnings}
 
 
@@ -72,33 +72,33 @@ def validate_save_response(data: Dict[str, Any]) -> Dict[str, Any]:
     """Проверка структуры ответа /save"""
     errors = []
     warnings = []
-    
+
     required_fields = ["success", "filename"]
     for field in required_fields:
         if field not in data:
             errors.append(f"Отсутствует обязательное поле: {field}")
-    
+
     if data.get("success"):
         filename = data.get("filename", "")
         if "_saved_" not in filename:
             warnings.append("Имя файла не содержит '_saved_'")
         if not filename.endswith(".json"):
             warnings.append("Имя файла не заканчивается на .json")
-    
+
     return {"errors": errors, "warnings": warnings}
 
 
 def validate_api_structure() -> Dict[str, Any]:
     """
     Проверка структуры API для фронтенда
-    
+
     Returns:
         Dict с результатами проверки
     """
     checks = []
     all_errors = []
     all_warnings = []
-    
+
     # Проверка 1: Структура ответа /parse
     parse_example = {
         "success": True,
@@ -138,7 +138,7 @@ def validate_api_structure() -> Dict[str, Any]:
         },
         "processed_at": "2025-12-07T00:00:00"
     }
-    
+
     result = validate_parse_response(parse_example)
     checks.append({
         "name": "Структура ответа /parse",
@@ -148,14 +148,14 @@ def validate_api_structure() -> Dict[str, Any]:
     })
     all_errors.extend(result["errors"])
     all_warnings.extend(result["warnings"])
-    
+
     # Проверка 2: Структура ответа /save
     save_example = {
         "success": True,
         "filename": "invoice_saved_07120130.json",
         "message": "Данные успешно сохранены"
     }
-    
+
     result = validate_save_response(save_example)
     checks.append({
         "name": "Структура ответа /save",
@@ -165,7 +165,7 @@ def validate_api_structure() -> Dict[str, Any]:
     })
     all_errors.extend(result["errors"])
     all_warnings.extend(result["warnings"])
-    
+
     # Проверка 3: Поля для редактируемых форм
     required_editable_fields = {
         "document_info": ["document_type", "document_number", "document_date"],
@@ -173,13 +173,13 @@ def validate_api_structure() -> Dict[str, Any]:
         "parties.buyer": ["name"],
         "totals": ["total", "vat", "total_with_vat"]
     }
-    
+
     checks.append({
         "name": "Поля для редактирования",
         "passed": True,
         "message": f"Проверено {len(required_editable_fields)} секций"
     })
-    
+
     return {
         "success": len(all_errors) == 0,
         "checks": checks,
@@ -197,32 +197,32 @@ def validate_api_structure() -> Dict[str, Any]:
 def main():
     """CLI интерфейс"""
     import sys
-    
+
     print("🔍 Проверка совместимости API с фронтендом...")
     print("")
-    
+
     results = validate_api_structure()
-    
+
     print(f"📊 Результаты: {results['summary']['passed']}/{results['summary']['total_checks']} проверок пройдено")
     print("")
-    
+
     for check in results["checks"]:
         status = "✅" if check.get("passed", False) else "❌"
         print(f"{status} {check['name']}")
-        
+
         if check.get("errors"):
             for error in check["errors"]:
                 print(f"  ❌ {error}")
-        
+
         if check.get("warnings"):
             for warning in check["warnings"]:
                 print(f"  ⚠️  {warning}")
-        
+
         if check.get("message"):
             print(f"  ℹ️  {check['message']}")
-        
+
         print("")
-    
+
     if results["success"]:
         print("✅ Все проверки пройдены успешно!")
         return 0
