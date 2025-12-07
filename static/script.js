@@ -627,7 +627,7 @@ function displayEditableData(data) {
     if (!elements.editableData) {
         return;
     }
-    
+
     let html = '<div class="editable-data-grid">';
 
     // Helper function to get label from data or fallback
