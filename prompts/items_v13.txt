@@ -43,3 +43,4 @@ Return a SINGLE valid JSON object with exactly two root keys:
 === EXECUTION ===
 Analyze the image. Reconstruct the table. Ensure every piece of data inside the grid is captured, using "raw" if necessary.
 
+

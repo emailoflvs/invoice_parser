@@ -49,3 +49,4 @@ The response MUST contain two root keys: "column_mapping" and "line_items".
 2. NUMBER FORMAT: Preserve original separators as they appear.
 3. UNIT SEPARATION: If a unit is combined with a numerical value in the same cell, and there is a separate column for units, split them appropriately.
 
+
