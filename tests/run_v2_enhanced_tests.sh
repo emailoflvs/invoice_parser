@@ -36,3 +36,4 @@ echo "  - /tmp/v2_binarized_test.log"
 echo ""
 echo "JSON файлы сохранены в output/"
 
+

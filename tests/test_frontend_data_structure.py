@@ -240,3 +240,4 @@ def test_empty_data_handling():
     assert isinstance(empty_data["line_items"], list)
     assert len(empty_data["line_items"]) == 0
 
+

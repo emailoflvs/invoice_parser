@@ -289,3 +289,4 @@ def test_public_endpoints(client, endpoint):
     response = client.get(endpoint)
     assert response.status_code == 200
 
+

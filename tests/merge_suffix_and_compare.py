@@ -172,3 +172,4 @@ if __name__ == "__main__":
 
     merge_suffix_files(output_dir, reference_file)
 
+
