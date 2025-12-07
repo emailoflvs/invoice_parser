@@ -285,6 +285,9 @@ function updateProgress(percentage) {
 
 // Display results
 function displayResults(data) {
+    console.log('🎯 displayResults called');
+    console.log('📦 Полученные данные:', data);
+    
     // Очищаем интервал прогресса
     if (state.progressInterval) {
         clearInterval(state.progressInterval);
@@ -292,14 +295,19 @@ function displayResults(data) {
     updateProgress(100);
 
     setTimeout(() => {
+        console.log('⏱️ setTimeout выполняется через 500ms');
         showSection('results');
 
         const parsedData = data.data;
+        console.log('📊 parsedData:', parsedData);
+        console.log('📋 Ключи в parsedData:', Object.keys(parsedData));
 
         // Display editable form
+        console.log('🎨 Вызываем displayEditableData...');
         displayEditableData(parsedData);
 
         // Header information
+        console.log('📄 Вызываем displayHeaderInfo...');
         displayHeaderInfo(parsedData);
 
         // Items table - поддержка разных структур
@@ -307,13 +315,17 @@ function displayResults(data) {
         if (parsedData.table_data) {
             items = parsedData.table_data.line_items || parsedData.table_data.items || items;
         }
+        console.log('🛒 Товары для отображения:', items.length);
         displayItemsTable(items);
 
         // Summary
+        console.log('💰 Вызываем displaySummary...');
         displaySummary(parsedData);
 
         // Raw JSON
         elements.jsonContent.textContent = JSON.stringify(data, null, 2);
+        
+        console.log('✅ displayResults завершен');
     }, 500);
 }
 
@@ -613,8 +625,15 @@ const fieldLabels = {
 
 // Display editable data form
 function displayEditableData(data) {
-    if (!elements.editableData) return;
-
+    console.log('🔍 displayEditableData called with:', data);
+    
+    if (!elements.editableData) {
+        console.error('❌ elements.editableData не найден!');
+        return;
+    }
+    
+    console.log('✅ elements.editableData найден:', elements.editableData);
+    
     let html = '<div class="editable-data-grid">';
 
     // Helper function to get label from data or fallback
@@ -690,7 +709,7 @@ function displayEditableData(data) {
             }
             html += '</div>';
         }
-        
+
         // Поддержка buyer или customer
         const buyerData = data.parties.buyer || data.parties.customer;
         if (buyerData) {
@@ -746,13 +765,13 @@ function displayEditableData(data) {
     // Process line_items as table (поддержка разных структур)
     let items = data.line_items || data.items || [];
     let column_mapping = data.column_mapping || {};
-    
+
     // Если товары в table_data
     if (data.table_data) {
         items = data.table_data.line_items || data.table_data.items || items;
         column_mapping = data.table_data.column_mapping || column_mapping;
     }
-    
+
     if (items.length > 0) {
         html += '<div class="editable-group" style="grid-column: 1 / -1;">';
         html += '<div class="editable-group-title"><i class="fas fa-list"></i> Товары и услуги</div>';
@@ -786,7 +805,9 @@ function displayEditableData(data) {
         html += '</div>';
     }
 
+    console.log('📝 Сгенерировано HTML длиной:', html.length);
     elements.editableData.innerHTML = html;
+    console.log('✅ HTML вставлен в editableData');
 }
 
 // Collect edited data from form
