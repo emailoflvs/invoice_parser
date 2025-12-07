@@ -8,14 +8,21 @@ services:
     volumes:
       - ./invoices:/app/invoices
       - ./output:/app/output
+      - ./temp:/app/temp
       - ./logs:/app/logs
       - ./examples:/app/examples
       - ./.env:/app/.env
     environment:
       - PYTHONPATH=/app/src
+      - LOGS_DIR=/app/logs
+      - OUTPUT_DIR=/app/output
+      - TEMP_DIR=/app/temp
+      - INVOICES_DIR=/app/invoices
+      - EXAMPLES_DIR=/app/examples
+      - PROMPTS_DIR=/app/prompts
     command: python -m invoiceparser.app.main_web
     ports:
-      - "${WEB_PORT:-8000}:8000"
+      - "8000:8000"
     restart: unless-stopped
 
   # Telegram бот (опционально)

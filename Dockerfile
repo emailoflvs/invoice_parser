@@ -23,10 +23,19 @@ COPY prompts/ /app/prompts/
 COPY static/ /app/static/
 
 # Создаём необходимые директории
-RUN mkdir -p /app/invoices /app/output/temp /app/logs /app/examples
+RUN mkdir -p /app/invoices /app/output /app/temp /app/logs /app/examples
 
-# Устанавливаем PYTHONPATH
+# Устанавливаем переменные окружения
 ENV PYTHONPATH=/app/src
+ENV LOGS_DIR=/app/logs
+ENV OUTPUT_DIR=/app/output
+ENV TEMP_DIR=/app/temp
+ENV INVOICES_DIR=/app/invoices
+ENV EXAMPLES_DIR=/app/examples
+ENV PROMPTS_DIR=/app/prompts
 
-# По умолчанию запускаем CLI
-CMD ["python", "-m", "invoiceparser.app.main_cli", "--help"]
+# Expose порт для веб-интерфейса
+EXPOSE 8000
+
+# По умолчанию запускаем веб-интерфейс
+CMD ["python", "-m", "invoiceparser.app.main_web"]
