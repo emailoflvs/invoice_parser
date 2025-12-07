@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug View</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1e1e1e;
+            color: #00ff00;
+            font-size: 14px;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            background: #2d2d2d;
+            border-left: 4px solid #00ff00;
+        }
+        .error { color: #ff4444; border-left-color: #ff4444; }
+        .success { color: #00ff00; }
+        .warning { color: #ffaa00; }
+        pre {
+            background: #000;
+            padding: 10px;
+            overflow-x: auto;
+            color: #00ff00;
+            white-space: pre-wrap;
+        }
+        button {
+            background: #00ff00;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-family: monospace;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        #screenshot {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 DEBUG VIEW - Проверка фронтенда</h1>
+
+    <button onclick="runFullTest()">▶ Запустить полный тест</button>
+    <button onclick="location.reload()">🔄 Обновить</button>
+
+    <div id="output"></div>
+    <div id="screenshot"></div>
+
+    <script>
+        const output = document.getElementById('output');
+        const screenshot = document.getElementById('screenshot');
+
+        function addLog(title, content, type = 'section') {
+            const div = document.createElement('div');
+            div.className = type;
+            div.innerHTML = `<strong>${title}</strong><pre>${content}</pre>`;
+            output.appendChild(div);
+        }
+
+        async function runFullTest() {
+            output.innerHTML = '';
+            screenshot.innerHTML = '';
+
+            addLog('🚀 НАЧАЛО ТЕСТА', new Date().toLocaleTimeString());
+
+            try {
+                // Шаг 1: Парсим документ
+                addLog('📤 Шаг 1: Отправка lakover.jpg на парсинг', 'Загружаем файл...');
+
+                const fileResp = await fetch('/invoices/lakover.jpg');
+                if (!fileResp.ok) {
+                    addLog('❌ Файл не найден', fileResp.status, 'error');
+                    return;
+                }
+
+                const blob = await fileResp.blob();
+                addLog('✅ Файл загружен', `Размер: ${blob.size} bytes`, 'success');
+
+                const formData = new FormData();
+                formData.append('file', blob, 'lakover.jpg');
+
+                const parseResp = await fetch('/parse', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer mytoken'
+                    },
+                    body: formData
+                });
+
+                addLog('📥 Ответ сервера', `Статус: ${parseResp.status}`);
+
+                if (!parseResp.ok) {
+                    const error = await parseResp.json();
+                    addLog('❌ Ошибка парсинга', JSON.stringify(error, null, 2), 'error');
+                    return;
+                }
+
+                const data = await parseResp.json();
+                addLog('✅ Парсинг успешен', `success: ${data.success}`, 'success');
+
+                // Шаг 2: Анализируем структуру
+                addLog('📊 Шаг 2: Структура данных',
+                    `Ключи верхнего уровня:\n${Object.keys(data).join('\n')}`);
+
+                if (!data.data) {
+                    addLog('❌ ПРОБЛЕМА', 'data.data отсутствует!', 'error');
+                    return;
+                }
+
+                const parsedData = data.data;
+                addLog('📋 Ключи в data', Object.keys(parsedData).join(', '));
+
+                // Шаг 3: Показываем каждую секцию
+                addLog('📝 Шаг 3: Содержимое секций', '');
+
+                if (parsedData.document_info) {
+                    const fields = [];
+                    for (const [key, value] of Object.entries(parsedData.document_info)) {
+                        if (!key.endsWith('_label')) {
+                            fields.push(`${key}: ${value}`);
+                        }
+                    }
+                    addLog('✅ document_info', fields.join('\n'), 'success');
+                } else {
+                    addLog('❌ document_info', 'ОТСУТСТВУЕТ', 'error');
+                }
+
+                if (parsedData.parties) {
+                    if (parsedData.parties.supplier) {
+                        const fields = [];
+                        for (const [key, value] of Object.entries(parsedData.parties.supplier)) {
+                            if (!key.endsWith('_label') && typeof value !== 'object') {
+                                fields.push(`${key}: ${String(value).substring(0, 50)}`);
+                            }
+                        }
+                        addLog('✅ parties.supplier', fields.join('\n'), 'success');
+                    }
+
+                    const buyer = parsedData.parties.buyer || parsedData.parties.customer;
+                    if (buyer) {
+                        const fields = [];
+                        for (const [key, value] of Object.entries(buyer)) {
+                            if (!key.endsWith('_label') && typeof value !== 'object') {
+                                fields.push(`${key}: ${String(value).substring(0, 50)}`);
+                            }
+                        }
+                        addLog('✅ parties.buyer/customer', fields.join('\n'), 'success');
+                    }
+                }
+
+                if (parsedData.totals) {
+                    const fields = [];
+                    for (const [key, value] of Object.entries(parsedData.totals)) {
+                        fields.push(`${key}: ${value}`);
+                    }
+                    addLog('✅ totals', fields.join('\n'), 'success');
+                }
+
+                // Товары
+                let items = parsedData.line_items || parsedData.items || [];
+                let column_mapping = parsedData.column_mapping || {};
+
+                if (parsedData.table_data) {
+                    items = parsedData.table_data.line_items || parsedData.table_data.items || items;
+                    column_mapping = parsedData.table_data.column_mapping || column_mapping;
+                }
+
+                addLog('🛒 Товары', `Количество: ${items.length}${items.length > 0 ? '\nПоля: ' + Object.keys(items[0]).join(', ') : ''}`, items.length > 0 ? 'success' : 'warning');
+
+                if (Object.keys(column_mapping).length > 0) {
+                    addLog('📊 column_mapping', JSON.stringify(column_mapping, null, 2), 'success');
+                }
+
+                // Шаг 4: Эмулируем displayEditableData
+                addLog('🎨 Шаг 4: Генерация HTML для редактируемых полей', '');
+
+                let html = '<div style="background: white; color: black; padding: 20px; font-family: Arial;">';
+                html += '<h2>Превью редактируемых полей:</h2>';
+
+                // document_info
+                if (parsedData.document_info) {
+                    html += '<h3>📄 Информация о документе</h3>';
+                    for (const [key, value] of Object.entries(parsedData.document_info)) {
+                        if (!key.endsWith('_label') && typeof value !== 'object') {
+                            html += `<div style="margin: 10px 0;">`;
+                            html += `<label style="display: block; font-weight: bold;">${key}:</label>`;
+                            html += `<input type="text" value="${value || ''}" style="width: 100%; padding: 5px; font-size: 14px;">`;
+                            html += `</div>`;
+                        }
+                    }
+                }
+
+                // parties.supplier
+                if (parsedData.parties?.supplier) {
+                    html += '<h3>🏢 Поставщик</h3>';
+                    for (const [key, value] of Object.entries(parsedData.parties.supplier)) {
+                        if (!key.endsWith('_label') && typeof value !== 'object') {
+                            html += `<div style="margin: 10px 0;">`;
+                            html += `<label style="display: block; font-weight: bold;">${key}:</label>`;
+                            html += `<input type="text" value="${value || ''}" style="width: 100%; padding: 5px; font-size: 14px;">`;
+                            html += `</div>`;
+                        }
+                    }
+                }
+
+                // Товары
+                if (items.length > 0) {
+                    html += '<h3>🛒 Товары</h3>';
+                    html += '<table style="width: 100%; border-collapse: collapse;">';
+                    html += '<thead><tr>';
+                    for (const key of Object.keys(items[0])) {
+                        if (!key.endsWith('_label') && key !== 'raw') {
+                            const label = column_mapping[key] || key;
+                            html += `<th style="border: 1px solid #ddd; padding: 8px; background: #f0f0f0;">${label}</th>`;
+                        }
+                    }
+                    html += '</tr></thead><tbody>';
+                    items.forEach((item, idx) => {
+                        html += '<tr>';
+                        for (const [key, value] of Object.entries(item)) {
+                            if (!key.endsWith('_label') && key !== 'raw') {
+                                html += `<td style="border: 1px solid #ddd; padding: 8px;"><input type="text" value="${value || ''}" style="width: 100%;"></td>`;
+                            }
+                        }
+                        html += '</tr>';
+                    });
+                    html += '</tbody></table>';
+                }
+
+                html += '</div>';
+
+                screenshot.innerHTML = html;
+                addLog('✅ HTML сгенерирован', `Длина: ${html.length} символов`, 'success');
+
+                // Итог
+                addLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', '');
+                addLog('✅ ТЕСТ ЗАВЕРШЕН',
+                    `Если вы видите поля выше с данными,\nзначит проблема в основном script.js\n\nСмотрите раздел выше с превью полей.`,
+                    'success');
+
+            } catch (error) {
+                addLog('❌ ОШИБКА', `${error.message}\n\n${error.stack}`, 'error');
+            }
+        }
+
+        // Автозапуск
+        window.addEventListener('load', () => {
+            setTimeout(runFullTest, 500);
+        });
+    </script>
+</body>
+</html>
+

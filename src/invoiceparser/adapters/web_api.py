@@ -78,6 +78,12 @@ class WebAPI:
             self.app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
             logger.info(f"Static files mounted from: {static_dir}")
 
+        # Подключение директории с invoices для тестирования
+        invoices_dir = Path(__file__).parent.parent.parent.parent / "invoices"
+        if invoices_dir.exists():
+            self.app.mount("/invoices", StaticFiles(directory=str(invoices_dir)), name="invoices")
+            logger.info(f"Invoices directory mounted from: {invoices_dir}")
+
         self._setup_routes()
 
     def _setup_routes(self):

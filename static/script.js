@@ -285,9 +285,6 @@ function updateProgress(percentage) {
 
 // Display results
 function displayResults(data) {
-    console.log('🎯 displayResults called');
-    console.log('📦 Полученные данные:', data);
-    
     // Очищаем интервал прогресса
     if (state.progressInterval) {
         clearInterval(state.progressInterval);
@@ -295,19 +292,14 @@ function displayResults(data) {
     updateProgress(100);
 
     setTimeout(() => {
-        console.log('⏱️ setTimeout выполняется через 500ms');
         showSection('results');
 
         const parsedData = data.data;
-        console.log('📊 parsedData:', parsedData);
-        console.log('📋 Ключи в parsedData:', Object.keys(parsedData));
 
         // Display editable form
-        console.log('🎨 Вызываем displayEditableData...');
         displayEditableData(parsedData);
 
         // Header information
-        console.log('📄 Вызываем displayHeaderInfo...');
         displayHeaderInfo(parsedData);
 
         // Items table - поддержка разных структур
@@ -315,32 +307,33 @@ function displayResults(data) {
         if (parsedData.table_data) {
             items = parsedData.table_data.line_items || parsedData.table_data.items || items;
         }
-        console.log('🛒 Товары для отображения:', items.length);
         displayItemsTable(items);
 
         // Summary
-        console.log('💰 Вызываем displaySummary...');
         displaySummary(parsedData);
 
         // Raw JSON
         elements.jsonContent.textContent = JSON.stringify(data, null, 2);
-        
-        console.log('✅ displayResults завершен');
     }, 500);
 }
 
 function displayHeaderInfo(data) {
+    // Извлекаем данные из правильной структуры
+    const docInfo = data.document_info || {};
+    const supplier = data.parties?.supplier || {};
+    const buyer = data.parties?.buyer || data.parties?.customer || {};
+
     const fields = [
-        { label: 'Номер документа', key: 'invoice_number' },
-        { label: 'Дата документа', key: 'invoice_date' },
-        { label: 'Поставщик', key: 'supplier_name' },
-        { label: 'Покупатель', key: 'customer_name' },
-        { label: 'Валюта', key: 'currency' }
+        { label: 'Номер документа', value: docInfo.document_number || data.invoice_number },
+        { label: 'Дата документа', value: docInfo.document_date || data.invoice_date },
+        { label: 'Поставщик', value: supplier.name || data.supplier_name },
+        { label: 'Покупатель', value: buyer.name || data.customer_name },
+        { label: 'Валюта', value: docInfo.currency || data.currency }
     ];
 
     let html = '';
     fields.forEach(field => {
-        const value = data[field.key] || 'Н/Д';
+        const value = field.value || 'Н/Д';
         html += `
             <div class="info-item">
                 <span class="info-label">${field.label}:</span>
@@ -390,15 +383,21 @@ function displayItemsTable(items) {
 }
 
 function displaySummary(data) {
+    // Извлекаем данные из правильной структуры
+    const totals = data.totals || {};
+    const docInfo = data.document_info || {};
+
     const fields = [
-        { label: 'Сумма без НДС', key: 'subtotal' },
-        { label: 'НДС', key: 'tax_amount' },
-        { label: 'Итого', key: 'total_amount', highlight: true }
+        { label: 'Сумма без НДС', value: totals.subtotal || data.subtotal },
+        { label: 'НДС', value: totals.vat_amount || totals.tax_amount || data.tax_amount || data.vat_amount },
+        { label: 'Итого', value: totals.total_amount || data.total_amount, highlight: true }
     ];
+
+    const currency = docInfo.currency || data.currency || '';
 
     let html = '';
     fields.forEach(field => {
-        const value = data[field.key] !== undefined ? formatNumber(data[field.key]) + ' ' + (data.currency || '') : 'Н/Д';
+        const value = field.value !== undefined ? formatNumber(field.value) + ' ' + currency : 'Н/Д';
         const style = field.highlight ? 'font-size: 1.2rem; font-weight: 700; color: var(--primary-color);' : '';
         html += `
             <div class="info-item">
@@ -625,14 +624,9 @@ const fieldLabels = {
 
 // Display editable data form
 function displayEditableData(data) {
-    console.log('🔍 displayEditableData called with:', data);
-    
     if (!elements.editableData) {
-        console.error('❌ elements.editableData не найден!');
         return;
     }
-    
-    console.log('✅ elements.editableData найден:', elements.editableData);
     
     let html = '<div class="editable-data-grid">';
 
@@ -805,9 +799,7 @@ function displayEditableData(data) {
         html += '</div>';
     }
 
-    console.log('📝 Сгенерировано HTML длиной:', html.length);
     elements.editableData.innerHTML = html;
-    console.log('✅ HTML вставлен в editableData');
 }
 
 // Collect edited data from form
