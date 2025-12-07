@@ -302,8 +302,12 @@ function displayResults(data) {
         // Header information
         displayHeaderInfo(parsedData);
 
-        // Items table
-        displayItemsTable(parsedData.line_items || parsedData.items || []);
+        // Items table - поддержка разных структур
+        let items = parsedData.line_items || parsedData.items || [];
+        if (parsedData.table_data) {
+            items = parsedData.table_data.line_items || parsedData.table_data.items || items;
+        }
+        displayItemsTable(items);
 
         // Summary
         displaySummary(parsedData);
@@ -675,7 +679,7 @@ function displayEditableData(data) {
         html += '</div>';
     }
 
-    // Process parties (supplier and buyer)
+    // Process parties (supplier and buyer/customer)
     if (data.parties) {
         if (data.parties.supplier) {
             html += '<div class="editable-group">';
@@ -686,13 +690,15 @@ function displayEditableData(data) {
             }
             html += '</div>';
         }
-
-        if (data.parties.buyer) {
+        
+        // Поддержка buyer или customer
+        const buyerData = data.parties.buyer || data.parties.customer;
+        if (buyerData) {
             html += '<div class="editable-group">';
             html += '<div class="editable-group-title"><i class="fas fa-user"></i> Покупатель</div>';
-            for (const [key, value] of Object.entries(data.parties.buyer)) {
+            for (const [key, value] of Object.entries(buyerData)) {
                 if (typeof value === 'object') continue;
-                html += createField(key, value, null, data.parties.buyer);
+                html += createField(key, value, null, buyerData);
             }
             html += '</div>';
         }
@@ -737,8 +743,16 @@ function displayEditableData(data) {
         html += '</div>';
     }
 
-    // Process line_items as table
-    const items = data.line_items || data.items || [];
+    // Process line_items as table (поддержка разных структур)
+    let items = data.line_items || data.items || [];
+    let column_mapping = data.column_mapping || {};
+    
+    // Если товары в table_data
+    if (data.table_data) {
+        items = data.table_data.line_items || data.table_data.items || items;
+        column_mapping = data.table_data.column_mapping || column_mapping;
+    }
+    
     if (items.length > 0) {
         html += '<div class="editable-group" style="grid-column: 1 / -1;">';
         html += '<div class="editable-group-title"><i class="fas fa-list"></i> Товары и услуги</div>';
@@ -749,8 +763,8 @@ function displayEditableData(data) {
         const firstItem = items[0];
         html += '<thead><tr>';
         for (const key of Object.keys(firstItem)) {
-            if (key.endsWith('_label')) continue;
-            const label = data.column_mapping?.[key] || getLabel(firstItem, key);
+            if (key.endsWith('_label') || key === 'raw') continue; // Пропускаем _label и raw
+            const label = column_mapping?.[key] || getLabel(firstItem, key);
             html += `<th>${label}</th>`;
         }
         html += '</tr></thead>';
@@ -760,7 +774,7 @@ function displayEditableData(data) {
         items.forEach((item, index) => {
             html += '<tr>';
             for (const [key, value] of Object.entries(item)) {
-                if (key.endsWith('_label')) continue;
+                if (key.endsWith('_label') || key === 'raw') continue; // Пропускаем _label и raw
                 const fieldId = `item_${index}_${key}`;
                 html += `<td><input type="text" id="${fieldId}" class="item-input" data-index="${index}" data-key="${key}" value="${escapeHtml(value || '')}"></td>`;
             }
