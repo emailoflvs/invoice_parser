@@ -4,12 +4,20 @@ services:
     build: .
     container_name: invoiceparser_app
     volumes:
+      # Данные и конфигурация
       - ./invoices:/app/invoices
       - ./output:/app/output
       - ./temp:/app/temp
       - ./logs:/app/logs
       - ./examples:/app/examples
       - ./.env:/app/.env
+      # Код и ресурсы
+      # ВНИМАНИЕ: volume для src/ монтируется для удобства разработки
+      # Для PRODUCTION: пересоберите образ (docker compose build) перед запуском,
+      # чтобы код был "заморожен" в образе, а не брался из локальной папки
+      - ./src:/app/src
+      - ./static:/app/static
+      - ./prompts:/app/prompts
     environment:
       - PYTHONPATH=/app/src
       - LOGS_DIR=/app/logs
@@ -31,6 +39,8 @@ services:
       - ./invoices:/app/invoices
       - ./output:/app/output
       - ./logs:/app/logs
+      - ./src:/app/src
+      - ./prompts:/app/prompts
       - ./.env:/app/.env
     environment:
       - PYTHONPATH=/app/src
@@ -47,6 +57,8 @@ services:
       - ./invoices:/app/invoices
       - ./output:/app/output
       - ./logs:/app/logs
+      - ./src:/app/src
+      - ./prompts:/app/prompts
       - ./.env:/app/.env
     environment:
       - PYTHONPATH=/app/src

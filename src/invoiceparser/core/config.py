@@ -18,6 +18,7 @@ class Config(BaseSettings):
     # Основные настройки
     mode: Literal["NORMAL", "TEST"] = Field(alias="MODE")
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = Field(alias="LOG_LEVEL")
+    dev_mode: bool = Field(alias="DEV_MODE", default=False)  # Режим разработки (auto-reload)
     parallel_parsing: bool = Field(alias="PARALLEL_PARSING", default=True)  # True = параллельно, False = последовательно
 
     # Директории

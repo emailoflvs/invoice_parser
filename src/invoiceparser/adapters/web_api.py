@@ -401,14 +401,31 @@ class WebAPI:
         host = host or self.config.web_host
         port = port or self.config.web_port
 
-        logger.info(f"Starting web server on {host}:{port}")
+        # В dev-режиме включаем auto-reload для автоматической перезагрузки при изменениях
+        reload = self.config.dev_mode
 
-        uvicorn.run(
-            self.app,
-            host=host,
-            port=port,
-            log_level=self.config.log_level.lower()
-        )
+        logger.info(f"Starting web server on {host}:{port} (dev_mode={reload})")
+        if reload:
+            logger.info("⚡ Auto-reload enabled - code changes will be applied automatically")
+
+        # Для reload нужно передавать строку импорта, а не объект app
+        if reload:
+            uvicorn.run(
+                "invoiceparser.adapters.web_api:create_app",
+                host=host,
+                port=port,
+                log_level=self.config.log_level.lower(),
+                reload=True,
+                reload_dirs=["/app/src"],
+                factory=True  # create_app - это фабрика
+            )
+        else:
+            uvicorn.run(
+                self.app,
+                host=host,
+                port=port,
+                log_level=self.config.log_level.lower()
+            )
 
 
 def create_app(config: Optional[Config] = None) -> FastAPI:

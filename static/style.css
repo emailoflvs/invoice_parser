@@ -908,3 +908,52 @@ body {
     }
 }
 
+
+/* Parse Buttons - Two buttons side by side */
+.parse-buttons {
+    display: flex;
+    gap: 15px;
+    margin-top: 20px;
+}
+
+.btn-fast, .btn-detailed {
+    border: none;
+    border-radius: 12px;
+    padding: 15px 30px;
+    font-size: 1.05rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: all 0.3s ease;
+    flex: 1;
+    width: auto; /* Переопределяем width: 100% из btn-primary */
+}
+
+.btn-fast {
+    background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%);
+    color: white;
+}
+
+.btn-fast:hover:not(:disabled) {
+    background: linear-gradient(135deg, #d97706 0%, #ea580c 100%);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+
+.btn-detailed {
+    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+    color: white;
+}
+
+.btn-detailed:hover:not(:disabled) {
+    background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+
+.btn-fast i, .btn-detailed i {
+    font-size: 1.2rem;
+}

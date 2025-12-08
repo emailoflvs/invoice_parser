@@ -274,8 +274,9 @@ class EmailPoller:
 
             except Exception as e:
                 logger.error(f"Email poller error: {e}", exc_info=True)
-                logger.info("Retrying in 60 seconds...")
-                time.sleep(60)
+                retry_delay = self.config.email_poll_retry_delay
+                logger.info(f"Retrying in {retry_delay} seconds...")
+                time.sleep(retry_delay)
 
         # Финальная очистка
         self.disconnect()

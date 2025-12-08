@@ -46,7 +46,13 @@ class Orchestrator:
         self.json_exporter = JSONExporter(config)
         self.excel_exporter = ExcelExporter(config)
 
-    def process_document(self, document_path: Path, compare_with: Optional[Path] = None, original_filename: Optional[str] = None) -> Dict[str, Any]:
+    def process_document(
+        self,
+        document_path: Path,
+        compare_with: Optional[Path] = None,
+        original_filename: Optional[str] = None,
+        mode: str = "detailed"  # НОВОЕ: "fast" или "detailed"
+    ) -> Dict[str, Any]:
         """
         Обработка документа
 
@@ -54,6 +60,7 @@ class Orchestrator:
             document_path: Путь к документу
             compare_with: Опциональный путь к эталонному JSON файлу для сравнения
             original_filename: Оригинальное имя файла (для генерации имени выходного файла)
+            mode: Режим обработки - "fast" (быстрый) или "detailed" (детальный)
 
         Returns:
             Результат обработки
@@ -62,7 +69,7 @@ class Orchestrator:
             ProcessingError: При ошибке обработки
         """
         start_time = time.time()
-        logger.info(f"Starting document processing: {document_path}")
+        logger.info(f"Starting document processing: {document_path} (mode: {mode})")
 
         try:
             # Проверка существования файла
@@ -74,9 +81,9 @@ class Orchestrator:
 
             # Обработка в зависимости от типа
             if file_extension == '.pdf':
-                result = self._process_pdf(document_path)
+                result = self._process_pdf(document_path, mode=mode)
             elif file_extension in ['.jpg', '.jpeg', '.png', '.tiff', '.bmp']:
-                result = self._process_image(document_path)
+                result = self._process_image(document_path, mode=mode)
             else:
                 raise ProcessingError(f"Unsupported file format: {file_extension}")
 
@@ -100,7 +107,8 @@ class Orchestrator:
                 "processed_at": datetime.now().isoformat(),
                 "elapsed_time": elapsed_time,
                 "test_results": test_result,
-                "output_file": str(output_file) if output_file else None
+                "output_file": str(output_file) if output_file else None,
+                "mode": mode  # НОВОЕ: включаем режим в ответ
             }
 
         except Exception as e:
@@ -112,12 +120,13 @@ class Orchestrator:
                 "processed_at": datetime.now().isoformat()
             }
 
-    def _process_pdf(self, pdf_path: Path) -> Dict[str, Any]:
+    def _process_pdf(self, pdf_path: Path, mode: str = "detailed") -> Dict[str, Any]:
         """
         Обработка PDF документа
 
         Args:
             pdf_path: Путь к PDF файлу
+            mode: Режим обработки - "fast" или "detailed"
 
         Returns:
             Распарсенные данные (dict) счета
@@ -136,14 +145,18 @@ class Orchestrator:
         main_image = images[0]
         additional_images = images[1:] if len(images) > 1 else None
 
-        return self._parse_with_gemini(main_image, additional_images)
+        if mode == "fast":
+            return self._fast_parse_with_gemini(main_image, additional_images)
+        else:
+            return self._parse_with_gemini(main_image, additional_images)
 
-    def _process_image(self, image_path: Path) -> Dict[str, Any]:
+    def _process_image(self, image_path: Path, mode: str = "detailed") -> Dict[str, Any]:
         """
         Обработка изображения
 
         Args:
             image_path: Путь к изображению
+            mode: Режим обработки - "fast" или "detailed"
 
         Returns:
             Распарсенные данные (dict) счета
@@ -155,7 +168,99 @@ class Orchestrator:
 
         logger.info(f"Image preprocessed: {processed_image}")
 
-        return self._parse_with_gemini(processed_image)
+        if mode == "fast":
+            return self._fast_parse_with_gemini(processed_image)
+        else:
+            return self._parse_with_gemini(processed_image)
+
+    def _fast_parse_with_gemini(
+        self,
+        main_image: Path,
+        additional_images: Optional[list[Path]] = None
+    ) -> Dict[str, Any]:
+        """
+        БЫСТРЫЙ парсинг документа с помощью Gemini (один запрос)
+
+        Использует быструю модель (GEMINI_MODEL_FAST) и комбинированный промпт (PROMPT_ITEMS_HEADER)
+
+        Args:
+            main_image: Основное изображение (первая страница)
+            additional_images: Дополнительные изображения
+
+        Returns:
+            Распарсенные данные в формате dict
+        """
+        import time
+
+        logger.info(f"Starting FAST Gemini parsing with model: {self.config.gemini_model_fast}, max_tokens: {self.config.image_max_output_tokens_fast} (optimized for speed)")
+
+        try:
+            # Временно переключаем модель на быструю
+            original_model = self.config.gemini_model
+            self.config.gemini_model = self.config.gemini_model_fast
+
+            # Пересоздаем клиент с новой моделью
+            self.gemini_client = GeminiClient(self.config)
+
+            start = time.time()
+            logger.info("Parsing with combined prompt (header+items)...")
+
+            # Для быстрого режима используем меньше токенов из конфига для ускорения
+            fast_max_tokens = self.config.image_max_output_tokens_fast
+
+            response = self.gemini_client.parse_with_prompt_file(
+                image_path=main_image,
+                prompt_file_path=self.config.prompt_items_header,  # Комбинированный промпт
+                additional_images=additional_images,
+                max_tokens=fast_max_tokens  # Используем значение из IMAGE_MAX_OUTPUT_TOKENS_FAST
+            )
+
+            elapsed = time.time() - start
+            logger.info(f"Fast parsing completed successfully in {elapsed:.2f}s")
+            logger.info(f"FAST mode: 1 request with {self.config.gemini_model_fast}, max_tokens={self.config.image_max_output_tokens_fast}, time: {elapsed:.2f}s")
+
+            # Парсим JSON ответ
+            result = self.gemini_client.parse_json_response(response, "fast_combined")
+
+            # Проверка ошибок
+            if "error" in result:
+                logger.error("Fast parsing failed")
+                logger.error(f"Error: {result.get('error')}")
+                return {
+                    "error": "Fast parsing failed",
+                    "details": result.get('error')
+                }
+
+            # Добавляем служебные данные
+            result["_meta"] = {
+                "source_file": str(main_image),
+                "timestamp": datetime.now().isoformat(),
+                "processing_time_seconds": elapsed,
+                "mode": "fast",
+                "model": self.config.gemini_model_fast
+            }
+
+            logger.info(f"Fast parsing completed: {len(result.get('line_items', result.get('items', [])))} items found")
+
+            # Возвращаем модель обратно
+            self.config.gemini_model = original_model
+            self.gemini_client = GeminiClient(self.config)
+
+            return result
+
+        except GeminiAPIError:
+            # Пробрасываем ошибки от Gemini API как есть
+            # Возвращаем модель обратно
+            self.config.gemini_model = original_model
+            self.gemini_client = GeminiClient(self.config)
+            raise
+        except Exception as e:
+            logger.error(f"Fast parsing failed: {e}", exc_info=True)
+            # Возвращаем модель обратно
+            self.config.gemini_model = original_model
+            self.gemini_client = GeminiClient(self.config)
+            # Для других ошибок возвращаем общее сообщение
+            raise GeminiAPIError(f"ERROR_E001|Сервис временно недоступен из-за высокой нагрузки. Попробуйте позже.")
 
     def _run_test_for_document(self, document_path: Path, parsed_data: Dict[str, Any], compare_with: Optional[Path] = None) -> Dict[str, Any]:
         """
@@ -194,48 +299,42 @@ class Orchestrator:
                 expected_data = json.load(f)
 
             # Нормализуем структуры
-            expected_normalized = test_engine._normalize_structure(expected_data)
-            actual_normalized = test_engine._normalize_structure(parsed_data)
+            from ..services.test_engine import normalize_structure
+            expected_normalized = normalize_structure(expected_data)
+            actual_normalized = normalize_structure(parsed_data)
 
-            # 1. Сравниваем header (шапку)
-            header_differences = test_engine._compare_header(expected_normalized, actual_normalized)
+            # Сравниваем
+            differences = test_engine.compare_documents(expected_normalized, actual_normalized)
 
-            # 2. Сравниваем items (товары)
-            item_differences = test_engine._compare_items(
-                expected_normalized.get('items', []),
-                actual_normalized.get('items', [])
-            )
-
-            # Объединяем все различия
-            differences = header_differences + item_differences
+            # Формируем отчёт
             error_count = len(differences)
 
-            # Формируем список всех ошибок для вывода
+            # Создаем список первых 10 ошибок для краткого вывода
+            sample_errors = []
             all_errors = []
-            sample_errors = []  # Первые 10 для краткого вывода
-
-            for idx, diff in enumerate(differences):
-                line = diff.get('line', '?')
-                path = diff.get('path', '').split('.')[-1]
+            for i, diff in enumerate(differences[:10]):
+                line = diff.get('line')
+                path = diff.get('path', '')
                 expected = diff.get('expected', 'N/A')
                 actual = diff.get('actual', 'N/A')
+                description = diff.get('description', '')
 
-                # Укорачиваем значения для краткого вывода
-                exp_str = str(expected)[:50] + '...' if len(str(expected)) > 50 else str(expected)
-                act_str = str(actual)[:50] + '...' if len(str(actual)) > 50 else str(actual)
+                error_text = f"Line {line}, {path}: expected '{expected}', got '{actual}'" if line is not None else f"{description}: expected '{expected}', got '{actual}'"
+                sample_errors.append(error_text)
 
-                # Используем технические названия как есть
-                field_name = path
+            # Полный список ошибок
+            for diff in differences:
+                line = diff.get('line')
+                path = diff.get('path', '')
+                expected = diff.get('expected', 'N/A')
+                actual = diff.get('actual', 'N/A')
+                description = diff.get('description', '')
 
-                error_msg = f"строка {line}: {field_name}: {exp_str} vs {act_str}"
-                all_errors.append(error_msg)
-
-                # Первые 10 для краткого вывода
-                if idx < 10:
-                    sample_errors.append(error_msg)
+                error_text = f"Line {line}, {path}: expected '{expected}', got '{actual}'" if line is not None else f"{description}: expected '{expected}', got '{actual}'"
+                all_errors.append(error_text)
 
             return {
-                "status": "tested",
+                "status": "passed" if error_count == 0 else "failed",
                 "reference_file": str(expected_path),
                 "reference_file_name": expected_path.name,
                 "errors": error_count,
@@ -311,7 +410,7 @@ class Orchestrator:
 
             if self.config.parallel_parsing:
                 # ПАРАЛЛЕЛЬНОЕ выполнение обоих запросов
-                with ThreadPoolExecutor(max_workers=2) as executor:
+                with ThreadPoolExecutor(max_workers=self.config.parallel_workers) as executor:
                     # Запускаем оба запроса одновременно
                     header_future = executor.submit(parse_header)
                     items_future = executor.submit(parse_items)
@@ -326,6 +425,7 @@ class Orchestrator:
 
             total_elapsed = time.time() - total_start
             logger.info(f"Parsing completed in {total_elapsed:.2f}s ({mode} mode)")
+            logger.info(f"DETAILED mode: 2 parallel requests with gemini-2.5-pro, total time: {total_elapsed:.2f}s")
 
             # INFO: Логируем структуру items_data
             logger.info(f"items_data keys: {items_data.keys() if isinstance(items_data, dict) else type(items_data)}")

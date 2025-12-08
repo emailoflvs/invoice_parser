@@ -4,7 +4,11 @@ const state = {
     authToken: localStorage.getItem('authToken') || '',
     parsedData: null,
     originalFilename: null,
-    editedData: null
+    editedData: null,
+    interfaceRules: null,  // Правила интерфейса из interface-rules.json
+    config: {
+        maxFileSizeMB: 50  // Значение по умолчанию, загружается из API
+    }
 };
 
 // Элементы DOM
@@ -15,7 +19,9 @@ const elements = {
     fileName: document.getElementById('fileName'),
     fileSize: document.getElementById('fileSize'),
     removeFile: document.getElementById('removeFile'),
-    parseBtn: document.getElementById('parseBtn'),
+    parseButtons: document.getElementById('parseButtons'),
+    parseFastBtn: document.getElementById('parseFastBtn'),
+    parseDetailedBtn: document.getElementById('parseDetailedBtn'),
 
     uploadSection: document.getElementById('uploadSection'),
     progressSection: document.getElementById('progressSection'),
@@ -46,8 +52,44 @@ const elements = {
     authTokenInput: document.getElementById('authToken')
 };
 
+// Загрузка правил интерфейса
+async function loadInterfaceRules() {
+    try {
+        const response = await fetch('/static/interface-rules.json');
+        if (response.ok) {
+            state.interfaceRules = await response.json();
+            console.log('Interface rules loaded:', state.interfaceRules);
+        } else {
+            console.warn('Failed to load interface-rules.json, using defaults');
+            state.interfaceRules = null;
+        }
+    } catch (error) {
+        console.error('Error loading interface rules:', error);
+        state.interfaceRules = null;
+    }
+}
+
+// Загрузка конфигурации с сервера
+async function loadConfig() {
+    try {
+        const response = await fetch('/api/config');
+        if (response.ok) {
+            const config = await response.json();
+            state.config.maxFileSizeMB = config.max_file_size_mb || 50;
+            console.log('Config loaded:', state.config);
+        } else {
+            console.warn('Failed to load config, using defaults');
+        }
+    } catch (error) {
+        console.error('Error loading config:', error);
+    }
+}
+
 // Инициализация
-function init() {
+async function init() {
+    // Загружаем конфигурацию и правила интерфейса
+    await Promise.all([loadConfig(), loadInterfaceRules()]);
+
     setupEventListeners();
 
     // Проверяем токен при загрузке
@@ -70,8 +112,13 @@ function setupEventListeners() {
     elements.fileInput.addEventListener('change', handleFileSelect);
     elements.removeFile.addEventListener('click', removeFile);
 
-    // Parse button
-    elements.parseBtn.addEventListener('click', parseDocument);
+    // Parse buttons
+    if (elements.parseFastBtn) {
+        elements.parseFastBtn.addEventListener('click', () => parseDocument('fast'));
+    }
+    if (elements.parseDetailedBtn) {
+        elements.parseDetailedBtn.addEventListener('click', () => parseDocument('detailed'));
+    }
 
     // Action buttons
     elements.newParseBtn.addEventListener('click', resetApp);
@@ -133,11 +180,11 @@ function handleFile(file) {
         return;
     }
 
-    // Проверка размера файла (макс 50MB)
-    const maxSize = 50 * 1024 * 1024;
+    // Проверка размера файла
+    const maxSize = state.config.maxFileSizeMB * 1024 * 1024;
     if (file.size > maxSize) {
         const sizeMB = (file.size / 1024 / 1024).toFixed(1);
-        showError(`📄 Файл слишком большой (${sizeMB}МБ). Максимальный размер: 50МБ.`);
+        showError(`📄 Файл слишком большой (${sizeMB}МБ). Максимальный размер: ${state.config.maxFileSizeMB}МБ.`);
         return;
     }
 
@@ -151,14 +198,26 @@ function displayFileInfo(file) {
     elements.fileSize.textContent = formatFileSize(file.size);
     elements.fileInfo.style.display = 'flex';
     elements.uploadArea.style.display = 'none';
-    elements.parseBtn.disabled = false;
+    // Активируем кнопки анализа
+    if (elements.parseFastBtn) {
+        elements.parseFastBtn.disabled = false;
+    }
+    if (elements.parseDetailedBtn) {
+        elements.parseDetailedBtn.disabled = false;
+    }
 }
 
 function removeFile() {
     state.selectedFile = null;
     elements.fileInfo.style.display = 'none';
     elements.uploadArea.style.display = 'block';
-    elements.parseBtn.disabled = true;
+    // Деактивируем кнопки анализа
+    if (elements.parseFastBtn) {
+        elements.parseFastBtn.disabled = true;
+    }
+    if (elements.parseDetailedBtn) {
+        elements.parseDetailedBtn.disabled = true;
+    }
     elements.fileInput.value = '';
 }
 
@@ -171,7 +230,7 @@ function formatFileSize(bytes) {
 }
 
 // Parsing
-async function parseDocument() {
+async function parseDocument(mode = 'detailed') {
     if (!state.selectedFile) {
         showError('📄 Пожалуйста, выберите файл');
         return;
@@ -193,8 +252,8 @@ async function parseDocument() {
         // Симуляция прогресса
         simulateProgress();
 
-        // Отправляем запрос
-        const response = await fetch('/parse', {
+        // Отправляем запрос с параметром mode
+        const response = await fetch(`/parse?mode=${mode}`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${state.authToken}`

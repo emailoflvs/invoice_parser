@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Анализ документов</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     <link rel="stylesheet" href="/static/style.css">
@@ -49,10 +52,16 @@
                     </button>
                 </div>
 
-                <button class="btn-primary" id="parseBtn" disabled>
-                    <i class="fas fa-magic"></i>
-                    Распознать документ
-                </button>
+                <div class="parse-buttons">
+                    <button class="btn-primary btn-fast" id="parseFastBtn" disabled>
+                        <i class="fas fa-bolt"></i>
+                        Быстрый анализ
+                    </button>
+                    <button class="btn-primary btn-detailed" id="parseDetailedBtn" disabled>
+                        <i class="fas fa-search"></i>
+                        Детальный анализ
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -205,6 +214,27 @@
     </button>
 
     <script src="/static/script.js"></script>
+
+    <!-- Auto-reload on file changes (dev mode) -->
+    <script>
+        // Check if files are updated every 5 seconds in development
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            let lastModified = null;
+            setInterval(async () => {
+                try {
+                    const response = await fetch('/static/script.js', { method: 'HEAD' });
+                    const modified = response.headers.get('Last-Modified');
+                    if (lastModified && modified && lastModified !== modified) {
+                        console.log('Frontend files updated, reloading...');
+                        window.location.reload(true);
+                    }
+                    lastModified = modified;
+                } catch (e) {
+                    // Ignore errors
+                }
+            }, 5000);
+        }
+    </script>
 </body>
 </html>
 
