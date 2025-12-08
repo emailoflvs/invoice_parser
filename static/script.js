@@ -29,7 +29,6 @@ const elements = {
     headerInfo: document.getElementById('headerInfo'),
     itemsTable: document.getElementById('itemsTable'),
     summaryInfo: document.getElementById('summaryInfo'),
-    jsonContent: document.getElementById('jsonContent'),
 
     errorMessage: document.getElementById('errorMessage'),
 
@@ -37,7 +36,6 @@ const elements = {
     retryBtn: document.getElementById('retryBtn'),
     downloadJsonBtn: document.getElementById('downloadJsonBtn'),
     copyJsonBtn: document.getElementById('copyJsonBtn'),
-    toggleJsonBtn: document.getElementById('toggleJsonBtn'),
     saveAndContinueBtn: document.getElementById('saveAndContinueBtn'),
 
     settingsBtn: document.getElementById('settingsBtn'),
@@ -80,7 +78,6 @@ function setupEventListeners() {
     elements.retryBtn.addEventListener('click', resetApp);
     elements.downloadJsonBtn.addEventListener('click', downloadJson);
     elements.copyJsonBtn.addEventListener('click', copyJson);
-    elements.toggleJsonBtn.addEventListener('click', toggleJson);
     elements.saveAndContinueBtn.addEventListener('click', saveAndContinue);
 
     // Settings
@@ -311,9 +308,6 @@ function displayResults(data) {
 
         // Summary
         displaySummary(parsedData);
-
-        // Raw JSON
-        elements.jsonContent.textContent = JSON.stringify(data, null, 2);
     }, 500);
 }
 
@@ -326,8 +320,8 @@ function displayHeaderInfo(data) {
     const fields = [
         { label: 'Номер документа', value: docInfo.document_number || data.invoice_number },
         { label: 'Дата документа', value: docInfo.document_date || data.invoice_date },
-        { label: 'Поставщик', value: supplier.name || data.supplier_name },
-        { label: 'Покупатель', value: buyer.name || data.customer_name },
+        { label: 'Постачальник', value: supplier.name || data.supplier_name },
+        { label: 'Покупець', value: buyer.name || data.customer_name },
         { label: 'Валюта', value: docInfo.currency || data.currency }
     ];
 
@@ -347,35 +341,73 @@ function displayHeaderInfo(data) {
 
 function displayItemsTable(items) {
     if (!items || items.length === 0) {
-        elements.itemsTable.innerHTML = '<p style="padding: 20px; text-align: center; color: var(--text-secondary);">Товары не найдены</p>';
+        elements.itemsTable.innerHTML = '<p style="padding: 20px; text-align: center; color: var(--text-secondary);">Товари не знайдено</p>';
         return;
     }
 
-    let html = `
-        <thead>
-            <tr>
-                <th>№</th>
-                <th>Наименование</th>
-                <th>Количество</th>
-                <th>Ед. изм.</th>
-                <th>Цена</th>
-                <th>Сумма</th>
-            </tr>
-        </thead>
-        <tbody>
-    `;
+    // Определяем колонки динамически из первого элемента
+    const firstItem = items[0];
+    const columns = Object.keys(firstItem).filter(key => !key.endsWith('_label') && key !== 'raw');
+
+    // Маппинг полей для отображения (приоритетные поля для объединения)
+    const fieldMapping = {
+        'no': '№',
+        'line_number': '№',
+        'description': 'Наименование',
+        'item_name': 'Наименование',
+        'product_name': 'Наименование',
+        'tovar': 'Наименование',
+        'quantity': 'Количество',
+        'kilkist': 'Количество',
+        'unit': 'Ед. изм.',
+        'unit_price': 'Цена',
+        'price_no_vat': 'Цена',
+        'tsina_bez_pdv': 'Цена',
+        'price_without_vat': 'Цена',
+        'total_price': 'Сумма',
+        'sum_no_vat': 'Сумма',
+        'suma_bez_pdv': 'Сумма',
+        'total_without_vat': 'Сумма',
+        'amount_excluding_vat': 'Сумма',
+        'ukt_zed': 'УКТ ЗЕД',
+        'article': 'Артикул'
+    };
+
+    // Группируем колонки по типам для лучшего отображения
+    const priorityOrder = ['no', 'line_number', 'article', 'ukt_zed', 'description', 'item_name', 'product_name', 'tovar',
+                           'quantity', 'kilkist', 'unit', 'unit_price', 'price_no_vat', 'tsina_bez_pdv', 'price_without_vat',
+                           'total_price', 'sum_no_vat', 'suma_bez_pdv', 'total_without_vat', 'amount_excluding_vat'];
+
+    // Сортируем колонки: сначала приоритетные, потом остальные
+    const sortedColumns = [...priorityOrder.filter(col => columns.includes(col)),
+                           ...columns.filter(col => !priorityOrder.includes(col))];
+
+    let html = '<thead><tr>';
+    sortedColumns.forEach(key => {
+        const label = fieldMapping[key] || key;
+        html += `<th>${label}</th>`;
+    });
+    html += '</tr></thead><tbody>';
 
     items.forEach((item, index) => {
-        html += `
-            <tr>
-                <td>${index + 1}</td>
-                <td>${item.description || 'Н/Д'}</td>
-                <td>${item.quantity !== undefined ? item.quantity : 'Н/Д'}</td>
-                <td>${item.unit || 'Н/Д'}</td>
-                <td>${item.unit_price !== undefined ? formatNumber(item.unit_price) : 'Н/Д'}</td>
-                <td><strong>${item.total_price !== undefined ? formatNumber(item.total_price) : 'Н/Д'}</strong></td>
-            </tr>
-        `;
+        html += '<tr>';
+        sortedColumns.forEach(key => {
+            let value = item[key];
+            // Форматируем числовые значения
+            if (typeof value === 'number') {
+                if (key.includes('price') || key.includes('sum') || key.includes('total') || key.includes('amount')) {
+                    value = formatNumber(value);
+                } else {
+                    value = String(value);
+                }
+            } else if (value === null || value === undefined || value === '') {
+                value = 'Н/Д';
+            } else {
+                value = String(value);
+            }
+            html += `<td>${value}</td>`;
+        });
+        html += '</tr>';
     });
 
     html += '</tbody>';
@@ -387,17 +419,22 @@ function displaySummary(data) {
     const totals = data.totals || {};
     const docInfo = data.document_info || {};
 
+    // Поддержка разных названий полей
+    const subtotal = totals.subtotal || totals.total_no_vat || totals.total_without_vat || data.subtotal;
+    const vat = totals.vat || totals.vat_amount || totals.tax_amount || data.vat_amount || data.tax_amount;
+    const total = totals.total || totals.total_with_vat || totals.total_amount || data.total_amount;
+
     const fields = [
-        { label: 'Сумма без НДС', value: totals.subtotal || data.subtotal },
-        { label: 'НДС', value: totals.vat_amount || totals.tax_amount || data.tax_amount || data.vat_amount },
-        { label: 'Итого', value: totals.total_amount || data.total_amount, highlight: true }
+        { label: 'Сумма без НДС', value: subtotal },
+        { label: 'НДС', value: vat },
+        { label: 'Итого', value: total, highlight: true }
     ];
 
     const currency = docInfo.currency || data.currency || '';
 
     let html = '';
     fields.forEach(field => {
-        const value = field.value !== undefined ? formatNumber(field.value) + ' ' + currency : 'Н/Д';
+        const value = field.value !== undefined && field.value !== null ? formatNumber(field.value) + ' ' + currency : 'Н/Д';
         const style = field.highlight ? 'font-size: 1.2rem; font-weight: 700; color: var(--primary-color);' : '';
         html += `
             <div class="info-item">
@@ -447,11 +484,6 @@ function copyJson() {
     });
 }
 
-function toggleJson() {
-    const isVisible = elements.jsonContent.style.display !== 'none';
-    elements.jsonContent.style.display = isVisible ? 'none' : 'block';
-    elements.toggleJsonBtn.classList.toggle('active');
-}
 
 // Toast notifications
 function showToast(message, isError = false) {
@@ -561,65 +593,77 @@ document.addEventListener('keydown', (e) => {
 // Field label mappings (Russian labels for fields)
 const fieldLabels = {
     // Document Info
-    'document_type': 'Тип документа:',
-    'document_number': 'Номер документа:',
-    'document_date': 'Дата документа:',
-    'document_date_normalized': 'Дата (нормализованная):',
-    'location': 'Местоположение:',
-    'currency': 'Валюта:',
+    'document_type': 'Тип документа',
+    'document_number': 'Номер документа',
+    'document_date': 'Дата документа',
+    'document_date_normalized': 'Дата (нормалізована)',
+    'location': 'Місце складання',
+    'currency': 'Валюта',
 
     // Parties - Supplier
-    'name': 'Название:',
-    'account_number': 'Номер счета:',
-    'bank': 'Банк:',
-    'address': 'Адрес:',
-    'phone': 'Телефон:',
-    'edrpou': 'ЄДРПОУ:',
-    'ipn': 'ІПН:',
+    'name': 'Назва',
+    'account_number': 'Номер рахунку',
+    'bank': 'Банк',
+    'address': 'Адреса',
+    'phone': 'Телефон',
+    'tax_id': 'ЄДРПОУ',
+    'vat_id': 'ІПН',
+    'edrpou': 'ЄДРПОУ',
+    'ipn': 'ІПН',
 
     // References
-    'contract_number': 'Номер контракта:',
-    'basis_document': 'Основание:',
+    'contract_number': 'Номер контракту',
+    'basis_document': 'Підстава',
 
     // Totals
-    'total': 'Сумма без НДС:',
-    'vat': 'НДС:',
-    'total_with_vat': 'Итого с НДС:',
+    'total': 'Всього',
+    'vat': 'ПДВ',
+    'vat_amount': 'ПДВ',
+    'subtotal': 'Сума без ПДВ',
+    'total_with_vat': 'Всього з ПДВ',
+    'total_amount': 'Всього',
 
     // Amounts in words
-    'total_in_words': 'Сумма прописью:',
-    'vat_in_words': 'НДС прописью:',
+    'total_in_words': 'Сума прописом',
+    'vat_in_words': 'ПДВ прописом',
 
     // Line items
     'line_number': '№',
+    'no': '№',
     'article': 'Артикул',
-    'product_name': 'Товары (роботи, послуги)',
+    'product_name': 'Товари (роботи, послуги)',
+    'tovar': 'Товар',
+    'description': 'Найменування',
     'application_mode': 'Режим полімерізації',
+    'polymerization_mode_application_type': 'Режим полімерізації/ Тип нанесення',
     'ukt_zed': 'Код УКТЗЕД',
+    'ukt_zed_code': 'Код УКТЗЕД',
     'quantity': 'Кількість',
+    'kilkist': 'Кількість',
+    'unit': 'Од. вим.',
     'price_excluding_vat': 'Ціна без ПДВ',
+    'price_without_vat': 'Ціна без ПДВ',
+    'tsina_bez_pdv': 'Ціна без ПДВ',
     'amount_excluding_vat': 'Сума без ПДВ',
+    'amount_without_vat': 'Сума без ПДВ',
+    'suma_bez_pdv': 'Сума без ПДВ',
+    'unit_price': 'Ціна',
+    'total_price': 'Сума',
 
     // Invoice fields (alternative)
-    'invoice_number': 'Номер счета:',
-    'invoice_date': 'Дата счета:',
-    'supplier_name': 'Поставщик:',
-    'customer_name': 'Покупатель:',
-    'description': 'Наименование',
-    'unit': 'Ед. изм.',
-    'unit_price': 'Цена',
-    'total_price': 'Сумма',
-    'subtotal': 'Сумма без НДС:',
-    'tax_amount': 'НДС:',
-    'total_amount': 'Итого:',
+    'invoice_number': 'Номер рахунку',
+    'invoice_date': 'Дата рахунку',
+    'supplier_name': 'Постачальник',
+    'customer_name': 'Покупець',
 
     // Additional fields
-    'role': 'Роль:',
-    'is_signed': 'Подписано:',
-    'is_stamped': 'Печать:',
-    'stamp_content': 'Содержимое печати:',
-    'label_raw': 'Метка:',
-    'value_raw': 'Значение:'
+    'role': 'Роль',
+    'is_signed': 'Підписано',
+    'is_stamped': 'Печатка',
+    'stamp_content': 'Зміст печатки',
+    'handwritten_date': 'Дата від руки',
+    'label_raw': 'Мітка',
+    'value_raw': 'Значення'
 };
 
 // Display editable data form
@@ -632,11 +676,19 @@ function displayEditableData(data) {
 
     // Helper function to get label from data or fallback
     const getLabel = (obj, key) => {
-        // Check if object has _label for this key
+        // Сначала проверяем, если значение само является объектом с _label
+        if (obj && obj[key] && typeof obj[key] === 'object' && obj[key] !== null && !Array.isArray(obj[key])) {
+            if (obj[key]._label) {
+                return obj[key]._label;
+            }
+        }
+
+        // Проверяем, есть ли отдельное поле key + '_label'
         const labelKey = key + '_label';
         if (obj && obj[labelKey]) {
             return obj[labelKey];
         }
+
         // Fallback to predefined labels
         return fieldLabels[key] || key;
     };
@@ -647,7 +699,20 @@ function displayEditableData(data) {
         if (key.endsWith('_label')) return '';
 
         const fieldId = `edit_${key}_${Math.random().toString(36).substr(2, 9)}`;
-        const displayLabel = label || getLabel(parentObj, key);
+        // Используем _label из данных, если есть
+        // Приоритет: переданный label > getLabel (который ищет _label) > fieldLabels[key] > key
+        let displayLabel = label;
+        if (!displayLabel) {
+            displayLabel = getLabel(parentObj, key);
+        }
+        if (!displayLabel || displayLabel === key) {
+            displayLabel = fieldLabels[key] || key;
+        }
+
+        // Если label все еще равен ключу и нет fieldLabels, не показываем его
+        if (displayLabel === key && !fieldLabels[key]) {
+            return '';
+        }
         const fieldValue = value !== null && value !== undefined ? value : '';
 
         // For boolean values
@@ -664,11 +729,13 @@ function displayEditableData(data) {
         }
 
         // For string/number values
-        if (typeof fieldValue === 'string' && fieldValue.length > 60) {
+        // Если это JSON строка (начинается с { или [), всегда используем textarea
+        const isJsonString = typeof fieldValue === 'string' && (fieldValue.trim().startsWith('{') || fieldValue.trim().startsWith('['));
+        if (isJsonString || (typeof fieldValue === 'string' && fieldValue.length > 60)) {
             return `
                 <div class="editable-field">
                     <label class="editable-label" for="${fieldId}">${displayLabel}</label>
-                    <textarea id="${fieldId}" class="editable-textarea" data-key="${key}">${escapeHtml(fieldValue)}</textarea>
+                    <textarea id="${fieldId}" class="editable-textarea" data-key="${key}" ${isJsonString ? 'style="min-height: 120px; font-family: monospace; font-size: 0.9rem;"' : ''}>${escapeHtml(fieldValue)}</textarea>
                 </div>
             `;
         } else {
@@ -684,77 +751,306 @@ function displayEditableData(data) {
     // Process document_info
     if (data.document_info) {
         html += '<div class="editable-group">';
-        html += '<div class="editable-group-title"><i class="fas fa-file-alt"></i> Информация о документе</div>';
+        html += '<div class="editable-group-title"><i class="fas fa-file-alt"></i> Інформація про документ</div>';
         for (const [key, value] of Object.entries(data.document_info)) {
-            if (typeof value === 'object') continue;
-            html += createField(key, value, null, data.document_info);
+            // Пропускаем _label
+            if (key.endsWith('_label')) continue;
+            // Показываем все поля, включая объекты и массивы
+            if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+                // Для объектов показываем как JSON строку
+                html += createField(key, JSON.stringify(value, null, 2), fieldLabels[key] || null, data.document_info);
+            } else if (Array.isArray(value)) {
+                // Для массивов показываем как JSON строку
+                html += createField(key, JSON.stringify(value, null, 2), fieldLabels[key] || null, data.document_info);
+            } else {
+                html += createField(key, value, fieldLabels[key] || null, data.document_info);
+            }
         }
         html += '</div>';
     }
 
-    // Process parties (supplier and buyer/customer)
+    // Process parties - обрабатываем все роли динамически
     if (data.parties) {
-        if (data.parties.supplier) {
-            html += '<div class="editable-group">';
-            html += '<div class="editable-group-title"><i class="fas fa-building"></i> Постачальник</div>';
-            for (const [key, value] of Object.entries(data.parties.supplier)) {
-                if (typeof value === 'object') continue;
-                html += createField(key, value, null, data.parties.supplier);
-            }
-            html += '</div>';
-        }
+        // Маппинг ролей на иконки и названия (украинский)
+        const roleMapping = {
+            'supplier': { icon: 'fa-building', title: 'Постачальник' },
+            'buyer': { icon: 'fa-user', title: 'Покупець' },
+            'customer': { icon: 'fa-user', title: 'Покупець' },
+            'supplier_representative': { icon: 'fa-user-tie', title: 'Представник постачальника' },
+            'recipient': { icon: 'fa-hand-holding', title: 'Отримувач' },
+            'performer': { icon: 'fa-user-cog', title: 'Виконавець' }
+        };
 
-        // Поддержка buyer или customer
-        const buyerData = data.parties.buyer || data.parties.customer;
-        if (buyerData) {
-            html += '<div class="editable-group">';
-            html += '<div class="editable-group-title"><i class="fas fa-user"></i> Покупатель</div>';
-            for (const [key, value] of Object.entries(buyerData)) {
-                if (typeof value === 'object') continue;
-                html += createField(key, value, null, buyerData);
+        // Обрабатываем все роли в parties
+        for (const [roleKey, roleData] of Object.entries(data.parties)) {
+            if (typeof roleData === 'object' && roleData !== null && !Array.isArray(roleData)) {
+                const roleInfo = roleMapping[roleKey] || { icon: 'fa-user', title: roleKey };
+                // Используем _label из данных, если есть, иначе используем маппинг
+                let roleTitle = roleData._label ? roleData._label.replace(':', '').trim() : roleInfo.title;
+                // Переводим на украинский, если нужно
+                if (roleTitle === 'Покупатель') roleTitle = 'Покупець';
+                if (roleTitle === 'Представитель поставщика') roleTitle = 'Представник постачальника';
+                if (roleTitle === 'Получатель') roleTitle = 'Отримувач';
+
+                html += '<div class="editable-group">';
+                html += `<div class="editable-group-title"><i class="fas ${roleInfo.icon}"></i> ${roleTitle}</div>`;
+                for (const [key, value] of Object.entries(roleData)) {
+                    // Пропускаем _label, так как он уже использован в заголовке
+                    if (key === '_label') continue;
+                    // Используем украинские названия из fieldLabels
+                    const ukrainianLabel = fieldLabels[key] || null;
+                    // Показываем все поля, включая объекты и массивы
+                    if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+                        html += createField(key, JSON.stringify(value, null, 2), ukrainianLabel, roleData);
+                    } else if (Array.isArray(value)) {
+                        html += createField(key, JSON.stringify(value, null, 2), ukrainianLabel, roleData);
+                    } else {
+                        html += createField(key, value, ukrainianLabel, roleData);
+                    }
+                }
+                html += '</div>';
             }
-            html += '</div>';
         }
     }
 
-    // Process references
-    if (data.references) {
-        html += '<div class="editable-group">';
-        html += '<div class="editable-group-title"><i class="fas fa-link"></i> Ссылки</div>';
-        for (const [key, value] of Object.entries(data.references)) {
-            if (typeof value === 'object') continue;
-            html += createField(key, value, null, data.references);
-        }
-        html += '</div>';
-    }
-
-    // Process totals
+    // Process totals - вставляем в grid, чтобы могло быть рядом с buyer
     if (data.totals) {
         html += '<div class="editable-group">';
-        html += '<div class="editable-group-title"><i class="fas fa-calculator"></i> Итоговые суммы</div>';
+        html += '<div class="editable-group-title"><i class="fas fa-calculator"></i> Підсумкові суми</div>';
         for (const [key, value] of Object.entries(data.totals)) {
-            if (typeof value === 'object') continue;
-            html += createField(key, value, null, data.totals);
+            let numericValue = null;
+            let displayLabel = null;
+
+            // Если значение - объект с полями label и value, показываем только value с label из объекта
+            if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+                if ('value' in value && 'label' in value) {
+                    // Используем label из объекта, если есть, иначе украинское название
+                    displayLabel = value.label || value._label || fieldLabels[key] || key;
+                    numericValue = value.value;
+                } else if ('value' in value) {
+                    // Только value, используем _label или украинское название
+                    displayLabel = value._label || fieldLabels[key] || key;
+                    numericValue = value.value;
+                } else {
+                    // Обычный объект - показываем как JSON
+                    const ukrainianLabel = fieldLabels[key] || null;
+                    html += createField(key, JSON.stringify(value, null, 2), ukrainianLabel, data.totals);
+                    continue;
+                }
+            } else if (Array.isArray(value)) {
+                const ukrainianLabel = fieldLabels[key] || null;
+                html += createField(key, JSON.stringify(value, null, 2), ukrainianLabel, data.totals);
+                continue;
+            } else {
+                // Простое значение - показываем с украинским названием
+                displayLabel = fieldLabels[key] || null;
+                numericValue = value;
+            }
+
+            // Показываем числовое поле
+            if (numericValue !== null) {
+                html += createField(key, numericValue, displayLabel, data.totals);
+
+                // Под числовым полем добавляем поле прописью
+                let amountInWords = null;
+
+                // Ищем соответствующее значение прописью в amounts_in_words
+                if (data.amounts_in_words) {
+                    // Маппинг ключей totals на amounts_in_words - пробуем разные варианты
+                    let possibleKeys = [];
+                    if (key === 'total' || key === 'total_with_vat' || key === 'total_amount') {
+                        possibleKeys = ['total', 'total_amount', 'total_with_vat', 'total_amount_in_words'];
+                    } else if (key === 'vat' || key === 'vat_amount' || key === 'tax_amount') {
+                        possibleKeys = ['vat', 'vat_amount', 'tax_amount', 'vat_amount_in_words'];
+                    } else if (key === 'subtotal' || key === 'total_no_vat' || key === 'total_without_vat') {
+                        possibleKeys = ['subtotal', 'total_no_vat', 'total_without_vat'];
+                    }
+
+                    // Ищем значение прописью по всем возможным ключам
+                    for (const possibleKey of possibleKeys) {
+                        if (data.amounts_in_words[possibleKey]) {
+                            const amountObj = data.amounts_in_words[possibleKey];
+                            if (typeof amountObj === 'object' && amountObj !== null && 'value' in amountObj) {
+                                amountInWords = amountObj.value;
+                                break;
+                            } else if (typeof amountObj === 'string') {
+                                amountInWords = amountObj;
+                                break;
+                            }
+                        }
+                    }
+
+                    // Если не нашли по ключам, пробуем найти по структуре объекта с _label
+                    // Или просто перебираем все ключи в amounts_in_words
+                    if (!amountInWords) {
+                        for (const [amountKey, amountValue] of Object.entries(data.amounts_in_words)) {
+                            if (typeof amountValue === 'object' && amountValue !== null && amountValue !== undefined) {
+                                // Проверяем _label на соответствие текущему полю
+                                const label = (amountValue._label || amountValue.label || '').toLowerCase();
+                                const labelKey = amountKey.toLowerCase();
+
+                                // Для total
+                                if ((key === 'total' || key === 'total_with_vat' || key === 'total_amount') &&
+                                    (label.includes('всього') || label.includes('total') || labelKey.includes('total'))) {
+                                    if ('value' in amountValue) {
+                                        amountInWords = amountValue.value;
+                                        break;
+                                    }
+                                }
+                                // Для vat
+                                else if ((key === 'vat' || key === 'vat_amount' || key === 'tax_amount') &&
+                                         (label.includes('пдв') || label.includes('vat') || labelKey.includes('vat'))) {
+                                    if ('value' in amountValue) {
+                                        amountInWords = amountValue.value;
+                                        break;
+                                    }
+                                }
+                                // Для subtotal
+                                else if ((key === 'subtotal' || key === 'total_no_vat' || key === 'total_without_vat') &&
+                                         (label.includes('сума без') || label.includes('subtotal') || labelKey.includes('subtotal'))) {
+                                    if ('value' in amountValue) {
+                                        amountInWords = amountValue.value;
+                                        break;
+                                    }
+                                }
+                            } else if (typeof amountValue === 'string' && amountValue) {
+                                // Если значение - строка, проверяем ключ
+                                const labelKey = amountKey.toLowerCase();
+                                if ((key === 'total' || key === 'total_with_vat' || key === 'total_amount') && labelKey.includes('total')) {
+                                    amountInWords = amountValue;
+                                    break;
+                                } else if ((key === 'vat' || key === 'vat_amount' || key === 'tax_amount') && labelKey.includes('vat')) {
+                                    amountInWords = amountValue;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Всегда показываем поле для ввода прописью, даже если значение не найдено
+                // Используем тот же ключ для сохранения, но с суффиксом _in_words
+                html += createField(`${key}_in_words`, amountInWords || '', '', data.totals);
+            }
         }
         html += '</div>';
     }
 
-    html += '</div>';
+    // amounts_in_words теперь отображаются внутри totals, блок удален
+
+    // Process signatures - в grid
+    // По промпту header_v8.txt: signatures - это ARRAY of objects
+    if (data.signatures && Array.isArray(data.signatures)) {
+        html += '<div class="editable-group">';
+        html += '<div class="editable-group-title"><i class="fas fa-signature"></i> Підписи</div>';
+        data.signatures.forEach((signature, index) => {
+            if (typeof signature === 'object' && signature !== null) {
+                // Добавляем заголовок для каждой подписи, если их несколько
+                if (data.signatures.length > 1) {
+                    html += `<div style="margin-top: ${index > 0 ? '20px' : '0'}; padding-top: ${index > 0 ? '15px' : '0'}; border-top: ${index > 0 ? '1px solid var(--border-color)' : 'none'}; margin-bottom: 10px;"><strong>Підпис ${index + 1}:</strong></div>`;
+                }
+                // Обрабатываем поля подписи согласно промпту: role, name, is_signed, is_stamped, stamp_content, handwritten_date
+                const signatureFields = ['role', 'name', 'is_signed', 'is_stamped', 'stamp_content', 'handwritten_date'];
+                signatureFields.forEach(fieldName => {
+                    const value = signature[fieldName];
+                    const ukrainianLabel = fieldLabels[fieldName] || null;
+                    html += createField(`signature_${index}_${fieldName}`, value, ukrainianLabel, signature);
+                });
+            }
+        });
+        html += '</div>';
+    }
+
+    // Process other_fields - в grid
+    // Переименовано в "Дополнительная информация" и объединяем label, value, key в одно поле
+    if (data.other_fields) {
+        html += '<div class="editable-group">';
+        html += '<div class="editable-group-title"><i class="fas fa-info-circle"></i> Додаткова інформація</div>';
+        // other_fields может быть массивом или объектом
+        if (Array.isArray(data.other_fields)) {
+            data.other_fields.forEach((field, index) => {
+                if (typeof field === 'object' && field !== null) {
+                    // Объединяем label, value, key в одно поле
+                    let displayValue = '';
+                    let displayLabel = '';
+
+                    // Поддержка структуры {label, value, key}
+                    if ('label' in field && 'value' in field) {
+                        displayLabel = field.label || field.label_raw || `Поле ${index + 1}`;
+                        const value = field.value !== null && field.value !== undefined ? field.value : (field.value_raw || '');
+                        // Объединяем все в одно значение
+                        displayValue = value;
+                        // Не показываем key отдельно
+                    }
+                    // Поддержка структуры {label_raw, value_raw, type}
+                    else if ('label_raw' in field || 'value_raw' in field) {
+                        displayLabel = field.label_raw || field.type || `Поле ${index + 1}`;
+                        displayValue = field.value_raw !== null && field.value_raw !== undefined ? field.value_raw : '';
+                        // Не показываем type отдельно
+                    }
+                    // Если другая структура, обрабатываем все поля
+                    else {
+                        // Собираем все значения в одно
+                        const parts = [];
+                        for (const [key, value] of Object.entries(field)) {
+                            if (key !== '_label' && value !== null && value !== undefined) {
+                                parts.push(`${key}: ${value}`);
+                            }
+                        }
+                        displayValue = parts.join('; ');
+                        displayLabel = `Поле ${index + 1}`;
+                    }
+
+                    if (displayLabel) {
+                        html += createField(`other_field_${index}_combined`, displayValue, displayLabel, field);
+                    }
+                }
+            });
+        } else if (typeof data.other_fields === 'object' && data.other_fields !== null) {
+            for (const [key, value] of Object.entries(data.other_fields)) {
+                if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+                    html += createField(key, JSON.stringify(value, null, 2), null, data.other_fields);
+                } else if (Array.isArray(value)) {
+                    html += createField(key, JSON.stringify(value, null, 2), null, data.other_fields);
+                } else {
+                    html += createField(key, value, null, data.other_fields);
+                }
+            }
+        }
+        html += '</div>';
+    }
 
     // Process additional top-level fields (for simpler invoice structures)
+    // references не обрабатываем - секция удалена по запросу пользователя
+    // _meta и test_results - техническая информация, не показываем пользователю
     const processedSections = ['document_info', 'parties', 'references', 'totals', 'amounts_in_words',
-                                'signatures', 'other_fields', 'line_items', 'items', 'column_mapping'];
-    const remainingFields = Object.entries(data).filter(([key]) => !processedSections.includes(key));
+                                'signatures', 'other_fields', 'line_items', 'items', 'column_mapping', 'table_data',
+                                '_meta', 'test_results'];  // Исключаем техническую информацию
+    const remainingFields = Object.entries(data).filter(([key]) =>
+        !processedSections.includes(key) &&
+        !key.startsWith('_') &&  // Исключаем все служебные поля, начинающиеся с _
+        key !== 'test_results'   // Исключаем результаты тестирования
+    );
 
     if (remainingFields.length > 0) {
         html += '<div class="editable-group">';
-        html += '<div class="editable-group-title"><i class="fas fa-info-circle"></i> Дополнительная информация</div>';
+        html += '<div class="editable-group-title"><i class="fas fa-info-circle"></i> Додаткова інформація</div>';
         for (const [key, value] of remainingFields) {
-            if (typeof value === 'object' || key.endsWith('_label')) continue;
-            html += createField(key, value, null, data);
+            if (key.endsWith('_label')) continue;
+            // Показываем все поля, включая объекты и массивы
+            if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+                html += createField(key, JSON.stringify(value, null, 2), null, data);
+            } else if (Array.isArray(value)) {
+                html += createField(key, JSON.stringify(value, null, 2), null, data);
+            } else {
+                html += createField(key, value, null, data);
+            }
         }
         html += '</div>';
     }
+
+    // Закрываем grid после всех секций
+    html += '</div>';
 
     // Process line_items as table (поддержка разных структур)
     let items = data.line_items || data.items || [];
@@ -768,7 +1064,7 @@ function displayEditableData(data) {
 
     if (items.length > 0) {
         html += '<div class="editable-group" style="grid-column: 1 / -1;">';
-        html += '<div class="editable-group-title"><i class="fas fa-list"></i> Товары и услуги</div>';
+        html += '<div class="editable-group-title"><i class="fas fa-list"></i> Товари та послуги</div>';
         html += '<div class="table-container">';
         html += '<table class="editable-items-table">';
 
@@ -789,7 +1085,16 @@ function displayEditableData(data) {
             for (const [key, value] of Object.entries(item)) {
                 if (key.endsWith('_label') || key === 'raw') continue; // Пропускаем _label и raw
                 const fieldId = `item_${index}_${key}`;
-                html += `<td><input type="text" id="${fieldId}" class="item-input" data-index="${index}" data-key="${key}" value="${escapeHtml(value || '')}"></td>`;
+                // Показываем все значения, включая объекты и массивы
+                let displayValue = '';
+                if (value === null || value === undefined) {
+                    displayValue = '';
+                } else if (typeof value === 'object' || Array.isArray(value)) {
+                    displayValue = JSON.stringify(value, null, 2);
+                } else {
+                    displayValue = String(value);
+                }
+                html += `<td><input type="text" id="${fieldId}" class="item-input" data-index="${index}" data-key="${key}" value="${escapeHtml(displayValue)}" title="${escapeHtml(displayValue)}"></td>`;
             }
             html += '</tr>';
         });
@@ -815,9 +1120,185 @@ function collectEditedData() {
         const key = input.dataset.key;
         let value = input.value;
 
+        // Обработка полей signatures (формат: signature_0_role, signature_0_name и т.д.)
+        if (key.startsWith('signature_')) {
+            const parts = key.split('_');
+            if (parts.length >= 3) {
+                const index = parseInt(parts[1]);
+                const fieldName = parts.slice(2).join('_'); // На случай, если поле содержит подчеркивания
+
+                // Убеждаемся, что signatures - массив
+                if (!Array.isArray(editedData.signatures)) {
+                    editedData.signatures = [];
+                }
+                // Создаем объект подписи, если его нет
+                if (!editedData.signatures[index]) {
+                    editedData.signatures[index] = {};
+                }
+
+                // Конвертируем значение
+                if (input.tagName === 'SELECT') {
+                    value = value === 'true';
+                } else if (fieldName === 'is_signed' || fieldName === 'is_stamped') {
+                    // Boolean поля
+                    value = value === 'true' || value === true || value === '1';
+                } else if (!isNaN(value) && value !== '') {
+                    const originalValue = editedData.signatures[index][fieldName];
+                    if (typeof originalValue === 'number') {
+                        value = parseFloat(value);
+                    }
+                }
+
+                editedData.signatures[index][fieldName] = value;
+                return; // Пропускаем updateNestedValue для signatures
+            }
+        }
+
+        // Обработка полей _in_words (формат: total_in_words, vat_in_words и т.д.)
+        // Эти поля теперь отображаются внутри totals, под числовыми значениями
+        if (key.endsWith('_in_words')) {
+            const baseKey = key.replace('_in_words', ''); // Извлекаем базовый ключ (total, vat и т.д.)
+
+            // Сохраняем в amounts_in_words с соответствующим ключом
+            if (!editedData.amounts_in_words) {
+                editedData.amounts_in_words = {};
+            }
+
+            // Определяем ключ для amounts_in_words
+            let amountKey = baseKey;
+            if (baseKey === 'total' || baseKey === 'total_with_vat' || baseKey === 'total_amount') {
+                amountKey = 'total';
+            } else if (baseKey === 'vat' || baseKey === 'vat_amount' || baseKey === 'tax_amount') {
+                amountKey = 'vat';
+            } else if (baseKey === 'subtotal' || baseKey === 'total_no_vat' || baseKey === 'total_without_vat') {
+                amountKey = 'subtotal';
+            }
+
+            // Сохраняем структуру объекта
+            if (!editedData.amounts_in_words[amountKey]) {
+                editedData.amounts_in_words[amountKey] = {};
+            }
+
+            // Сохраняем оригинальные поля, если они есть
+            if (state.parsedData && state.parsedData.data && state.parsedData.data.amounts_in_words &&
+                state.parsedData.data.amounts_in_words[amountKey] &&
+                typeof state.parsedData.data.amounts_in_words[amountKey] === 'object') {
+                const original = state.parsedData.data.amounts_in_words[amountKey];
+                if (original._label) editedData.amounts_in_words[amountKey]._label = original._label;
+                if (original.label) editedData.amounts_in_words[amountKey].label = original.label;
+            }
+
+            // Сохраняем новое значение
+            editedData.amounts_in_words[amountKey].value = value;
+            return;
+        }
+
+        // Обработка полей amounts_in_words (формат: amounts_in_words_total или amounts_in_words_total_value)
+        if (key.startsWith('amounts_in_words_')) {
+            const parts = key.split('_');
+            // Поддержка двух форматов: amounts_in_words_total и amounts_in_words_total_value
+            if (parts.length >= 3) {
+                let amountKey;
+                let subKey = 'value'; // По умолчанию сохраняем в value
+
+                if (parts[parts.length - 1] === 'value' && parts.length >= 4) {
+                    // Формат: amounts_in_words_total_value
+                    amountKey = parts.slice(2, -1).join('_'); // Извлекаем "total" из "amounts_in_words_total_value"
+                    subKey = 'value';
+                } else {
+                    // Формат: amounts_in_words_total (без _value)
+                    amountKey = parts.slice(2).join('_'); // Извлекаем "total" из "amounts_in_words_total"
+                    subKey = 'value';
+                }
+
+                if (!editedData.amounts_in_words) {
+                    editedData.amounts_in_words = {};
+                }
+                // Если оригинальная структура была объектом с value, сохраняем как объект
+                if (state.parsedData && state.parsedData.data && state.parsedData.data.amounts_in_words &&
+                    state.parsedData.data.amounts_in_words[amountKey] &&
+                    typeof state.parsedData.data.amounts_in_words[amountKey] === 'object') {
+                    // Сохраняем структуру объекта
+                    if (!editedData.amounts_in_words[amountKey]) {
+                        editedData.amounts_in_words[amountKey] = {};
+                    }
+                    // Сохраняем оригинальные поля, если они есть
+                    const original = state.parsedData.data.amounts_in_words[amountKey];
+                    if (original._label) editedData.amounts_in_words[amountKey]._label = original._label;
+                    if (original.label) editedData.amounts_in_words[amountKey].label = original.label;
+                    // Сохраняем новое значение
+                    editedData.amounts_in_words[amountKey].value = value;
+                } else {
+                    // Простое значение или создаем объект с value
+                    if (!editedData.amounts_in_words[amountKey]) {
+                        editedData.amounts_in_words[amountKey] = {};
+                    }
+                    editedData.amounts_in_words[amountKey].value = value;
+                }
+                return;
+            } else if (parts.length >= 4) {
+                // Формат: amounts_in_words_total_other_field
+                const amountKey = parts.slice(2, -1).join('_');
+                const subKey = parts[parts.length - 1];
+
+                if (!editedData.amounts_in_words) {
+                    editedData.amounts_in_words = {};
+                }
+                if (!editedData.amounts_in_words[amountKey]) {
+                    editedData.amounts_in_words[amountKey] = {};
+                }
+
+                // Парсим JSON если нужно
+                if (value.trim() !== '' && (value.trim().startsWith('{') || value.trim().startsWith('['))) {
+                    try {
+                        value = JSON.parse(value);
+                    } catch (e) {
+                        // Оставляем как строку
+                    }
+                }
+
+                editedData.amounts_in_words[amountKey][subKey] = value;
+                return;
+            }
+        }
+
+        // Обработка объединенных полей other_fields (формат: other_field_0_combined)
+        if (key.startsWith('other_field_') && key.endsWith('_combined')) {
+            const parts = key.split('_');
+            const index = parseInt(parts[2]);
+
+            if (!editedData.other_fields) {
+                editedData.other_fields = [];
+            }
+            if (!editedData.other_fields[index]) {
+                editedData.other_fields[index] = {};
+            }
+
+            // Сохраняем значение в value
+            editedData.other_fields[index].value = value;
+            // Пытаемся сохранить label и key из оригинальных данных, если они есть
+            if (state.parsedData && state.parsedData.data && state.parsedData.data.other_fields && state.parsedData.data.other_fields[index]) {
+                const original = state.parsedData.data.other_fields[index];
+                if (original.label) editedData.other_fields[index].label = original.label;
+                if (original.key) editedData.other_fields[index].key = original.key;
+                if (original.label_raw) editedData.other_fields[index].label_raw = original.label_raw;
+                if (original.value_raw) editedData.other_fields[index].value_raw = original.value_raw;
+                if (original.type) editedData.other_fields[index].type = original.type;
+            }
+            return;
+        }
+
         // Convert value types
         if (input.tagName === 'SELECT') {
             value = value === 'true';
+        } else if (value.trim() !== '' && (value.trim().startsWith('{') || value.trim().startsWith('['))) {
+            // Try to parse JSON strings
+            try {
+                value = JSON.parse(value);
+            } catch (e) {
+                // If parsing fails, keep as string
+                value = value;
+            }
         } else if (!isNaN(value) && value !== '') {
             // Try to preserve original number type
             const originalValue = getOriginalValue(editedData, key);
@@ -837,18 +1318,33 @@ function collectEditedData() {
         const key = input.dataset.key;
         let value = input.value;
 
-        // Try to preserve number types
-        if (editedData.line_items && editedData.line_items[index]) {
-            const originalValue = editedData.line_items[index][key];
-            if (typeof originalValue === 'number' && !isNaN(value)) {
-                value = parseFloat(value);
+        // Try to parse JSON strings
+        if (value.trim() !== '' && (value.trim().startsWith('{') || value.trim().startsWith('['))) {
+            try {
+                value = JSON.parse(value);
+            } catch (e) {
+                // If parsing fails, keep as string
+                value = value;
             }
+        } else {
+            // Try to preserve number types
+            if (editedData.line_items && editedData.line_items[index]) {
+                const originalValue = editedData.line_items[index][key];
+                if (typeof originalValue === 'number' && !isNaN(value) && value !== '') {
+                    value = parseFloat(value);
+                }
+            } else if (editedData.items && editedData.items[index]) {
+                const originalValue = editedData.items[index][key];
+                if (typeof originalValue === 'number' && !isNaN(value) && value !== '') {
+                    value = parseFloat(value);
+                }
+            }
+        }
+
+        // Update the value
+        if (editedData.line_items && editedData.line_items[index]) {
             editedData.line_items[index][key] = value;
         } else if (editedData.items && editedData.items[index]) {
-            const originalValue = editedData.items[index][key];
-            if (typeof originalValue === 'number' && !isNaN(value)) {
-                value = parseFloat(value);
-            }
             editedData.items[index][key] = value;
         }
     });

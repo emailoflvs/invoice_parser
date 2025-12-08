@@ -1,15 +1,59 @@
 """Экспорт результатов в JSON"""
 import json
 import logging
+import re
 from decimal import Decimal
 from pathlib import Path
 from datetime import date, datetime
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from ..core.config import Config
 # НЕ импортируем InvoiceData - работаем с Dict
 from ..core.errors import ExportError
 
 logger = logging.getLogger(__name__)
+
+
+def transliterate_to_latin(text: str) -> str:
+    """
+    Транслитерация кириллицы в латиницу для использования в именах файлов
+
+    Args:
+        text: Текст с кириллицей
+
+    Returns:
+        Текст в латинице
+    """
+    # Простая таблица транслитерации для украинского/русского
+    translit_map = {
+        'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo',
+        'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
+        'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
+        'ф': 'f', 'х': 'h', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'sch',
+        'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya',
+        'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D', 'Е': 'E', 'Ё': 'Yo',
+        'Ж': 'Zh', 'З': 'Z', 'И': 'I', 'Й': 'Y', 'К': 'K', 'Л': 'L', 'М': 'M',
+        'Н': 'N', 'О': 'O', 'П': 'P', 'Р': 'R', 'С': 'S', 'Т': 'T', 'У': 'U',
+        'Ф': 'F', 'Х': 'H', 'Ц': 'Ts', 'Ч': 'Ch', 'Ш': 'Sh', 'Щ': 'Sch',
+        'Ъ': '', 'Ы': 'Y', 'Ь': '', 'Э': 'E', 'Ю': 'Yu', 'Я': 'Ya',
+        'і': 'i', 'ї': 'yi', 'є': 'ye', 'ґ': 'g',
+        'І': 'I', 'Ї': 'Yi', 'Є': 'Ye', 'Ґ': 'G'
+    }
+
+    result = []
+    for char in text:
+        if char in translit_map:
+            result.append(translit_map[char])
+        elif char.isalnum() or char in ['-', '_', '.']:
+            result.append(char)
+        else:
+            result.append('_')
+
+    # Убираем множественные подчеркивания и заменяем на одно
+    result_str = ''.join(result)
+    result_str = re.sub(r'_+', '_', result_str)
+    result_str = result_str.strip('_')
+
+    return result_str
 
 class JSONExporter:
     """Экспортер в JSON формат"""
@@ -25,24 +69,33 @@ class JSONExporter:
         self.output_dir = config.output_dir
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-    def export(self, document_path: Path, invoice_data: Dict[str, Any]) -> Path:
+    def export(self, document_path: Path, invoice_data: Dict[str, Any], original_filename: Optional[str] = None) -> Path:
         """
         Экспорт данных счета в JSON
 
         Args:
             document_path: Путь к исходному документу
             invoice_data: Данные счета (dict)
+            original_filename: Оригинальное имя файла (если отличается от document_path)
 
         Returns:
             Путь к созданному JSON файлу
         """
         try:
-            # Генерируем имя файла: название_документа_модель_деньмесяцчасминута_количество_ошибок.json
-            filename_base = document_path.stem
+            # Используем оригинальное имя файла, если оно передано, иначе берем из document_path
+            if original_filename:
+                filename_base = Path(original_filename).stem
+            else:
+                filename_base = document_path.stem
+
+            # Транслитерируем в латиницу
+            filename_base = transliterate_to_latin(filename_base)
+
             now = datetime.now()
             timestamp = f"{now.day:02d}{now.month:02d}{now.hour:02d}{now.minute:02d}"
-            # Нормализуем название модели для использования в имени файла
-            model_name = self.config.gemini_model.replace('.', '-').replace('/', '-').replace('\\', '-')
+
+            # Используем модель gemini (как указано в требованиях)
+            model_name = "gemini"
 
             # Проверяем наличие результатов теста
             if 'test_results' in invoice_data and invoice_data['test_results']:

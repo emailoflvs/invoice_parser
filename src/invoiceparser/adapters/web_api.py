@@ -5,10 +5,12 @@ import logging
 import tempfile
 from pathlib import Path
 from typing import Optional
-from fastapi import FastAPI, UploadFile, File, HTTPException, Header, Depends
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi import FastAPI, UploadFile, File, HTTPException, Header, Depends, Request
+from fastapi.responses import JSONResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.types import Message
 from pydantic import BaseModel
 
 from ..core.config import Config
@@ -72,11 +74,58 @@ class WebAPI:
             allow_headers=["*"],
         )
 
-        # Подключение статических файлов
+        # Подключение статических файлов с отключением кэша
         static_dir = Path(__file__).parent.parent.parent.parent / "static"
+        logger.info(f"Static directory: {static_dir}, exists: {static_dir.exists()}")
+
+        # Сохраняем путь к статическим файлам
+        self.static_dir = static_dir
+
         if static_dir.exists():
-            self.app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
-            logger.info(f"Static files mounted from: {static_dir}")
+            # ВАЖНО: Регистрируем кастомный роут ПЕРЕД mount, чтобы он имел приоритет
+            # FastAPI обрабатывает роуты перед mount, поэтому этот роут будет вызываться первым
+            @self.app.get("/static/{file_path:path}")
+            async def serve_static_file(file_path: str):
+                """Отдача статических файлов с no-cache заголовками, читая напрямую из файловой системы"""
+                file_full_path = static_dir / file_path
+
+                # Проверяем безопасность пути (предотвращаем path traversal)
+                try:
+                    file_full_path.resolve().relative_to(static_dir.resolve())
+                except ValueError:
+                    raise HTTPException(status_code=403, detail="Access denied")
+
+                if file_full_path.exists() and file_full_path.is_file():
+                    # Читаем файл напрямую из файловой системы
+                    with open(file_full_path, 'rb') as f:
+                        content = f.read()
+
+                    logger.info(f"Serving static file: {file_path}, size: {len(content)} bytes")
+
+                    # Определяем media type
+                    if file_path.endswith('.js'):
+                        media_type = "application/javascript"
+                    elif file_path.endswith('.css'):
+                        media_type = "text/css"
+                    elif file_path.endswith('.html'):
+                        media_type = "text/html"
+                    else:
+                        media_type = "application/octet-stream"
+
+                    return Response(
+                        content=content,
+                        media_type=media_type,
+                        headers={
+                            "Cache-Control": "no-cache, no-store, must-revalidate",
+                            "Pragma": "no-cache",
+                            "Expires": "0"
+                        }
+                    )
+                else:
+                    logger.warning(f"Static file not found: {file_full_path}")
+                    raise HTTPException(status_code=404, detail="File not found")
+
+            logger.info(f"Static files route registered from: {static_dir} (no-cache enabled, direct file reading)")
 
         # Подключение директории с invoices для тестирования
         invoices_dir = Path(__file__).parent.parent.parent.parent / "invoices"
@@ -85,6 +134,17 @@ class WebAPI:
             logger.info(f"Invoices directory mounted from: {invoices_dir}")
 
         self._setup_routes()
+
+        # Добавляем тестовый роут для проверки
+        @self.app.get("/test-static-path")
+        async def test_static_path():
+            """Тестовый роут для проверки пути к статическим файлам"""
+            return {
+                "static_dir": str(self.static_dir),
+                "exists": self.static_dir.exists(),
+                "script_js_exists": (self.static_dir / "script.js").exists(),
+                "script_js_size": (self.static_dir / "script.js").stat().st_size if (self.static_dir / "script.js").exists() else 0
+            }
 
     def _setup_routes(self):
         """Настройка маршрутов"""
@@ -177,8 +237,8 @@ class WebAPI:
 
                 logger.info(f"Received file: {file.filename}, saved to: {tmp_path}")
 
-                # Обработка документа
-                result = self.orchestrator.process_document(tmp_path)
+                # Обработка документа (передаем оригинальное имя файла)
+                result = self.orchestrator.process_document(tmp_path, original_filename=file.filename)
 
                 # Очистка временного файла
                 tmp_path.unlink(missing_ok=True)

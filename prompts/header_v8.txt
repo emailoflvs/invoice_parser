@@ -42,20 +42,32 @@ The response MUST contain the following root objects:
 3. "references":
    - An object for related documents (contracts, orders). Keys: normalized snake_case.
 
-4. "totals":
+4. "signatures":
+   - TYPE: ARRAY of objects. Requires a FLAT STRUCTURE.
+   - Extract ALL signature zones from the document.
+   - OBJECT FIELDS:
+     - "role": (string) Printed role of the signer, if visible.
+     - "name": (string) Printed name/surname, if visible.
+     - "is_signed": (boolean) Whether a handwritten signature is present.
+     - "is_stamped": (boolean) Whether a stamp is present.
+     - "stamp_content": (string) Text content inside the stamp, if present.
+     - "handwritten_date": (string) Handwritten date near the signature, if present.
+
+5. "totals":
    - An object containing final numerical summary data.
    - Keys: Use short, standard English business terms.
    - Values: NUMBER TYPES (float), using DOT as separator. Remove spaces.
 
-5. "amounts_in_words":
+6. "amounts_in_words":
    - An object for textual representations of amounts.
 
-6. "other_fields":
-   - TYPE: ARRAY of objects for any text not fitting above.
-   - FIELDS:
-     - "label": (string) Original label text.
-     - "value": (string) Value text.
-     - "key": (string) Normalized English key.
+7. "other_fields":
+   - TYPE: ARRAY of objects.
+   - PURPOSE: Storage for ALL text fragments not included in categories 1-6.
+   - OBJECT STRUCTURE (KEYS ONLY ENGLISH):
+     - "label_raw": (string) Exact raw text of the label from the image (if present).
+     - "value_raw": (string) Exact raw text of the value from the image.
+     - "type": (string) Normalized field type (snake_case). Use this if `label_raw` is absent.
 
 === TEXT PROCESSING RULES ===
 1. RAW DATA FIDELITY: Capture text exactly as it appears.

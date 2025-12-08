@@ -46,13 +46,14 @@ class Orchestrator:
         self.json_exporter = JSONExporter(config)
         self.excel_exporter = ExcelExporter(config)
 
-    def process_document(self, document_path: Path, compare_with: Optional[Path] = None) -> Dict[str, Any]:
+    def process_document(self, document_path: Path, compare_with: Optional[Path] = None, original_filename: Optional[str] = None) -> Dict[str, Any]:
         """
         Обработка документа
 
         Args:
             document_path: Путь к документу
             compare_with: Опциональный путь к эталонному JSON файлу для сравнения
+            original_filename: Оригинальное имя файла (для генерации имени выходного файла)
 
         Returns:
             Результат обработки
@@ -87,7 +88,7 @@ class Orchestrator:
                 result['test_results'] = test_result
 
             # Экспорт результатов
-            output_file = self._export_results(document_path, result)
+            output_file = self._export_results(document_path, result, original_filename)
 
             elapsed_time = time.time() - start_time
             logger.info(f"Document processing completed: {document_path} (took {elapsed_time:.2f}s)")
@@ -353,11 +354,19 @@ class Orchestrator:
 
             # Если данные упакованы в header объект, распаковываем
             if "header" in header_data and isinstance(header_data["header"], dict):
+                logger.info(f"Unpacking header data. Original keys: {list(header_data.keys())}")
                 header_data = header_data["header"]
+                logger.info(f"Unpacked header keys: {list(header_data.keys())}")
+
+            # Логируем все ключи header_data перед post-processing
+            logger.info(f"Header data keys before post-processing: {list(header_data.keys())}")
 
             # Post-processing: передаем данные как есть
             logger.info("Post-processing parsed data...")
             result = self.post_processor.process(header_data, items_data)
+
+            # Логируем все ключи результата после post-processing
+            logger.info(f"Result keys after post-processing: {list(result.keys())}")
 
             # Добавляем служебные данные (без упоминания модели для клиента)
             result["_meta"] = {
@@ -379,19 +388,23 @@ class Orchestrator:
 
             return result
 
+        except GeminiAPIError:
+            # Пробрасываем ошибки от Gemini API как есть
+            raise
         except Exception as e:
             logger.error(f"Document processing failed: {e}", exc_info=True)
-            # Не передаем детали клиенту - только общее сообщение
+            # Для других ошибок возвращаем общее сообщение
             raise GeminiAPIError(f"ERROR_E001|Сервис временно недоступен из-за высокой нагрузки. Попробуйте позже.")
 
 
-    def _export_results(self, document_path: Path, invoice_data: Dict[str, Any]) -> Optional[Path]:
+    def _export_results(self, document_path: Path, invoice_data: Dict[str, Any], original_filename: Optional[str] = None) -> Optional[Path]:
         """
         Экспорт результатов
 
         Args:
             document_path: Путь к исходному документу
             invoice_data: Данные счета (может содержать test_results)
+            original_filename: Оригинальное имя файла (для генерации имени выходного файла)
 
         Returns:
             Путь к сохраненному JSON файлу
@@ -448,11 +461,11 @@ class Orchestrator:
                         export_data_with_test[key] = value
 
                 # Экспорт в JSON с результатами теста
-                json_path = self.json_exporter.export(document_path, export_data_with_test)
+                json_path = self.json_exporter.export(document_path, export_data_with_test, original_filename)
                 logger.info(f"Exported to JSON with test results: {json_path}")
             else:
                 # Экспорт в JSON без результатов теста
-                json_path = self.json_exporter.export(document_path, invoice_data)
+                json_path = self.json_exporter.export(document_path, invoice_data, original_filename)
                 logger.info(f"Exported to JSON: {json_path}")
 
             # Экспорт в Excel отключен (только JSON)

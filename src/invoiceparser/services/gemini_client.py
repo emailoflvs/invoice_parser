@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Optional, Dict, Any, List
 import logging
 import google.generativeai as genai
+from google.api_core import exceptions as google_exceptions
 from PIL import Image
 
 from ..core.config import Config
@@ -161,29 +162,34 @@ class GeminiClient:
 
             return raw_text
 
+        except google_exceptions.DeadlineExceeded as e:
+            logger.error("ERROR_CODE: E004 - Request timeout (DeadlineExceeded)")
+            logger.error(f"AI API timeout error: {e}", exc_info=True)
+            raise GeminiAPIError("ERROR_E004|Превышено время ожидания. Попробуйте использовать документ меньшего размера.")
         except Exception as e:
             error_message = str(e)
+            error_type = type(e).__name__
             logger.error(f"AI API error: {e}", exc_info=True)
-            logger.error(f"Full error details: {error_message}", exc_info=True)
+            logger.error(f"Error type: {error_type}, Full error details: {error_message}", exc_info=True)
 
             # Определяем тип ошибки - технический код для логов, пользовательское сообщение для клиента
-            if "quota" in error_message.lower() or "429" in error_message:
+            if "quota" in error_message.lower() or "429" in error_message or "QuotaExceeded" in error_type:
                 logger.error("ERROR_CODE: E001 - API quota exceeded")
                 raise GeminiAPIError("ERROR_E001|Сервис временно недоступен из-за высокой нагрузки. Попробуйте позже.")
-            elif "401" in error_message or "unauthorized" in error_message.lower():
+            elif "401" in error_message or "unauthorized" in error_message.lower() or "Unauthenticated" in error_type:
                 logger.error("ERROR_CODE: E002 - API authentication error")
                 raise GeminiAPIError("ERROR_E002|Ошибка конфигурации сервиса. Обратитесь в поддержку.")
-            elif "403" in error_message or "forbidden" in error_message.lower():
+            elif "403" in error_message or "forbidden" in error_message.lower() or "PermissionDenied" in error_type:
                 logger.error("ERROR_CODE: E003 - API access denied")
                 raise GeminiAPIError("ERROR_E003|Ошибка конфигурации сервиса. Обратитесь в поддержку.")
-            elif "timeout" in error_message.lower():
+            elif "timeout" in error_message.lower() or "Timeout" in error_type or "DeadlineExceeded" in error_type:
                 logger.error("ERROR_CODE: E004 - Request timeout")
                 raise GeminiAPIError("ERROR_E004|Превышено время ожидания. Попробуйте использовать документ меньшего размера.")
-            elif "network" in error_message.lower() or "connection" in error_message.lower():
+            elif "network" in error_message.lower() or "connection" in error_message.lower() or "Unavailable" in error_type:
                 logger.error("ERROR_CODE: E005 - Network error")
                 raise GeminiAPIError("ERROR_E005|Ошибка сетевого подключения. Проверьте соединение и попробуйте снова.")
             else:
-                logger.error(f"ERROR_CODE: E099 - Unknown error: {error_message}")
+                logger.error(f"ERROR_CODE: E099 - Unknown error: {error_type} - {error_message}")
                 raise GeminiAPIError(f"ERROR_E099|Не удалось обработать документ. Попробуйте снова или обратитесь в поддержку.")
 
     def parse_with_prompt_file(

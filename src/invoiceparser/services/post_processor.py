@@ -31,8 +31,12 @@ class InvoicePostProcessor:
                 }
             }
         """
-        # 1. Базовая структура из header
+        # 1. Базовая структура из header - копируем ВСЕ поля без исключений
         result = dict(header_json)
+
+        # Логируем ключи для отладки
+        logger.debug(f"Header JSON keys: {list(header_json.keys())}")
+        logger.debug(f"Result keys after copy: {list(result.keys())}")
 
         # 2. Формируем table_data из items
         table_data = {}
