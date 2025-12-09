@@ -32,16 +32,12 @@ const elements = {
     progressPercentage: document.getElementById('progressPercentage'),
 
     editableData: document.getElementById('editableData'),
-    headerInfo: document.getElementById('headerInfo'),
-    itemsTable: document.getElementById('itemsTable'),
-    summaryInfo: document.getElementById('summaryInfo'),
 
     errorMessage: document.getElementById('errorMessage'),
 
     newParseBtn: document.getElementById('newParseBtn'),
     retryBtn: document.getElementById('retryBtn'),
-    downloadJsonBtn: document.getElementById('downloadJsonBtn'),
-    copyJsonBtn: document.getElementById('copyJsonBtn'),
+    backBtn: document.getElementById('backBtn'),
     saveAndContinueBtn: document.getElementById('saveAndContinueBtn'),
 
     settingsBtn: document.getElementById('settingsBtn'),
@@ -123,8 +119,7 @@ function setupEventListeners() {
     // Action buttons
     elements.newParseBtn.addEventListener('click', resetApp);
     elements.retryBtn.addEventListener('click', resetApp);
-    elements.downloadJsonBtn.addEventListener('click', downloadJson);
-    elements.copyJsonBtn.addEventListener('click', copyJson);
+    elements.backBtn.addEventListener('click', resetApp);
     elements.saveAndContinueBtn.addEventListener('click', saveAndContinue);
 
     // Settings
@@ -176,7 +171,7 @@ function handleFile(file) {
     const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
 
     if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(fileExtension)) {
-        showError('📄 Неподдерживаемый формат файла. Загрузите PDF, JPG, PNG, TIFF или BMP.');
+        showError('📄 Непідтримуваний формат файлу. Завантажте PDF, JPG, PNG, TIFF або BMP.');
         return;
     }
 
@@ -184,7 +179,7 @@ function handleFile(file) {
     const maxSize = state.config.maxFileSizeMB * 1024 * 1024;
     if (file.size > maxSize) {
         const sizeMB = (file.size / 1024 / 1024).toFixed(1);
-        showError(`📄 Файл слишком большой (${sizeMB}МБ). Максимальный размер: ${state.config.maxFileSizeMB}МБ.`);
+        showError(`📄 Файл занадто великий (${sizeMB}МБ). Максимальний розмір: ${state.config.maxFileSizeMB}МБ.`);
         return;
     }
 
@@ -232,7 +227,7 @@ function formatFileSize(bytes) {
 // Parsing
 async function parseDocument(mode = 'detailed') {
     if (!state.selectedFile) {
-        showError('📄 Пожалуйста, выберите файл');
+        showError('📄 Будь ласка, виберіть файл');
         return;
     }
 
@@ -269,13 +264,13 @@ async function parseDocument(mode = 'detailed') {
             let userMessage = '';
 
             if (response.status === 401) {
-                userMessage = '🔐 Неверная авторизация. Проверьте токен в настройках.';
+                userMessage = '🔐 Невірна авторизація. Перевірте токен в налаштуваннях.';
                 // Открываем модальное окно настроек
                 setTimeout(() => showModal(), 1000);
             } else if (errorInfo.error_code) {
                 // Новый формат с кодами ошибок
                 const code = errorInfo.error_code;
-                const message = errorInfo.message || 'Неизвестная ошибка';
+                const message = errorInfo.message || 'Невідома помилка';
 
                 // Добавляем эмодзи в зависимости от типа ошибки
                 let emoji = '❌';
@@ -292,12 +287,12 @@ async function parseDocument(mode = 'detailed') {
                 }
             } else if (response.status === 400) {
                 // Ошибки валидации - показываем как есть
-                userMessage = `📄 ${errorInfo.message || 'Неверный формат файла или слишком большой размер'}`;
+                userMessage = `📄 ${errorInfo.message || 'Невірний формат файлу або занадто великий розмір'}`;
             } else if (response.status === 413) {
-                userMessage = '📄 Файл слишком большой. Максимальный размер: 50МБ.';
+                userMessage = '📄 Файл занадто великий. Максимальний розмір: 50МБ.';
             } else {
                 // Другие HTTP ошибки
-                userMessage = errorInfo.message || `Не удалось обработать запрос. Попробуйте снова или свяжитесь с поддержкой.`;
+                userMessage = errorInfo.message || `Не вдалося обробити запит. Спробуйте знову або зв'яжіться з підтримкою.`;
             }
 
             throw new Error(userMessage);
@@ -309,12 +304,12 @@ async function parseDocument(mode = 'detailed') {
             state.parsedData = data;
             displayResults(data);
         } else {
-            throw new Error(data.error || '❌ Не удалось обработать документ. Попробуйте снова.');
+            throw new Error(data.error || '❌ Не вдалося обробити документ. Спробуйте знову.');
         }
 
     } catch (error) {
         console.error('Parse error:', error);
-        showError(error.message || '❌ Произошла ошибка при обработке документа. Попробуйте снова или свяжитесь с поддержкой.');
+        showError(error.message || '❌ Сталася помилка при обробці документа. Спробуйте знову або зв\'яжіться з підтримкою.');
     }
 }
 
@@ -354,195 +349,8 @@ function displayResults(data) {
 
         // Display editable form
         displayEditableData(parsedData);
-
-        // Header information
-        displayHeaderInfo(parsedData);
-
-        // Items table - поддержка разных структур
-        let items = parsedData.line_items || parsedData.items || [];
-        if (parsedData.table_data) {
-            items = parsedData.table_data.line_items || parsedData.table_data.items || items;
-        }
-        displayItemsTable(items);
-
-        // Summary
-        displaySummary(parsedData);
     }, 500);
 }
-
-function displayHeaderInfo(data) {
-    // Извлекаем данные из правильной структуры
-    const docInfo = data.document_info || {};
-    const supplier = data.parties?.supplier || {};
-    const buyer = data.parties?.buyer || data.parties?.customer || {};
-
-    const fields = [
-        { label: 'Номер документа', value: docInfo.document_number || data.invoice_number },
-        { label: 'Дата документа', value: docInfo.document_date || data.invoice_date },
-        { label: 'Постачальник', value: supplier.name || data.supplier_name },
-        { label: 'Покупець', value: buyer.name || data.customer_name },
-        { label: 'Валюта', value: docInfo.currency || data.currency }
-    ];
-
-    let html = '';
-    fields.forEach(field => {
-        const value = field.value || 'Н/Д';
-        html += `
-            <div class="info-item">
-                <span class="info-label">${field.label}:</span>
-                <span class="info-value">${value}</span>
-            </div>
-        `;
-    });
-
-    elements.headerInfo.innerHTML = html;
-}
-
-function displayItemsTable(items) {
-    if (!items || items.length === 0) {
-        elements.itemsTable.innerHTML = '<p style="padding: 20px; text-align: center; color: var(--text-secondary);">Товари не знайдено</p>';
-        return;
-    }
-
-    // Определяем колонки динамически из первого элемента
-    const firstItem = items[0];
-    const columns = Object.keys(firstItem).filter(key => !key.endsWith('_label') && key !== 'raw');
-
-    // Маппинг полей для отображения (приоритетные поля для объединения)
-    const fieldMapping = {
-        'no': '№',
-        'line_number': '№',
-        'description': 'Наименование',
-        'item_name': 'Наименование',
-        'product_name': 'Наименование',
-        'tovar': 'Наименование',
-        'quantity': 'Количество',
-        'kilkist': 'Количество',
-        'unit': 'Ед. изм.',
-        'unit_price': 'Цена',
-        'price_no_vat': 'Цена',
-        'tsina_bez_pdv': 'Цена',
-        'price_without_vat': 'Цена',
-        'total_price': 'Сумма',
-        'sum_no_vat': 'Сумма',
-        'suma_bez_pdv': 'Сумма',
-        'total_without_vat': 'Сумма',
-        'amount_excluding_vat': 'Сумма',
-        'ukt_zed': 'УКТ ЗЕД',
-        'article': 'Артикул'
-    };
-
-    // Группируем колонки по типам для лучшего отображения
-    const priorityOrder = ['no', 'line_number', 'article', 'ukt_zed', 'description', 'item_name', 'product_name', 'tovar',
-                           'quantity', 'kilkist', 'unit', 'unit_price', 'price_no_vat', 'tsina_bez_pdv', 'price_without_vat',
-                           'total_price', 'sum_no_vat', 'suma_bez_pdv', 'total_without_vat', 'amount_excluding_vat'];
-
-    // Сортируем колонки: сначала приоритетные, потом остальные
-    const sortedColumns = [...priorityOrder.filter(col => columns.includes(col)),
-                           ...columns.filter(col => !priorityOrder.includes(col))];
-
-    let html = '<thead><tr>';
-    sortedColumns.forEach(key => {
-        const label = fieldMapping[key] || key;
-        html += `<th>${label}</th>`;
-    });
-    html += '</tr></thead><tbody>';
-
-    items.forEach((item, index) => {
-        html += '<tr>';
-        sortedColumns.forEach(key => {
-            let value = item[key];
-            // Форматируем числовые значения
-            if (typeof value === 'number') {
-                if (key.includes('price') || key.includes('sum') || key.includes('total') || key.includes('amount')) {
-                    value = formatNumber(value);
-                } else {
-                    value = String(value);
-                }
-            } else if (value === null || value === undefined || value === '') {
-                value = 'Н/Д';
-            } else {
-                value = String(value);
-            }
-            html += `<td>${value}</td>`;
-        });
-        html += '</tr>';
-    });
-
-    html += '</tbody>';
-    elements.itemsTable.innerHTML = html;
-}
-
-function displaySummary(data) {
-    // Извлекаем данные из правильной структуры
-    const totals = data.totals || {};
-    const docInfo = data.document_info || {};
-
-    // Поддержка разных названий полей
-    const subtotal = totals.subtotal || totals.total_no_vat || totals.total_without_vat || data.subtotal;
-    const vat = totals.vat || totals.vat_amount || totals.tax_amount || data.vat_amount || data.tax_amount;
-    const total = totals.total || totals.total_with_vat || totals.total_amount || data.total_amount;
-
-    const fields = [
-        { label: 'Сумма без НДС', value: subtotal },
-        { label: 'НДС', value: vat },
-        { label: 'Итого', value: total, highlight: true }
-    ];
-
-    const currency = docInfo.currency || data.currency || '';
-
-    let html = '';
-    fields.forEach(field => {
-        const value = field.value !== undefined && field.value !== null ? formatNumber(field.value) + ' ' + currency : 'Н/Д';
-        const style = field.highlight ? 'font-size: 1.2rem; font-weight: 700; color: var(--primary-color);' : '';
-        html += `
-            <div class="info-item">
-                <span class="info-label">${field.label}:</span>
-                <span class="info-value" style="${style}">${value}</span>
-            </div>
-        `;
-    });
-
-    elements.summaryInfo.innerHTML = html;
-}
-
-function formatNumber(num) {
-    return new Intl.NumberFormat('ru-RU', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-    }).format(num);
-}
-
-// Actions
-function downloadJson() {
-    if (!state.parsedData) return;
-
-    const dataStr = JSON.stringify(state.parsedData, null, 2);
-    const blob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `invoice_parsed_${Date.now()}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-
-    showToast('Файл скачан');
-}
-
-function copyJson() {
-    if (!state.parsedData) return;
-
-    const dataStr = JSON.stringify(state.parsedData, null, 2);
-    navigator.clipboard.writeText(dataStr).then(() => {
-        showToast('Скопировано в буфер обмена');
-    }).catch(err => {
-        console.error('Failed to copy:', err);
-        showToast('Ошибка копирования', true);
-    });
-}
-
 
 // Toast notifications
 function showToast(message, isError = false) {
@@ -626,14 +434,14 @@ function hideModal() {
 function saveSettings() {
     const token = elements.authTokenInput.value.trim();
     if (!token) {
-        showToast('Пожалуйста, введите токен авторизации', true);
+        showToast('Будь ласка, введіть токен авторизації', true);
         return;
     }
 
     state.authToken = token;
     localStorage.setItem('authToken', token);
     hideModal();
-    showToast('Настройки сохранены');
+    showToast('Налаштування збережено');
 }
 
 // Keyboard shortcuts
@@ -756,6 +564,17 @@ function displayEditableData(data) {
     const createField = (key, value, label, parentObj) => {
         // Skip _label fields themselves
         if (key.endsWith('_label')) return '';
+
+        // Skip empty values ONLY for handwritten/stamp fields
+        // Fields that should be hidden if empty: handwritten_date, stamp_content
+        const hiddenIfEmptyFields = ['handwritten_date', 'stamp_content'];
+        const isHiddenField = hiddenIfEmptyFields.some(field => key.includes(field));
+
+        if (isHiddenField && (value === null || value === undefined || value === '')) {
+            return '';
+        }
+
+        // For all other fields, show them even if empty (but keep boolean false as it's a valid value)
 
         const fieldId = `edit_${key}_${Math.random().toString(36).substr(2, 9)}`;
         // Используем _label из данных, если есть
@@ -1447,7 +1266,7 @@ function updateNestedValue(obj, key, value) {
 // Save and continue function
 async function saveAndContinue() {
     if (!state.parsedData || !state.originalFilename) {
-        showToast('Нет данных для сохранения', true);
+        showToast('Немає даних для збереження', true);
         return;
     }
 
@@ -1463,7 +1282,7 @@ async function saveAndContinue() {
 
         // Show loading state
         elements.saveAndContinueBtn.disabled = true;
-        elements.saveAndContinueBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Сохранение...';
+        elements.saveAndContinueBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Збереження...';
 
         // Send to server
         const response = await fetch('/save', {
@@ -1480,21 +1299,21 @@ async function saveAndContinue() {
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.message || 'Не удалось сохранить данные');
+            throw new Error(errorData.message || 'Не вдалося зберегти дані');
         }
 
         const result = await response.json();
 
         // Show success message
-        showToast(`✅ ${result.message || 'Данные успешно сохранены!'}`);
+        showToast(`✅ ${result.message || 'Дані успішно збережено!'}`);
 
         // Reset button
         elements.saveAndContinueBtn.disabled = false;
-        elements.saveAndContinueBtn.innerHTML = '<i class="fas fa-save"></i> Сохранить и продолжить';
+        elements.saveAndContinueBtn.innerHTML = '<i class="fas fa-save"></i> Зберегти та продовжити';
 
         // Optional: reset to upload new document
         setTimeout(() => {
-            if (confirm('Хотите загрузить новый документ?')) {
+            if (confirm('Хочете завантажити новий документ?')) {
                 resetApp();
             }
         }, 1500);
@@ -1505,7 +1324,7 @@ async function saveAndContinue() {
 
         // Reset button
         elements.saveAndContinueBtn.disabled = false;
-        elements.saveAndContinueBtn.innerHTML = '<i class="fas fa-save"></i> Сохранить и продолжить';
+        elements.saveAndContinueBtn.innerHTML = '<i class="fas fa-save"></i> Зберегти та продовжити';
     }
 }
 

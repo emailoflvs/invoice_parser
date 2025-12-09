@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="uk">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <title>Анализ документов</title>
+    <title>Аналіз документів</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     <link rel="stylesheet" href="/static/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -17,9 +17,9 @@
         <header class="header">
             <div class="logo">
                 <i class="fas fa-file-invoice"></i>
-                <h1>Анализ документов</h1>
+                <h1>Аналіз документів</h1>
             </div>
-            <p class="subtitle">Система обработки и анализа счетов и накладных</p>
+            <p class="subtitle">Система обробки та аналізу рахунків і накладних</p>
         </header>
 
         <!-- Upload Section -->
@@ -28,14 +28,14 @@
                 <div class="upload-icon">
                     <i class="fas fa-cloud-upload-alt"></i>
                 </div>
-                <h2>Загрузите документ</h2>
-                <p class="upload-description">Поддерживаемые форматы: PDF, JPG, JPEG, PNG, TIFF, BMP</p>
+                <h2>Завантажте документ</h2>
+                <p class="upload-description">Підтримувані формати: PDF, JPG, JPEG, PNG, TIFF, BMP</p>
 
                 <div class="upload-area" id="uploadArea">
                     <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png,.tiff,.bmp" hidden>
                     <div class="upload-content">
                         <i class="fas fa-file-upload"></i>
-                        <p>Перетащите файл сюда или <span class="browse-link">выберите файл</span></p>
+                        <p>Перетягніть файл сюди або <span class="browse-link">виберіть файл</span></p>
                     </div>
                 </div>
 
@@ -55,11 +55,11 @@
                 <div class="parse-buttons">
                     <button class="btn-primary btn-fast" id="parseFastBtn" disabled>
                         <i class="fas fa-bolt"></i>
-                        Быстрый анализ
+                        Швидкий аналіз
                     </button>
                     <button class="btn-primary btn-detailed" id="parseDetailedBtn" disabled>
                         <i class="fas fa-search"></i>
-                        Детальный анализ
+                        Детальний аналіз
                     </button>
                 </div>
             </div>
@@ -71,8 +71,8 @@
                 <div class="progress-icon">
                     <div class="spinner"></div>
                 </div>
-                <h3>Обработка документа...</h3>
-                <p class="progress-text">Пожалуйста, подождите. Идет анализ вашего документа</p>
+                <h3>Обробка документа...</h3>
+                <p class="progress-text">Будь ласка, зачекайте. Триває аналіз вашого документа</p>
                 <div class="progress-bar">
                     <div class="progress-fill" id="progressFill"></div>
                 </div>
@@ -85,11 +85,11 @@
             <div class="results-header">
                 <h2>
                     <i class="fas fa-check-circle success-icon"></i>
-                    Результаты анализа
+                    Результати аналізу
                 </h2>
                 <button class="btn-secondary" id="newParseBtn">
                     <i class="fas fa-plus"></i>
-                    Загрузить новый документ
+                    Завантажити новий документ
                 </button>
             </div>
 
@@ -97,70 +97,23 @@
             <div class="result-card editable-section">
                 <div class="result-card-header">
                     <i class="fas fa-edit"></i>
-                    <h3>Редактирование данных</h3>
+                    <h3>Редагування даних</h3>
                 </div>
                 <div class="result-card-body">
                     <div id="editableData">
                         <!-- Динамически заполняется через JS -->
                     </div>
                     <div class="save-section">
-                        <button class="btn-primary btn-save" id="saveAndContinueBtn">
-                            <i class="fas fa-save"></i>
-                            Сохранить и продолжить
+                        <button class="btn-secondary btn-save-action" id="backBtn">
+                            <i class="fas fa-arrow-left"></i>
+                            Назад
+                        </button>
+                        <button class="btn-secondary btn-save-action" id="saveAndContinueBtn">
+                            Зберегти та продовжити
+                            <i class="fas fa-arrow-right"></i>
                         </button>
                     </div>
                 </div>
-            </div>
-
-            <div class="results-grid">
-                <!-- Header Information -->
-                <div class="result-card">
-                    <div class="result-card-header">
-                        <i class="fas fa-info-circle"></i>
-                        <h3>Информация о документе</h3>
-                    </div>
-                    <div class="result-card-body" id="headerInfo">
-                        <!-- Динамически заполняется через JS -->
-                    </div>
-                </div>
-
-                <!-- Items Table -->
-                <div class="result-card full-width">
-                    <div class="result-card-header">
-                        <i class="fas fa-list"></i>
-                        <h3>Товары и услуги</h3>
-                    </div>
-                    <div class="result-card-body">
-                        <div class="table-container">
-                            <table class="items-table" id="itemsTable">
-                                <!-- Динамически заполняется через JS -->
-                            </table>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Summary -->
-                <div class="result-card">
-                    <div class="result-card-header">
-                        <i class="fas fa-calculator"></i>
-                        <h3>Итого</h3>
-                    </div>
-                    <div class="result-card-body" id="summaryInfo">
-                        <!-- Динамически заполняется через JS -->
-                    </div>
-                </div>
-            </div>
-
-            <!-- Actions -->
-            <div class="actions-section">
-                <button class="btn-action" id="downloadJsonBtn">
-                    <i class="fas fa-download"></i>
-                    Скачать JSON
-                </button>
-                <button class="btn-action" id="copyJsonBtn">
-                    <i class="fas fa-copy"></i>
-                    Копировать JSON
-                </button>
             </div>
 
         </div>
@@ -169,11 +122,11 @@
         <div class="error-section" id="errorSection" style="display: none;">
             <div class="error-card">
                 <i class="fas fa-exclamation-triangle"></i>
-                <h3>Ошибка</h3>
+                <h3>Помилка</h3>
                 <p id="errorMessage"></p>
                 <button class="btn-primary" id="retryBtn">
                     <i class="fas fa-redo"></i>
-                    Попробовать снова
+                    Спробувати знову
                 </button>
             </div>
         </div>
@@ -185,7 +138,7 @@
             <div class="modal-header">
                 <h3>
                     <i class="fas fa-cog"></i>
-                    Настройки
+                    Налаштування
                 </h3>
                 <button class="modal-close" id="closeModal">
                     <i class="fas fa-times"></i>
@@ -197,19 +150,19 @@
                         <i class="fas fa-key"></i>
                         Authorization Token
                     </label>
-                    <input type="password" id="authToken" placeholder="Введите токен авторизации">
-                    <small>Токен требуется для доступа к API</small>
+                    <input type="password" id="authToken" placeholder="Введіть токен авторизації">
+                    <small>Токен потрібен для доступу до API</small>
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary" id="cancelSettings">Отмена</button>
-                <button class="btn-primary" id="saveSettings">Сохранить</button>
+                <button class="btn-secondary" id="cancelSettings">Скасувати</button>
+                <button class="btn-primary" id="saveSettings">Зберегти</button>
             </div>
         </div>
     </div>
 
     <!-- Settings Button -->
-    <button class="btn-settings" id="settingsBtn" title="Настройки">
+    <button class="btn-settings" id="settingsBtn" title="Налаштування">
         <i class="fas fa-cog"></i>
     </button>
 

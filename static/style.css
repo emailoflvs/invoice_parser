@@ -811,13 +811,29 @@ body {
     padding-top: 20px;
     border-top: 2px solid var(--border-color);
     display: flex;
-    justify-content: center;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: nowrap;
 }
 
-.btn-save {
-    min-width: 250px;
-    font-size: 1.2rem;
-    padding: 18px 40px;
+.btn-save-action {
+    font-size: 1.1rem;
+    padding: 18px 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    white-space: nowrap;
+}
+
+.save-section #backBtn {
+    min-width: 140px;
+}
+
+.save-section #saveAndContinueBtn {
+    min-width: 220px;
+    max-width: 280px;
 }
 
 /* Responsive */

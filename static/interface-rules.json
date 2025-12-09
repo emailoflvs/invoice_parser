@@ -1,0 +1,241 @@
+{
+  "label_priority": {
+    "description": "Порядок приоритета для получения названия поля (label). Используется в указанном порядке до первого найденного значения.",
+    "priority": [
+      "field_label_from_data",
+      "key_suffix_label",
+      "nested_object_label",
+      "field_labels_mapping",
+      "key_as_fallback"
+    ],
+    "rules": {
+      "field_label_from_data": "Использовать значение из переданного параметра label при вызове createField",
+      "key_suffix_label": "Искать поле с именем {key}_label в родительском объекте",
+      "nested_object_label": "Если значение является объектом, проверить наличие поля _label внутри этого объекта",
+      "field_labels_mapping": "Использовать маппинг из fieldLabels по ключу",
+      "key_as_fallback": "Использовать сам ключ как название (только если не найдено ничего другого)"
+    }
+  },
+
+  "field_display_rules": {
+    "description": "Правила отображения полей в интерфейсе",
+    "hide_fields": {
+      "suffixes": ["_label"],
+      "prefixes": ["_meta", "_test"],
+      "exact_keys": ["raw", "test_results"]
+    },
+    "show_empty_fields": false,
+    "show_technical_fields": false,
+    "skip_if_label_equals_key": true
+  },
+
+  "sections": {
+    "description": "Правила обработки секций данных",
+    "document_info": {
+      "enabled": true,
+      "title_source": "static",
+      "title": "Інформація про документ",
+      "icon": "fa-file-alt",
+      "field_order": "as_in_data",
+      "process_nested_objects": "as_json",
+      "process_arrays": "as_json"
+    },
+    "parties": {
+      "enabled": true,
+      "title_source": "from_data",
+      "title_fallback": "role_key",
+      "icon_source": "from_mapping",
+      "icon_mapping": {
+        "supplier": "fa-building",
+        "buyer": "fa-user",
+        "customer": "fa-user",
+        "supplier_representative": "fa-user-tie",
+        "recipient": "fa-hand-holding",
+        "performer": "fa-user-cog"
+      },
+      "title_mapping": {
+        "supplier": "Постачальник",
+        "buyer": "Покупець",
+        "customer": "Покупець",
+        "supplier_representative": "Представник постачальника",
+        "recipient": "Отримувач",
+        "performer": "Виконавець"
+      },
+      "use_label_from_data": true,
+      "label_cleanup": {
+        "remove_suffix": ":",
+        "trim": true
+      },
+      "field_order": "as_in_data",
+      "skip_in_title": ["_label"]
+    },
+    "totals": {
+      "enabled": true,
+      "title_source": "static",
+      "title": "Підсумкові суми",
+      "icon": "fa-calculator",
+      "field_order": "as_in_data",
+      "numeric_fields": {
+        "detect_by_structure": true,
+        "structure_patterns": [
+          {"has": ["value", "label"]},
+          {"has": ["value", "_label"]},
+          {"has": ["value"]}
+        ],
+        "show_in_words_below": true,
+        "in_words_suffix": "_in_words",
+        "in_words_source": "amounts_in_words",
+        "in_words_mapping": {
+          "total": ["total", "total_amount", "total_with_vat", "total_amount_in_words"],
+          "vat": ["vat", "vat_amount", "tax_amount", "vat_amount_in_words"],
+          "subtotal": ["subtotal", "total_no_vat", "total_without_vat"]
+        },
+        "match_by_label_keywords": {
+          "total": ["всього", "total"],
+          "vat": ["пдв", "vat"],
+          "subtotal": ["сума без", "subtotal"]
+        }
+      }
+    },
+    "signatures": {
+      "enabled": true,
+      "title_source": "static",
+      "title": "Підписи",
+      "icon": "fa-signature",
+      "is_array": true,
+      "field_order": ["role", "name", "is_signed", "is_stamped", "stamp_content", "handwritten_date"],
+      "show_index_if_multiple": true
+    },
+    "other_fields": {
+      "enabled": true,
+      "title_source": "static",
+      "title": "Додаткова інформація",
+      "icon": "fa-info-circle",
+      "can_be_array": true,
+      "can_be_object": true,
+      "array_processing": {
+        "combine_fields": true,
+        "combined_fields": ["label", "value", "key"],
+        "fallback_fields": ["label_raw", "value_raw", "type"],
+        "display_label_source": ["label", "label_raw", "type"],
+        "display_value_source": ["value", "value_raw"]
+      }
+    },
+    "line_items": {
+      "enabled": true,
+      "title_source": "static",
+      "title": "Товари та послуги",
+      "icon": "fa-list",
+      "display_as": "table",
+      "data_sources": ["line_items", "items", "table_data.line_items", "table_data.items"],
+      "column_mapping_source": ["column_mapping", "table_data.column_mapping"],
+      "column_merge_rules": {
+        "enabled": true,
+        "merge_groups": [
+          {
+            "target": "№",
+            "sources": ["no", "line_number"]
+          },
+          {
+            "target": "Наименование",
+            "sources": ["description", "item_name", "product_name", "tovar"]
+          },
+          {
+            "target": "Количество",
+            "sources": ["quantity", "kilkist"]
+          },
+          {
+            "target": "Цена",
+            "sources": ["unit_price", "price_no_vat", "tsina_bez_pdv", "price_without_vat"]
+          },
+          {
+            "target": "Сумма",
+            "sources": ["total_price", "sum_no_vat", "suma_bez_pdv", "total_without_vat", "amount_excluding_vat"]
+          }
+        ],
+        "use_label_from_data": true,
+        "label_priority": ["_label", "label", "field_mapping", "key"]
+      },
+      "column_order": {
+        "priority": ["no", "line_number", "article", "ukt_zed", "description", "item_name", "product_name", "tovar", "quantity", "kilkist", "unit", "unit_price", "price_no_vat", "tsina_bez_pdv", "price_without_vat", "total_price", "sum_no_vat", "suma_bez_pdv", "total_without_vat", "amount_excluding_vat"],
+        "then_others": true
+      },
+      "hide_columns": {
+        "suffixes": ["_label"],
+        "exact": ["raw"]
+      },
+      "format_numeric": {
+        "price_fields": ["price", "sum", "total", "amount"],
+        "format": "number_with_2_decimals"
+      }
+    }
+  },
+
+  "field_types": {
+    "description": "Правила обработки разных типов полей",
+    "boolean": {
+      "display_as": "select",
+      "options": {
+        "true": "Да",
+        "false": "Нет"
+      }
+    },
+    "object": {
+      "display_as": "textarea",
+      "format": "json",
+      "min_height": 120,
+      "font_family": "monospace",
+      "font_size": "0.9rem"
+    },
+    "array": {
+      "display_as": "textarea",
+      "format": "json",
+      "min_height": 120,
+      "font_family": "monospace",
+      "font_size": "0.9rem"
+    },
+    "string": {
+      "display_as": "input",
+      "switch_to_textarea_if_length": 60,
+      "textarea_min_height": 80
+    },
+    "number": {
+      "display_as": "input",
+      "format_in_table": "number_with_2_decimals"
+    }
+  },
+
+  "processed_sections": {
+    "description": "Список секций, которые обрабатываются специально и не должны попадать в 'остальные поля'",
+    "sections": [
+      "document_info",
+      "parties",
+      "references",
+      "totals",
+      "amounts_in_words",
+      "signatures",
+      "other_fields",
+      "line_items",
+      "items",
+      "column_mapping",
+      "table_data",
+      "_meta",
+      "test_results"
+    ],
+    "exclude_prefixes": ["_"],
+    "exclude_exact": ["test_results"]
+  },
+
+  "remaining_fields": {
+    "description": "Правила для полей, не попавших в основные секции",
+    "enabled": true,
+    "title_source": "static",
+    "title": "Додаткова інформація",
+    "icon": "fa-info-circle",
+    "hide_fields": {
+      "suffixes": ["_label"]
+    }
+  }
+}
+
+
