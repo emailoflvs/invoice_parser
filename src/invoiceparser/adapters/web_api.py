@@ -179,6 +179,7 @@ class WebAPI:
         @self.app.post("/parse", response_model=ParseResponse)
         async def parse_document(
             file: UploadFile = File(...),
+            mode: str = "detailed",
             token: Optional[str] = Header(None, alias="Authorization")
         ):
             """
@@ -186,6 +187,7 @@ class WebAPI:
 
             Args:
                 file: Uploaded document (PDF or image)
+                mode: Режим обработки - "fast" (быстрый) или "detailed" (детальный)
                 token: Authorization token
 
             Returns:
@@ -235,10 +237,14 @@ class WebAPI:
                     tmp_file.write(content)
                     tmp_path = Path(tmp_file.name)
 
-                logger.info(f"Received file: {file.filename}, saved to: {tmp_path}")
+                logger.info(f"Received file: {file.filename}, saved to: {tmp_path}, mode: {mode}")
 
-                # Обработка документа (передаем оригинальное имя файла)
-                result = self.orchestrator.process_document(tmp_path, original_filename=file.filename)
+                # Валидация режима
+                if mode not in ["fast", "detailed"]:
+                    mode = "detailed"  # По умолчанию детальный режим
+
+                # Обработка документа (передаем оригинальное имя файла и режим)
+                result = self.orchestrator.process_document(tmp_path, original_filename=file.filename, mode=mode)
 
                 # Очистка временного файла
                 tmp_path.unlink(missing_ok=True)

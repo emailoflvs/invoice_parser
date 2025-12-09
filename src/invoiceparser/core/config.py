@@ -20,6 +20,7 @@ class Config(BaseSettings):
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = Field(alias="LOG_LEVEL")
     dev_mode: bool = Field(alias="DEV_MODE", default=False)  # Режим разработки (auto-reload)
     parallel_parsing: bool = Field(alias="PARALLEL_PARSING", default=True)  # True = параллельно, False = последовательно
+    parallel_workers: int = Field(alias="PARALLEL_WORKERS", default=2)  # количество параллельных потоков
 
     # Директории
     invoices_dir: Path = Field(alias="INVOICES_DIR")
@@ -31,11 +32,13 @@ class Config(BaseSettings):
     # Gemini API
     gemini_api_key: str = Field(alias="GEMINI_API_KEY")
     gemini_model: str = Field(alias="GEMINI_MODEL")
+    gemini_model_fast: str = Field(alias="GEMINI_MODEL_FAST", default="gemini-2.0-flash-exp")
     gemini_timeout: int = Field(alias="GEMINI_TIMEOUT")
     # vision_seed больше не используется - timestamp генерируется динамически
     prompts_dir: Path = Field(alias="PROMPTS_DIR")
     prompt_header_path: Path = Field(alias="PROMPT_HEADER_PATH")
     prompt_items_path: Path = Field(alias="PROMPT_ITEMS_PATH")
+    prompt_items_header: Path = Field(alias="PROMPT_ITEMS_HEADER", default=Path("prompts/header+items.txt"))
 
     # Настройки изображений
     enable_image_enhancement: bool = Field(alias="ENABLE_IMAGE_ENHANCEMENT")
@@ -58,6 +61,7 @@ class Config(BaseSettings):
     image_temperature: float = Field(alias="IMAGE_TEMPERATURE")
     image_top_p: float = Field(alias="IMAGE_TOP_P")
     image_max_output_tokens: int = Field(alias="IMAGE_MAX_OUTPUT_TOKENS")
+    image_max_output_tokens_fast: int = Field(alias="IMAGE_MAX_OUTPUT_TOKENS_FAST", default=4096)
 
     # Настройки PDF
     pdf_processing_mode: Literal["DIRECT", "IMAGE_BASED", "HYBRID"] = Field(alias="PDF_PROCESSING_MODE")

@@ -231,6 +231,39 @@ class Orchestrator:
                     "details": result.get('error')
                 }
 
+            # Нормализуем структуру fast режима, чтобы она соответствовала detailed режиму
+            # 1. Нормализуем parties: если это массив, преобразуем в объект с ключами-ролями
+            if "parties" in result and isinstance(result["parties"], list):
+                parties_obj = {}
+                for party in result["parties"]:
+                    if isinstance(party, dict) and "role" in party:
+                        role = party["role"]
+                        # Используем role как ключ, остальные поля как значение
+                        party_data = {k: v for k, v in party.items() if k != "role"}
+                        parties_obj[role] = party_data
+                if parties_obj:
+                    result["parties"] = parties_obj
+
+            # 2. Извлекаем column_mapping и line_items в table_data (как в detailed режиме)
+            table_data = {}
+            if "column_mapping" in result:
+                table_data["column_mapping"] = result["column_mapping"]
+            if "line_items" in result:
+                table_data["line_items"] = result["line_items"]
+            elif "items" in result:
+                table_data["line_items"] = result["items"]
+
+            # Если table_data не пустой, добавляем его в результат
+            if table_data:
+                result["table_data"] = table_data
+
+            # Применяем нормализацию чисел через post_processor (как в detailed режиме)
+            if "totals" in result and isinstance(result["totals"], dict):
+                self.post_processor._normalize_totals(result["totals"])
+
+            if "table_data" in result and "line_items" in result["table_data"]:
+                self.post_processor._normalize_line_items(result["table_data"]["line_items"])
+
             # Добавляем служебные данные
             result["_meta"] = {
                 "source_file": str(main_image),
@@ -240,7 +273,7 @@ class Orchestrator:
                 "model": self.config.gemini_model_fast
             }
 
-            logger.info(f"Fast parsing completed: {len(result.get('line_items', result.get('items', [])))} items found")
+            logger.info(f"Fast parsing completed: {len(result.get('table_data', {}).get('line_items', result.get('line_items', [])))} items found")
 
             # Возвращаем модель обратно
             self.config.gemini_model = original_model
