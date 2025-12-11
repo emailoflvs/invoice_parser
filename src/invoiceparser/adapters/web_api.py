@@ -169,9 +169,9 @@ class WebAPI:
 
                 # Проверяем подключение к БД
                 from ..database import get_session
+                from sqlalchemy import text
                 async for session in get_session():
                     # Простая проверка - попробуем выполнить простой запрос
-                    from sqlalchemy import text
                     await session.execute(text("SELECT 1"))
                     logger.info("✅ Database connection established")
                     break
@@ -236,11 +236,11 @@ class WebAPI:
                 logger.warning(f"Database health check failed: {e}")
                 db_status = "error"
 
-            return {
-                "status": "ok" if db_status == "ok" else "degraded",
-                "version": "1.0.0",
-                "database": db_status
-            }
+            return HealthResponse(
+                status="ok" if db_status == "ok" else "degraded",
+                version="1.0.0",
+                database=db_status
+            )
 
         @self.app.get("/api/validate-frontend")
         async def validate_frontend():
@@ -329,7 +329,7 @@ class WebAPI:
                     mode = "detailed"  # По умолчанию детальный режим
 
                 # Обработка документа (передаем оригинальное имя файла и режим)
-                result = self.orchestrator.process_document(tmp_path, original_filename=file.filename, mode=mode)
+                result = await self.orchestrator.process_document(tmp_path, original_filename=file.filename, mode=mode)
 
                 # Очистка временного файла
                 tmp_path.unlink(missing_ok=True)
@@ -419,11 +419,23 @@ class WebAPI:
                 new_filename = f"{base_name}_saved_{timestamp}.json"
                 output_path = output_dir / new_filename
 
-                # Сохраняем данные
+                # Сохраняем данные в файл
                 with open(output_path, 'w', encoding='utf-8') as f:
                     json.dump(save_request.data, f, indent=2, ensure_ascii=False)
 
                 logger.info(f"Saved edited data to: {output_path}")
+
+                # Сохранение APPROVED данных в базу данных
+                document_id = save_request.data.get('document_id')  # ID документа из RAW сохранения
+                if document_id:
+                    try:
+                        await self._save_approved_to_database(document_id, save_request.data)
+                        logger.info(f"✅ APPROVED data saved to database (document_id: {document_id})")
+                    except Exception as e:
+                        logger.error(f"Failed to save APPROVED data to database: {e}", exc_info=True)
+                        # Не падаем, файл уже сохранен
+                else:
+                    logger.warning("No document_id in save request, skipping database save")
 
                 return SaveResponse(
                     success=True,
@@ -459,6 +471,38 @@ class WebAPI:
                         "save": "/save (POST)"
                     }
                 }
+
+    async def _save_approved_to_database(self, document_id: int, approved_data: dict) -> None:
+        """
+        Сохранение APPROVED данных в базу данных
+
+        Args:
+            document_id: ID документа в БД
+            approved_data: Утвержденные данные
+        """
+        try:
+            from ..database import get_session
+            from ..database.service import DatabaseService
+
+            # Создаем DatabaseService если еще нет
+            db_service = DatabaseService(
+                database_url=self.config.database_url,
+                echo=self.config.db_echo,
+                pool_size=self.config.db_pool_size,
+                max_overflow=self.config.db_max_overflow
+            )
+
+            async for session in get_session():
+                await db_service.save_approved_document(
+                    session=session,
+                    document_id=document_id,
+                    approved_json=approved_data,
+                    user_id=None  # TODO: добавить user_id когда будет аутентификация
+                )
+                break
+        except Exception as e:
+            logger.error(f"Database approved save error: {e}", exc_info=True)
+            raise
 
     def _verify_token(self, token: Optional[str]) -> bool:
         """

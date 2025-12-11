@@ -259,7 +259,8 @@ class TestEngine:
             expected_data = json.load(f)
 
         # Обработка документа
-        result = self.orchestrator.process_document(doc_path)
+        import asyncio
+        result = asyncio.run(self.orchestrator.process_document(doc_path))
 
         if not result["success"]:
             return {

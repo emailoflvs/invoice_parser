@@ -182,7 +182,8 @@ class EmailPoller:
             # Обработка каждого вложения
             for attachment_path in attachments:
                 try:
-                    result = self.orchestrator.process_document(attachment_path)
+                    import asyncio
+                    result = asyncio.run(self.orchestrator.process_document(attachment_path))
 
                     if result["success"]:
                         logger.info(f"Successfully processed: {attachment_path}")

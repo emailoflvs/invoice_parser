@@ -186,7 +186,7 @@ class TelegramBot:
             logger.info(f"Received document from user {user_id}: {file_name}")
 
             # Обработка документа
-            result = self.orchestrator.process_document(tmp_path)
+            result = await self.orchestrator.process_document(tmp_path)
 
             # Очистка временного файла
             tmp_path.unlink(missing_ok=True)

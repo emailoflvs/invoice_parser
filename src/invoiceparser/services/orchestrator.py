@@ -22,6 +22,12 @@ from ..utils.file_ops import ensure_dir, get_file_hash
 logger = logging.getLogger(__name__)
 
 
+def _lazy_import_database_service():
+    """Ленивый импорт DatabaseService для избежания циклических зависимостей"""
+    from ..database.service import DatabaseService
+    return DatabaseService
+
+
 def _lazy_import_test_engine():
     """Ленивый импорт TestEngine для избежания циклических зависимостей"""
     from ..services.test_engine import TestEngine
@@ -46,7 +52,21 @@ class Orchestrator:
         self.json_exporter = JSONExporter(config)
         self.excel_exporter = ExcelExporter(config)
 
-    def process_document(
+        # Инициализация DatabaseService (ленивая загрузка)
+        try:
+            DatabaseServiceClass = _lazy_import_database_service()
+            self.db_service = DatabaseServiceClass(
+                database_url=config.database_url,
+                echo=config.db_echo,
+                pool_size=config.db_pool_size,
+                max_overflow=config.db_max_overflow
+            )
+            logger.info("DatabaseService initialized in Orchestrator")
+        except Exception as e:
+            logger.warning(f"DatabaseService not available: {e}")
+            self.db_service = None
+
+    async def process_document(
         self,
         document_path: Path,
         compare_with: Optional[Path] = None,
@@ -97,6 +117,15 @@ class Orchestrator:
             # Экспорт результатов
             output_file = self._export_results(document_path, result, original_filename)
 
+            # Сохранение RAW данных в базу данных
+            document_id = None
+            if self.db_service:
+                try:
+                    document_id = await self._save_raw_to_database(document_path, result, original_filename)
+                    logger.info(f"✅ RAW data saved to database (document_id: {document_id})")
+                except Exception as e:
+                    logger.error(f"Failed to save RAW data to database: {e}", exc_info=True)
+
             elapsed_time = time.time() - start_time
             logger.info(f"Document processing completed: {document_path} (took {elapsed_time:.2f}s)")
 
@@ -108,7 +137,8 @@ class Orchestrator:
                 "elapsed_time": elapsed_time,
                 "test_results": test_result,
                 "output_file": str(output_file) if output_file else None,
-                "mode": mode  # НОВОЕ: включаем режим в ответ
+                "mode": mode,  # НОВОЕ: включаем режим в ответ
+                "document_id": document_id  # ID документа в БД
             }
 
         except Exception as e:
@@ -529,6 +559,42 @@ class Orchestrator:
             # Для других ошибок возвращаем общее сообщение
             raise GeminiAPIError(f"ERROR_E001|Сервис временно недоступен из-за высокой нагрузки. Попробуйте позже.")
 
+
+    async def _save_raw_to_database(
+        self,
+        document_path: Path,
+        invoice_data: Dict[str, Any],
+        original_filename: Optional[str] = None
+    ) -> Optional[int]:
+        """
+        Сохранение RAW данных в базу данных
+
+        Args:
+            document_path: Путь к файлу документа
+            invoice_data: Распарсенные данные
+            original_filename: Оригинальное имя файла
+
+        Returns:
+            ID созданного документа в БД
+        """
+        if not self.db_service:
+            return None
+
+        try:
+            from ..database import get_session
+
+            async for session in get_session():
+                document = await self.db_service.save_parsed_document(
+                    session=session,
+                    file_path=document_path,
+                    raw_json=invoice_data,
+                    doc_type_code="UA_INVOICE",
+                    original_filename=original_filename or document_path.name
+                )
+                return document.id
+        except Exception as e:
+            logger.error(f"Database save error: {e}", exc_info=True)
+            raise
 
     def _export_results(self, document_path: Path, invoice_data: Dict[str, Any], original_filename: Optional[str] = None) -> Optional[Path]:
         """
