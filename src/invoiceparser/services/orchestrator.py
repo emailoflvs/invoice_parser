@@ -458,7 +458,7 @@ class Orchestrator:
 
             total_elapsed = time.time() - total_start
             logger.info(f"Parsing completed in {total_elapsed:.2f}s ({mode} mode)")
-            logger.info(f"DETAILED mode: 2 parallel requests with gemini-2.5-pro, total time: {total_elapsed:.2f}s")
+            logger.info(f"DETAILED mode: 2 parallel requests with {self.config.gemini_model}, total time: {total_elapsed:.2f}s")
 
             # INFO: Логируем структуру items_data
             logger.info(f"items_data keys: {items_data.keys() if isinstance(items_data, dict) else type(items_data)}")

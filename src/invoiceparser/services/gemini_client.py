@@ -197,7 +197,7 @@ class GeminiClient:
         image_path: Path,
         prompt_file_path: Path,
         additional_images: Optional[List[Path]] = None,
-        max_tokens: int = 16384,
+        max_tokens: Optional[int] = None,
         timeout: Optional[int] = None
     ) -> str:
         """
@@ -206,7 +206,9 @@ class GeminiClient:
         Args:
             image_path: Путь к изображению
             prompt_file_path: Путь к файлу с промптом
-            additional_images: Дополнительные изображения
+            additional_images: Дополнительные изображения (для многостраничных PDF)
+            max_tokens: Максимальное количество токенов (если None - из config)
+            timeout: Таймаут запроса (если None - из config)
 
         Returns:
             Ответ от модели

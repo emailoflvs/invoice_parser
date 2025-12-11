@@ -18,6 +18,9 @@ from ..services.orchestrator import Orchestrator
 
 logger = logging.getLogger(__name__)
 
+# Константы
+BEARER_PREFIX = "Bearer "
+
 
 class ParseResponse(BaseModel):
     """Модель ответа на запрос парсинга"""
@@ -216,8 +219,8 @@ class WebAPI:
                 # Читаем содержимое файла
                 content = await file.read()
 
-                # Проверка размера файла (50MB)
-                max_size = 50 * 1024 * 1024
+                # Проверка размера файла
+                max_size = self.config.max_file_size_mb * 1024 * 1024
                 if len(content) > max_size:
                     size_mb = len(content) / 1024 / 1024
                     logger.warning(f"Rejected file: too large ({size_mb:.1f}MB)")
@@ -225,7 +228,7 @@ class WebAPI:
                         status_code=413,
                         detail={
                             "error_code": "FILE_TOO_LARGE",
-                            "message": f"Файл слишком большой ({size_mb:.1f}МБ). Максимальный размер: 50МБ."
+                            "message": f"Файл слишком большой ({size_mb:.1f}МБ). Максимальный размер: {self.config.max_file_size_mb}МБ."
                         }
                     )
 
@@ -389,8 +392,8 @@ class WebAPI:
             return False
 
         # Удаление префикса Bearer
-        if token.startswith("Bearer "):
-            token = token[7:]
+        if token.startswith(BEARER_PREFIX):
+            token = token[len(BEARER_PREFIX):]
 
         return token == self.config.web_auth_token
 
@@ -416,13 +419,23 @@ class WebAPI:
 
         # Для reload нужно передавать строку импорта, а не объект app
         if reload:
+            # Определяем директории для reload
+            if self.config.reload_dirs:
+                # Если указано в config - используем указанные
+                reload_dirs = [d.strip() for d in self.config.reload_dirs.split(",") if d.strip()]
+            else:
+                # Автоматически определяем путь к src
+                # Путь относительно текущего файла: web_api.py -> src/invoiceparser/adapters/
+                src_path = Path(__file__).parent.parent.parent.parent / "src"
+                reload_dirs = [str(src_path.resolve())]
+
             uvicorn.run(
                 "invoiceparser.adapters.web_api:create_app",
                 host=host,
                 port=port,
                 log_level=self.config.log_level.lower(),
                 reload=True,
-                reload_dirs=["/app/src"],
+                reload_dirs=reload_dirs,
                 factory=True  # create_app - это фабрика
             )
         else:

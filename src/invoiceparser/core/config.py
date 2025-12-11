@@ -77,6 +77,8 @@ class Config(BaseSettings):
     web_host: str = Field(alias="WEB_HOST", default="0.0.0.0")
     web_port: int = Field(alias="WEB_PORT", default=8000)
     web_auth_token: str = Field(alias="WEB_AUTH_TOKEN", default="")
+    max_file_size_mb: int = Field(alias="MAX_FILE_SIZE_MB", default=50)  # Максимальный размер загружаемого файла в МБ
+    reload_dirs: str = Field(alias="RELOAD_DIRS", default="")  # Директории для auto-reload (через запятую, пусто = автоматически)
 
     # Настройки Telegram Bot
     telegram_bot_token: str = Field(alias="TELEGRAM_BOT_TOKEN", default="")
