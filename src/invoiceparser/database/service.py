@@ -10,7 +10,9 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, func, or_, text
+
+from ..utils.datetime_utils import utcnow
 
 from .models import (
     Base, Document, File, DocumentType, DocumentSnapshot,
@@ -24,7 +26,7 @@ logger = logging.getLogger(__name__)
 class DatabaseService:
     """Service for database operations with full architecture support"""
 
-    def __init__(self, database_url: str, echo: bool = False, pool_size: int = 5, max_overflow: int = 10):
+    def __init__(self, database_url: str, echo: bool = False, pool_size: int = 50, max_overflow: int = 20):
         """Initialize database service"""
         from .database import init_db
         init_db(database_url, echo=echo, pool_size=pool_size, max_overflow=max_overflow)
@@ -40,7 +42,20 @@ class DatabaseService:
         name: str,
         description: Optional[str] = None
     ) -> DocumentType:
-        """Get existing document type or create new one"""
+        """
+        Get existing document type or create new one.
+
+        This allows dynamic addition of new document types without migrations.
+
+        Args:
+            session: Database session
+            code: Unique code for document type (e.g., 'UA_INVOICE', 'FR_FACTURE')
+            name: Human-readable name (e.g., 'Ukrainian Invoice')
+            description: Optional description (can be in any language)
+
+        Returns:
+            DocumentType instance
+        """
         result = await session.execute(
             select(DocumentType).where(DocumentType.code == code)
         )
@@ -50,8 +65,52 @@ class DatabaseService:
             doc_type = DocumentType(code=code, name=name, description=description)
             session.add(doc_type)
             await session.flush()
-            logger.info(f"Created document type: {code}")
+            logger.info(f"Created document type: {code} - {name}")
 
+        return doc_type
+
+    async def list_document_types(
+        self,
+        session: AsyncSession
+    ) -> List[DocumentType]:
+        """List all document types"""
+        result = await session.execute(select(DocumentType).order_by(DocumentType.code))
+        return list(result.scalars().all())
+
+    async def update_document_type(
+        self,
+        session: AsyncSession,
+        code: str,
+        name: Optional[str] = None,
+        description: Optional[str] = None
+    ) -> Optional[DocumentType]:
+        """
+        Update existing document type.
+
+        Args:
+            session: Database session
+            code: Document type code
+            name: New name (if provided)
+            description: New description (if provided)
+
+        Returns:
+            Updated DocumentType or None if not found
+        """
+        result = await session.execute(
+            select(DocumentType).where(DocumentType.code == code)
+        )
+        doc_type = result.scalar_one_or_none()
+
+        if not doc_type:
+            return None
+
+        if name is not None:
+            doc_type.name = name
+        if description is not None:
+            doc_type.description = description
+
+        await session.flush()
+        logger.info(f"Updated document type: {code}")
         return doc_type
 
     # ========================================================================
@@ -139,7 +198,7 @@ class DatabaseService:
         session: AsyncSession,
         file_path: Path,
         raw_json: Dict[str, Any],
-        doc_type_code: str = "UA_INVOICE",
+        doc_type_code: Optional[str] = None,
         original_filename: Optional[str] = None
     ) -> Document:
         """
@@ -157,9 +216,19 @@ class DatabaseService:
             session, file_path, original_filename
         )
 
-        # 2. Get document type
+        # 2. Detect and get/create document type
+        # If doc_type_code is provided, use it
+        # Otherwise, auto-detect from JSON data
+        if doc_type_code:
+            # Use provided code (fallback name will be set in get_or_create)
+            detected_code, detected_name = doc_type_code, doc_type_code.replace('_', ' ').title()
+        else:
+            # Auto-detect from JSON
+            detected_code, detected_name = self._detect_document_type_code(raw_json)
+            logger.info(f"Auto-detected document type: {detected_code} - {detected_name}")
+
         doc_type = await self.get_or_create_document_type(
-            session, code=doc_type_code, name="Ukrainian Invoice"
+            session, code=detected_code, name=detected_name
         )
 
         # 3. Extract and link companies
@@ -227,7 +296,7 @@ class DatabaseService:
         # Update status
         document.status = 'approved'
         document.updated_by = user_id
-        document.updated_at = datetime.utcnow()
+        document.updated_at = utcnow()
 
         # Create APPROVED snapshot
         await self._create_snapshot(
@@ -530,7 +599,7 @@ class DatabaseService:
                 # Update approved value
                 field.approved_value_text = new_value
                 field.approved_by = user_id
-                field.approved_at = datetime.utcnow()
+                field.approved_at = utcnow()
 
                 # Mark as corrected if changed
                 if field.raw_value_text != new_value:
@@ -621,8 +690,352 @@ class DatabaseService:
 
         return None
 
+    def _detect_document_type_code(
+        self,
+        json_data: Dict[str, Any]
+    ) -> Tuple[str, str]:
+        """
+        Detect document type code and name from parsed JSON.
+
+        Tries to determine document type from:
+        1. document_info.document_type field
+        2. document_info.type field
+        3. Falls back to GENERAL_INVOICE
+
+        Args:
+            json_data: Parsed document JSON
+
+        Returns:
+            Tuple of (code, name) for document type
+        """
+        doc_info = json_data.get('document_info', {})
+
+        # Try to get document type from various fields
+        doc_type_str = (
+            doc_info.get('document_type') or
+            doc_info.get('type') or
+            ''
+        ).strip()
+
+        if not doc_type_str:
+            # No type detected, use general
+            return ('GENERAL_INVOICE', 'General Invoice')
+
+        # Normalize document type string
+        doc_type_lower = doc_type_str.lower()
+
+        # Try to detect known patterns
+        if 'видаткова накладна' in doc_type_lower or 'выдаточная накладная' in doc_type_lower:
+            return ('UA_INVOICE', 'Ukrainian Invoice')
+        elif 'товарно-транспортна накладна' in doc_type_lower or 'ttn' in doc_type_lower:
+            return ('UA_TTN', 'Ukrainian Waybill')
+        elif 'торг-12' in doc_type_lower or 'торг12' in doc_type_lower or 'torg-12' in doc_type_lower:
+            return ('RU_TORG12', 'Russian TORG-12')
+        elif 'facture' in doc_type_lower or 'фактура' in doc_type_lower:
+            # Detect country from currency or other hints
+            currency = doc_info.get('currency', '').upper()
+            if currency == 'EUR' or 'fr' in doc_type_lower:
+                return ('FR_FACTURE', 'French Invoice')
+            elif currency == 'USD':
+                return ('US_INVOICE', 'US Invoice')
+            else:
+                return ('GENERAL_INVOICE', 'Invoice (Facture)')
+        elif 'invoice' in doc_type_lower or 'накладная' in doc_type_lower:
+            currency = doc_info.get('currency', '').upper()
+            if currency == 'UAH':
+                return ('UA_INVOICE', 'Ukrainian Invoice')
+            elif currency == 'RUB':
+                return ('RU_INVOICE', 'Russian Invoice')
+            elif currency == 'USD':
+                return ('US_INVOICE', 'US Invoice')
+            elif currency == 'EUR':
+                return ('EU_INVOICE', 'European Invoice')
+            else:
+                return ('GENERAL_INVOICE', 'General Invoice')
+        else:
+            # Unknown type - generate code from type string
+            # Convert to uppercase, replace spaces with underscores, remove special chars
+            code = doc_type_str.upper()
+            code = ''.join(c if c.isalnum() or c in (' ', '-', '_') else '' for c in code)
+            code = code.replace(' ', '_').replace('-', '_')
+            code = code[:50]  # Limit length
+
+            # If code is too short or generic, use GENERAL_INVOICE
+            if len(code) < 3 or code in ('DOCUMENT', 'DOC', 'TYPE'):
+                return ('GENERAL_INVOICE', doc_type_str or 'General Invoice')
+
+            # Use detected type name as is
+            return (code, doc_type_str)
+
     def _to_text(self, value: Any) -> Optional[str]:
         """Convert any value to text"""
         if value is None:
             return None
         return str(value)
+
+    # ========================================================================
+    # Search Methods (using new indexes)
+    # ========================================================================
+
+    async def search_documents_by_table_value(
+        self,
+        session: AsyncSession,
+        column_name: str,
+        value: str,
+        section_name: str = 'line_items',
+        use_approved: bool = True
+    ) -> List[Document]:
+        """
+        Search documents by value in table rows using GIN index.
+
+        Example: Find all documents containing product with SKU 'ABC123'
+
+        Args:
+            session: Database session
+            column_name: Normalized column name from column_mapping (e.g., 'sku', 'item_description')
+            value: Value to search for
+            section_name: Table section name (default: 'line_items')
+            use_approved: If True, search in approved data, else in raw data
+
+        Returns:
+            List of documents matching the criteria
+        """
+        rows_column = 'rows_approved' if use_approved else 'rows_raw'
+
+        # Use JSONB containment operator with GIN index (jsonb_path_ops)
+        # This searches for documents where rows array contains an object with matching column:value
+        # Create search pattern JSON: {"column_name": "value"}
+        import json
+        search_pattern = json.dumps({column_name: value})
+
+        # Use raw SQL for JSONB array search (more efficient with GIN index)
+        # @> checks if left JSONB contains right JSONB
+        query_text = f"""
+            SELECT DISTINCT d.*
+            FROM documents d
+            JOIN document_table_sections dts ON d.id = dts.document_id
+            WHERE dts.section_name = :section_name
+              AND EXISTS (
+                  SELECT 1
+                  FROM jsonb_array_elements(dts.{rows_column}) AS row
+                  WHERE row @> :search_pattern::jsonb
+              )
+        """
+
+        query = text(query_text).columns(Document.id, Document.file_id, Document.doc_type_id,
+                                         Document.status, Document.language, Document.country,
+                                         Document.supplier_id, Document.buyer_id,
+                                         Document.created_at, Document.created_by,
+                                         Document.updated_at, Document.updated_by,
+                                         Document.parsing_metadata)
+
+        result = await session.execute(
+            query.bindparams(
+                section_name=section_name,
+                search_pattern=search_pattern
+            )
+        )
+
+        # Extract document IDs and load full objects
+        doc_ids = [row[0] for row in result]
+        if not doc_ids:
+            return []
+
+        docs_query = select(Document).where(Document.id.in_(doc_ids))
+        docs_result = await session.execute(docs_query)
+        return list(docs_result.scalars().all())
+
+    async def search_documents_by_text(
+        self,
+        session: AsyncSession,
+        search_text: str,
+        language: str = 'simple',
+        use_ocr: bool = True,
+        use_field_values: bool = True
+    ) -> List[Document]:
+        """
+        Full-text search in documents using GIN indexes.
+
+        Searches in:
+        - OCR text from pages
+        - Field values
+        - Company names
+
+        Args:
+            session: Database session
+            search_text: Text to search for
+            language: Language for search ('russian', 'ukrainian', 'english')
+            use_ocr: Search in OCR text
+            use_field_values: Search in field values
+
+        Returns:
+            List of documents matching the search
+        """
+        # Validate language (default to 'simple' for multilingual support)
+        valid_languages = ['simple', 'russian', 'english']
+        if language not in valid_languages:
+            logger.warning(f"Invalid language '{language}', using 'simple'")
+            language = 'simple'
+
+        conditions = []
+
+        if use_ocr:
+            # Search in OCR text
+            conditions.append(
+                select(Document.id).join(DocumentPage).where(
+                    func.to_tsvector(language, func.coalesce(DocumentPage.ocr_text, ''))
+                    .match(search_text)
+                ).exists()
+            )
+
+        if use_field_values:
+            # Search in field values
+            conditions.append(
+                select(Document.id).join(DocumentField).where(
+                    func.to_tsvector(language, func.coalesce(DocumentField.raw_value_text, ''))
+                    .match(search_text)
+                ).exists()
+            )
+
+        if conditions:
+            query = select(Document).where(or_(*conditions))
+        else:
+            query = select(Document).where(False)  # No results if no search criteria
+
+        result = await session.execute(query)
+        return list(result.scalars().all())
+
+    async def search_companies_by_name(
+        self,
+        session: AsyncSession,
+        name: str,
+        language: str = 'simple'
+    ) -> List[Company]:
+        """
+        Full-text search companies by name using GIN index.
+
+        Args:
+            session: Database session
+            name: Company name to search for
+            language: Language for search ('simple', 'russian', 'english')
+                     'simple' works with any language text
+
+        Returns:
+            List of companies matching the search
+        """
+        # Validate language
+        valid_languages = ['simple', 'russian', 'english']
+        if language not in valid_languages:
+            logger.warning(f"Invalid language '{language}', using 'simple'")
+            language = 'simple'
+
+        query = select(Company).where(
+            func.to_tsvector(language, func.coalesce(Company.legal_name, ''))
+            .match(name)
+        )
+
+        result = await session.execute(query)
+        return list(result.scalars().all())
+
+    async def search_documents_by_metadata(
+        self,
+        session: AsyncSession,
+        metadata_key: str,
+        metadata_value: Any
+    ) -> List[Document]:
+        """
+        Search documents by parsing_metadata JSONB field using GIN index.
+
+        Example: Find all documents parsed with specific model version
+
+        Args:
+            session: Database session
+            metadata_key: Key in JSONB (e.g., 'model_version', 'processing_time')
+            metadata_value: Value to search for
+
+        Returns:
+            List of documents matching the criteria
+        """
+        # Use JSONB containment operator
+        query = select(Document).where(
+            Document.parsing_metadata[metadata_key].astext == str(metadata_value)
+        )
+
+        result = await session.execute(query)
+        return list(result.scalars().all())
+
+    async def get_documents_by_status_and_date_range(
+        self,
+        session: AsyncSession,
+        status: str,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        limit: int = 100,
+        offset: int = 0
+    ) -> Tuple[List[Document], int]:
+        """
+        Get documents by status with date range filtering.
+        Uses composite index (status, created_at).
+
+        Args:
+            session: Database session
+            status: Document status
+            start_date: Start date for filtering
+            end_date: End date for filtering
+            limit: Maximum number of results
+            offset: Offset for pagination
+
+        Returns:
+            Tuple of (documents list, total count)
+        """
+        query = select(Document).where(Document.status == status)
+        count_query = select(func.count()).select_from(Document).where(Document.status == status)
+
+        if start_date:
+            query = query.where(Document.created_at >= start_date)
+            count_query = count_query.where(Document.created_at >= start_date)
+
+        if end_date:
+            query = query.where(Document.created_at <= end_date)
+            count_query = count_query.where(Document.created_at <= end_date)
+
+        # Order by created_at DESC (uses index)
+        query = query.order_by(Document.created_at.desc()).limit(limit).offset(offset)
+
+        result = await session.execute(query)
+        count_result = await session.execute(count_query)
+
+        return list(result.scalars().all()), count_result.scalar() or 0
+
+    async def get_documents_by_supplier(
+        self,
+        session: AsyncSession,
+        supplier_id: int,
+        limit: int = 100,
+        offset: int = 0
+    ) -> Tuple[List[Document], int]:
+        """
+        Get documents by supplier with pagination.
+        Uses composite index (supplier_id, created_at).
+
+        Args:
+            session: Database session
+            supplier_id: Supplier company ID
+            limit: Maximum number of results
+            offset: Offset for pagination
+
+        Returns:
+            Tuple of (documents list, total count)
+        """
+        query = select(Document).where(
+            Document.supplier_id == supplier_id
+        ).order_by(Document.created_at.desc()).limit(limit).offset(offset)
+
+        count_query = select(func.count()).select_from(Document).where(
+            Document.supplier_id == supplier_id
+        )
+
+        result = await session.execute(query)
+        count_result = await session.execute(count_query)
+
+        return list(result.scalars().all()), count_result.scalar() or 0

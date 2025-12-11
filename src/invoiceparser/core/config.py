@@ -90,8 +90,8 @@ class Config(BaseSettings):
         default="postgresql+asyncpg://invoiceparser:invoiceparser_password@db:5432/invoiceparser"
     )
     db_echo: bool = Field(alias="DB_ECHO", default=False)  # SQLAlchemy query logging
-    db_pool_size: int = Field(alias="DB_POOL_SIZE", default=5)
-    db_max_overflow: int = Field(alias="DB_MAX_OVERFLOW", default=10)
+    db_pool_size: int = Field(alias="DB_POOL_SIZE", default=50)  # Increased for high load (was 5)
+    db_max_overflow: int = Field(alias="DB_MAX_OVERFLOW", default=20)  # Increased for high load (was 10)
     db_auto_migrate: bool = Field(alias="DB_AUTO_MIGRATE", default=True)  # Auto-run migrations on startup
 
     @classmethod

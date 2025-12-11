@@ -5,13 +5,14 @@ import logging
 import tempfile
 from pathlib import Path
 from typing import Optional
-from fastapi import FastAPI, UploadFile, File, HTTPException, Header, Depends, Request
+from fastapi import FastAPI, UploadFile, File, HTTPException, Header, Depends, Request, Query
 from fastapi.responses import JSONResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import Message
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from typing import Optional, List
 
 from ..core.config import Config
 from ..services.orchestrator import Orchestrator
@@ -261,6 +262,57 @@ class WebAPI:
                 "summary": results["summary"]
             }
 
+        @self.app.get("/api/search/documents", tags=["Search"])
+        async def search_documents(
+            query: str = Query(..., description="Search query"),
+            language: str = Query("simple", description="Language: 'simple' (any), 'russian', 'english'"),
+            use_ocr: bool = Query(True, description="Search in OCR text"),
+            use_fields: bool = Query(True, description="Search in field values"),
+            token: Optional[str] = Header(None, alias="Authorization")
+        ):
+            """
+            Full-text search in documents.
+
+            Language options:
+            - 'simple': Works with any language (recommended for multilingual documents)
+            - 'russian': Optimized for Russian text
+            - 'english': Optimized for English text
+            """
+            if not self._verify_token(token):
+                raise HTTPException(status_code=401, detail="Unauthorized")
+
+            try:
+                from ..database import get_session
+
+                db_service = self.orchestrator.db_service
+                if not db_service:
+                    raise HTTPException(status_code=503, detail="Database service not available")
+
+                async for session in get_session():
+                    documents = await db_service.search_documents_by_text(
+                        session=session,
+                        search_text=query,
+                        language=language,
+                        use_ocr=use_ocr,
+                        use_field_values=use_fields
+                    )
+                    return {
+                        "count": len(documents),
+                        "documents": [
+                            {
+                                "id": doc.id,
+                                "status": doc.status,
+                                "language": doc.language,
+                                "country": doc.country,
+                                "created_at": doc.created_at.strftime("%Y-%m-%d %H:%M") if doc.created_at else None
+                            }
+                            for doc in documents
+                        ]
+                    }
+            except Exception as e:
+                logger.error(f"Search failed: {e}", exc_info=True)
+                raise HTTPException(status_code=500, detail=str(e))
+
         @self.app.post("/parse", response_model=ParseResponse)
         async def parse_document(
             file: UploadFile = File(...),
@@ -407,14 +459,14 @@ class WebAPI:
 
             try:
                 import json
-                from datetime import datetime
+                from ..utils.datetime_utils import now
 
                 # Создаем директорию output если её нет
                 output_dir = Path(self.config.output_dir)
                 output_dir.mkdir(parents=True, exist_ok=True)
 
                 # Генерируем имя файла
-                timestamp = datetime.now().strftime("%d%m%H%M")
+                timestamp = now().strftime("%Y%m%d_%H%M")
                 base_name = Path(save_request.original_filename).stem
                 new_filename = f"{base_name}_saved_{timestamp}.json"
                 output_path = output_dir / new_filename

@@ -584,11 +584,13 @@ class Orchestrator:
             from ..database import get_session
 
             async for session in get_session():
+                # Auto-detect document type from parsed JSON
+                # If detection fails, will use GENERAL_INVOICE
                 document = await self.db_service.save_parsed_document(
                     session=session,
                     file_path=document_path,
                     raw_json=invoice_data,
-                    doc_type_code="UA_INVOICE",
+                    doc_type_code=None,  # None triggers auto-detection
                     original_filename=original_filename or document_path.name
                 )
                 return document.id
