@@ -84,6 +84,16 @@ class Config(BaseSettings):
     telegram_bot_token: str = Field(alias="TELEGRAM_BOT_TOKEN", default="")
     telegram_allowed_user_ids: str = Field(alias="TELEGRAM_ALLOWED_USER_IDS", default="")
 
+    # Database settings
+    database_url: str = Field(
+        alias="DATABASE_URL",
+        default="postgresql+asyncpg://invoiceparser:invoiceparser_password@db:5432/invoiceparser"
+    )
+    db_echo: bool = Field(alias="DB_ECHO", default=False)  # SQLAlchemy query logging
+    db_pool_size: int = Field(alias="DB_POOL_SIZE", default=5)
+    db_max_overflow: int = Field(alias="DB_MAX_OVERFLOW", default=10)
+    db_auto_migrate: bool = Field(alias="DB_AUTO_MIGRATE", default=True)  # Auto-run migrations on startup
+
     @classmethod
     def load(cls) -> "Config":
         """

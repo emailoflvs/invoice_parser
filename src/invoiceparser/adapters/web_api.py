@@ -48,6 +48,7 @@ class HealthResponse(BaseModel):
     """Модель ответа health check"""
     status: str
     version: str
+    database: Optional[str] = None
 
 
 class WebAPI:
@@ -137,6 +138,7 @@ class WebAPI:
             logger.info(f"Invoices directory mounted from: {invoices_dir}")
 
         self._setup_routes()
+        self._setup_database()
 
         # Добавляем тестовый роут для проверки
         @self.app.get("/test-static-path")
@@ -149,15 +151,95 @@ class WebAPI:
                 "script_js_size": (self.static_dir / "script.js").stat().st_size if (self.static_dir / "script.js").exists() else 0
             }
 
+    def _setup_database(self):
+        """Настройка базы данных"""
+        from ..database import init_db, close_db
+
+        @self.app.on_event("startup")
+        async def startup_event():
+            """Инициализация БД при запуске приложения"""
+            try:
+                logger.info("Initializing database...")
+                init_db(
+                    database_url=self.config.database_url,
+                    echo=self.config.db_echo,
+                    pool_size=self.config.db_pool_size,
+                    max_overflow=self.config.db_max_overflow
+                )
+
+                # Проверяем подключение к БД
+                from ..database import get_session
+                async for session in get_session():
+                    # Простая проверка - попробуем выполнить простой запрос
+                    from sqlalchemy import text
+                    await session.execute(text("SELECT 1"))
+                    logger.info("✅ Database connection established")
+                    break
+
+                # Автоматический запуск миграций (если включен)
+                if self.config.db_auto_migrate:
+                    try:
+                        import subprocess
+                        import sys
+                        logger.info("Running database migrations...")
+                        result = subprocess.run(
+                            [sys.executable, "-m", "alembic", "upgrade", "head"],
+                            capture_output=True,
+                            text=True,
+                            timeout=30
+                        )
+                        if result.returncode == 0:
+                            logger.info("✅ Database migrations completed")
+                        else:
+                            logger.warning(f"⚠️ Migration output: {result.stdout}")
+                            if result.stderr:
+                                logger.warning(f"Migration errors: {result.stderr}")
+                    except subprocess.TimeoutExpired:
+                        logger.warning("⚠️ Migration timeout - migrations may still be running")
+                    except Exception as e:
+                        logger.warning(f"⚠️ Could not run migrations automatically: {e}")
+                        logger.info("You can run migrations manually: alembic upgrade head")
+                else:
+                    logger.info("Auto-migration disabled (DB_AUTO_MIGRATE=false)")
+
+            except Exception as e:
+                logger.error(f"❌ Failed to initialize database: {e}")
+                # В dev режиме не падаем, в production можно добавить exit
+                if not self.config.dev_mode:
+                    raise
+
+        @self.app.on_event("shutdown")
+        async def shutdown_event():
+            """Закрытие подключения к БД при остановке приложения"""
+            try:
+                logger.info("Closing database connections...")
+                await close_db()
+                logger.info("✅ Database connections closed")
+            except Exception as e:
+                logger.error(f"Error closing database: {e}")
+
     def _setup_routes(self):
         """Настройка маршрутов"""
 
         @self.app.get("/health", response_model=HealthResponse)
         async def health():
             """Health check endpoint"""
+            db_status = "unknown"
+            try:
+                from ..database import get_session
+                from sqlalchemy import text
+                async for session in get_session():
+                    await session.execute(text("SELECT 1"))
+                    db_status = "ok"
+                    break
+            except Exception as e:
+                logger.warning(f"Database health check failed: {e}")
+                db_status = "error"
+
             return {
-                "status": "ok",
-                "version": "1.0.0"
+                "status": "ok" if db_status == "ok" else "degraded",
+                "version": "1.0.0",
+                "database": db_status
             }
 
         @self.app.get("/api/validate-frontend")

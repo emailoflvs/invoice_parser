@@ -1,16 +1,15 @@
 """
-Final comprehensive architecture for document parsing.
-Includes: unknown fields, signatures, dynamic tables.
+Initial database schema for Invoice Parser.
 
-Revision ID: 001_final_architecture
-Revises: 
+Revision ID: 001_initial_schema
+Revises:
 Create Date: 2025-12-11
 """
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
-revision = '001_final_architecture'
+revision = '001_initial_schema'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -18,7 +17,7 @@ depends_on = None
 
 def upgrade() -> None:
     """Create all tables"""
-    
+
     # Reference Tables
     op.create_table(
         'document_types',
@@ -29,7 +28,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint('code')
     )
-    
+
     op.create_table(
         'field_definitions',
         sa.Column('id', sa.Integer(), nullable=False),
@@ -40,7 +39,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint('code')
     )
-    
+
     op.create_table(
         'field_labels',
         sa.Column('id', sa.Integer(), nullable=False),
@@ -51,7 +50,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id')
     )
     op.create_index('ix_field_labels_field_locale', 'field_labels', ['field_id', 'locale'])
-    
+
     # Companies
     op.create_table(
         'companies',
@@ -79,7 +78,7 @@ def upgrade() -> None:
     op.create_index('ix_companies_tax_id', 'companies', ['tax_id'])
     op.create_index('ix_companies_vat_id', 'companies', ['vat_id'])
     op.create_index('ix_companies_name', 'companies', ['legal_name'])
-    
+
     op.create_table(
         'company_document_profiles',
         sa.Column('id', sa.BigInteger(), nullable=False),
@@ -95,7 +94,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(['doc_type_id'], ['document_types.id']),
         sa.PrimaryKeyConstraint('id')
     )
-    
+
     # Files
     op.create_table(
         'files',
@@ -110,7 +109,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id')
     )
     op.create_index('ix_files_hash', 'files', ['file_hash'])
-    
+
     # Documents (MINIMAL!)
     op.create_table(
         'documents',
@@ -137,7 +136,7 @@ def upgrade() -> None:
     op.create_index('ix_documents_supplier', 'documents', ['supplier_id'])
     op.create_index('ix_documents_buyer', 'documents', ['buyer_id'])
     op.create_index('ix_documents_created', 'documents', ['created_at'])
-    
+
     # Document Pages
     op.create_table(
         'document_pages',
@@ -152,7 +151,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id')
     )
     op.create_index('ix_document_pages_doc', 'document_pages', ['document_id', 'page_number'])
-    
+
     # Document Snapshots
     op.create_table(
         'document_snapshots',
@@ -168,7 +167,7 @@ def upgrade() -> None:
         sa.UniqueConstraint('document_id', 'snapshot_type', 'version')
     )
     op.create_index('ix_document_snapshots_doc_type', 'document_snapshots', ['document_id', 'snapshot_type'])
-    
+
     # Document Fields (handles unknown fields!)
     op.create_table(
         'document_fields',
@@ -210,8 +209,8 @@ def upgrade() -> None:
     op.create_index('ix_document_fields_code', 'document_fields', ['field_code'])
     op.create_index('ix_document_fields_corrected', 'document_fields', ['is_corrected'])
     op.create_index('ix_document_fields_unknown', 'document_fields', ['field_id'])
-    
-    # Document Signatures (NEW!)
+
+    # Document Signatures
     op.create_table(
         'document_signatures',
         sa.Column('id', sa.BigInteger(), nullable=False),
@@ -235,8 +234,8 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id')
     )
     op.create_index('ix_document_signatures_doc', 'document_signatures', ['document_id', 'signature_index'])
-    
-    # Document Table Sections (NEW!)
+
+    # Document Table Sections
     op.create_table(
         'document_table_sections',
         sa.Column('id', sa.BigInteger(), nullable=False),
@@ -256,7 +255,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id')
     )
     op.create_index('ix_document_table_sections_doc', 'document_table_sections', ['document_id', 'section_order'])
-    
+
     # Seed data
     op.execute("""
         INSERT INTO document_types (code, name, description) VALUES

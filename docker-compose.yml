@@ -1,4 +1,23 @@
 services:
+  # PostgreSQL Database
+  db:
+    image: postgres:16-alpine
+    container_name: invoiceparser_db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-invoiceparser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-invoiceparser_password}
+      POSTGRES_DB: ${POSTGRES_DB:-invoiceparser}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-invoiceparser}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
   # Основное приложение (CLI/Web/API)
   app:
     build: .
@@ -18,6 +37,11 @@ services:
       - ./src:/app/src
       - ./static:/app/static
       - ./prompts:/app/prompts
+      - ./alembic.ini:/app/alembic.ini
+      - ./alembic:/app/alembic
+    depends_on:
+      db:
+        condition: service_healthy
     environment:
       - PYTHONPATH=/app/src
       - LOGS_DIR=/app/logs
@@ -30,6 +54,8 @@ services:
     ports:
       - "8000:8000"
     restart: unless-stopped
+    networks:
+      - default
 
   # Telegram бот (опционально)
   telegram-bot:
@@ -46,6 +72,9 @@ services:
       - PYTHONPATH=/app/src
     command: python -m invoiceparser.app.main_telegram
     restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
     profiles:
       - telegram
 
@@ -64,5 +93,11 @@ services:
       - PYTHONPATH=/app/src
     command: python -m invoiceparser.app.main_email
     restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
     profiles:
       - email
+
+volumes:
+  postgres_data:
