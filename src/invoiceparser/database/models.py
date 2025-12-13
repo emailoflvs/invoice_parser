@@ -425,6 +425,11 @@ class DocumentField(Base):
         nullable=True,
         comment='Original label from document - used when field is unknown'
     )
+    section_label: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+        comment='Original section label from document (_label from JSON, e.g., "Постачальник:", "Покупець:")'
+    )
     language: Mapped[Optional[str]] = mapped_column(
         String(10),
         nullable=True,

@@ -3,6 +3,7 @@ Database service for Invoice Parser.
 Handles: unknown fields, signatures, dynamic tables with column_mapping.
 """
 import logging
+import mimetypes
 from typing import Dict, Any, Optional, List, Tuple
 from pathlib import Path
 from datetime import datetime
@@ -269,6 +270,11 @@ class DatabaseService:
             session, document.id, raw_json, is_raw=True
         )
 
+        # 9. Create DocumentPages (if file is PDF or multi-page)
+        await self._populate_document_pages(
+            session, document.id, file_record.id, file_path
+        )
+
         await session.commit()
         logger.info(f"Document saved (ID: {document.id})")
 
@@ -335,7 +341,6 @@ class DatabaseService:
     ) -> File:
         """Create File record"""
         import hashlib
-        import mimetypes
 
         file_hash = None
         if file_path.exists():
@@ -361,37 +366,104 @@ class DatabaseService:
         session: AsyncSession,
         json_data: Dict[str, Any]
     ) -> Tuple[Optional[int], Optional[int]]:
-        """Extract supplier and buyer, create/link companies"""
+        """
+        Extract supplier and buyer, create/link companies.
+        Handles both formats: parties as dict or as array.
+        """
         supplier_id = None
         buyer_id = None
 
         parties = json_data.get('parties', {})
 
-        # Supplier
-        if 'supplier' in parties:
-            supplier_data = parties['supplier']
-            supplier = await self.create_or_update_company(
-                session,
-                name=supplier_data.get('name', 'Unknown Supplier'),
-                tax_id=supplier_data.get('tax_id'),
-                vat_id=supplier_data.get('vat_id'),
-                address=supplier_data.get('address'),
-                iban=supplier_data.get('account_number'),
-                bank_name=supplier_data.get('bank'),
-                phone=supplier_data.get('phone')
-            )
-            supplier_id = supplier.id
+        # Handle ARRAY format: [{"role": "Постачальник", "name": "...", "details": {...}}, ...]
+        if isinstance(parties, list):
+            for party in parties:
+                if not isinstance(party, dict):
+                    continue
 
-        # Buyer
-        if 'customer' in parties:
-            buyer_data = parties['customer']
-            buyer = await self.create_or_update_company(
-                session,
-                name=buyer_data.get('name', 'Unknown Buyer'),
-                tax_id=buyer_data.get('tax_id'),
-                address=buyer_data.get('address')
-            )
-            buyer_id = buyer.id
+                role = party.get('role', '').lower()
+                # Data can be in 'details' or directly in party
+                party_data = party.get('details', party) if isinstance(party.get('details'), dict) else party
+
+                # Determine party type by role (multilingual support)
+                supplier_keywords = ['постачальник', 'supplier', 'vendor', 'seller', 'поставщик', 'продавец']
+                buyer_keywords = ['покупець', 'buyer', 'customer', 'client', 'покупатель', 'клиент']
+
+                if any(keyword in role for keyword in supplier_keywords):
+                    # Extract tax_id from various fields
+                    tax_id = (
+                        party_data.get('edrpou') or
+                        party_data.get('tax_id') or
+                        party_data.get('ipn') or
+                        party_data.get('inn')
+                    )
+
+                    # Extract bank info
+                    bank_account = party_data.get('bank_account', {})
+                    if isinstance(bank_account, dict):
+                        iban = bank_account.get('iban')
+                        bank_name = bank_account.get('bank_name') or bank_account.get('bank')
+                    else:
+                        iban = None
+                        bank_name = None
+
+                    supplier = await self.create_or_update_company(
+                        session,
+                        name=party.get('name', 'Unknown Supplier'),
+                        tax_id=tax_id,
+                        vat_id=party_data.get('vat_id'),
+                        address=party_data.get('address'),
+                        iban=iban,
+                        bank_name=bank_name,
+                        phone=party_data.get('phone')
+                    )
+                    supplier_id = supplier.id
+
+                elif any(keyword in role for keyword in buyer_keywords):
+                    # Extract tax_id from various fields
+                    tax_id = (
+                        party_data.get('edrpou') or
+                        party_data.get('tax_id') or
+                        party_data.get('ipn') or
+                        party_data.get('inn')
+                    )
+
+                    buyer = await self.create_or_update_company(
+                        session,
+                        name=party.get('name', 'Unknown Buyer'),
+                        tax_id=tax_id,
+                        address=party_data.get('address')
+                    )
+                    buyer_id = buyer.id
+
+        # Handle DICT format: {"supplier": {...}, "customer": {...}}
+        elif isinstance(parties, dict):
+            # Supplier
+            if 'supplier' in parties:
+                supplier_data = parties['supplier']
+                if isinstance(supplier_data, dict):
+                    supplier = await self.create_or_update_company(
+                        session,
+                        name=supplier_data.get('name', 'Unknown Supplier'),
+                        tax_id=supplier_data.get('tax_id'),
+                        vat_id=supplier_data.get('vat_id'),
+                        address=supplier_data.get('address'),
+                        iban=supplier_data.get('account_number'),
+                        bank_name=supplier_data.get('bank'),
+                        phone=supplier_data.get('phone')
+                    )
+                    supplier_id = supplier.id
+
+            # Buyer (can be 'customer' or 'buyer')
+            buyer_data = parties.get('customer') or parties.get('buyer')
+            if buyer_data and isinstance(buyer_data, dict):
+                buyer = await self.create_or_update_company(
+                    session,
+                    name=buyer_data.get('name', 'Unknown Buyer'),
+                    tax_id=buyer_data.get('tax_id'),
+                    address=buyer_data.get('address')
+                )
+                buyer_id = buyer.id
 
         return supplier_id, buyer_id
 
@@ -455,7 +527,8 @@ class DatabaseService:
                 field_code=field_def.code if field_def else None,
                 section=field_data['section'],
                 group_key=field_data.get('group_key'),
-                raw_label=field_data['label'],
+                raw_label=field_data.get('label', ''),  # Field label (key name or original label)
+                section_label=field_data.get('section_label'),  # Section _label from JSON (e.g., "Постачальник:")
                 raw_value_text=self._to_text(field_data['value']),
                 language=self._detect_language(json_data)
             )
@@ -569,6 +642,72 @@ class DatabaseService:
                     table.is_corrected = True
                 await session.flush()
 
+    async def _populate_document_pages(
+        self,
+        session: AsyncSession,
+        document_id: int,
+        file_id: int,
+        file_path: Path
+    ):
+        """
+        Create DocumentPage records for the document.
+        For images: creates 1 page. For PDFs: creates pages for each PDF page.
+        """
+        import fitz  # PyMuPDF
+
+        pages_to_create = []
+
+        # Determine file type
+        mime_type, _ = mimetypes.guess_type(str(file_path))
+
+        if mime_type == 'application/pdf':
+            # PDF: extract pages
+            try:
+                doc = fitz.open(str(file_path))
+                page_count = len(doc)
+
+                for page_num in range(page_count):
+                    page = doc[page_num]
+                    # Extract text from page (OCR text if available)
+                    ocr_text = page.get_text()
+
+                    # For PDF, we use the same file_id for all pages
+                    # In a real system, you might want to create separate File records for each page image
+                    page_record = DocumentPage(
+                        document_id=document_id,
+                        file_id=file_id,  # Same file for all pages
+                        page_number=page_num + 1,  # 1-based
+                        ocr_text=ocr_text if ocr_text.strip() else None
+                    )
+                    pages_to_create.append(page_record)
+
+                doc.close()
+                logger.info(f"Created {len(pages_to_create)} pages from PDF")
+            except Exception as e:
+                logger.warning(f"Failed to extract PDF pages: {e}. Creating single page record.")
+                # Fallback: create single page
+                page_record = DocumentPage(
+                    document_id=document_id,
+                    file_id=file_id,
+                    page_number=1,
+                    ocr_text=None
+                )
+                pages_to_create.append(page_record)
+        else:
+            # Image: create single page
+            page_record = DocumentPage(
+                document_id=document_id,
+                file_id=file_id,
+                page_number=1,
+                ocr_text=None  # OCR text would be extracted separately if needed
+            )
+            pages_to_create.append(page_record)
+            logger.info(f"Created 1 page for image document")
+
+        if pages_to_create:
+            session.add_all(pages_to_create)
+            await session.flush()
+
     async def _update_approved_fields(
         self,
         session: AsyncSession,
@@ -615,6 +754,8 @@ class DatabaseService:
 
         # document_info
         doc_info = json_data.get('document_info', {})
+        doc_info_label = doc_info.get('_label')  # Extract _label if exists
+
         for key, value in doc_info.items():
             if key not in ['_label', 'location_label'] and value:
                 fields.append({
@@ -622,33 +763,96 @@ class DatabaseService:
                     'code': key,
                     'label': key,
                     'value': value,
-                    'group_key': 'document_info'
+                    'group_key': 'document_info',
+                    'section_label': doc_info_label  # Store _label for section
                 })
 
-        # parties
+        # parties - handle both array and dict formats
         parties = json_data.get('parties', {})
-        for party_type, party_data in parties.items():
-            if isinstance(party_data, dict):
-                for key, value in party_data.items():
-                    if key not in ['_label'] and value:
+
+        if isinstance(parties, list):
+            # Array format: [{"role": "Постачальник", "name": "...", "details": {...}}, ...]
+            for party in parties:
+                if not isinstance(party, dict):
+                    continue
+
+                role = party.get('role', 'unknown').lower()
+                # Determine section name from role
+                if any(kw in role for kw in ['постачальник', 'supplier', 'vendor', 'seller', 'поставщик', 'продавец']):
+                    section = 'supplier'
+                elif any(kw in role for kw in ['покупець', 'buyer', 'customer', 'client', 'покупатель', 'клиент']):
+                    section = 'buyer'
+                else:
+                    section = 'party'
+
+                # Data can be in 'details' or directly in party
+                party_data = party.get('details', party) if isinstance(party.get('details'), dict) else party
+
+                if isinstance(party_data, dict):
+                    # Extract _label for the section
+                    section_label = party.get('_label') or party_data.get('_label') or role
+
+                    for key, value in party_data.items():
+                        if key not in ['_label'] and value:
+                            # Use _label as the label for fields in this section
+                            field_label = section_label if key == 'name' else key
+
+                            fields.append({
+                                'section': section,
+                                'code': key,
+                                'label': field_label,  # Use _label for section header
+                                'value': value,
+                                'group_key': section,
+                                'section_label': section_label  # Store section label separately
+                            })
+
+                # Also extract top-level fields from party (name, role, etc.)
+                for key, value in party.items():
+                    if key not in ['_label', 'details'] and value and key not in [f['code'] for f in fields if f.get('group_key') == section]:
                         fields.append({
-                            'section': party_type,
+                            'section': section,
                             'code': key,
                             'label': key,
                             'value': value,
-                            'group_key': party_type
+                            'group_key': section,
+                            'section_label': section_label  # Store _label from JSON
                         })
+
+        elif isinstance(parties, dict):
+            # Dict format: {"supplier": {...}, "customer": {...}}
+            for party_type, party_data in parties.items():
+                if isinstance(party_data, dict):
+                    # Extract _label for the section (e.g., "Постачальник:", "Покупець:")
+                    section_label = party_data.get('_label', party_type)
+
+                    for key, value in party_data.items():
+                        if key not in ['_label'] and value:
+                            # Use _label as the label for fields in this section
+                            # For the first field, use section_label, for others use key
+                            field_label = section_label if key == 'name' else key
+
+                            fields.append({
+                                'section': party_type,
+                                'code': key,
+                                'label': field_label,  # Use _label for section header
+                                'value': value,
+                                'group_key': party_type,
+                                'section_label': section_label  # Store section label separately
+                            })
 
         # totals
         totals = json_data.get('totals', {})
+        totals_label = totals.get('_label')  # Extract _label if exists
+
         for key, value in totals.items():
-            if value:
+            if key not in ['_label'] and value:
                 fields.append({
                     'section': 'totals',
                     'code': key,
                     'label': key,
                     'value': value,
-                    'group_key': 'totals'
+                    'group_key': 'totals',
+                    'section_label': totals_label  # Store _label for section
                 })
 
         # other_fields
