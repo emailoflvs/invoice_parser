@@ -10,6 +10,7 @@ import logging
 import google.generativeai as genai
 from google.api_core import exceptions as google_exceptions
 from PIL import Image
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 from ..core.config import Config
 from ..core.errors import GeminiAPIError
@@ -39,6 +40,43 @@ class GeminiClient:
             logger.info(f"Gemini API configured with model: {self.config.gemini_model}, delay between requests: {self.config.gemini_timeout}s")
         except Exception as e:
             raise GeminiAPIError(f"Failed to configure Gemini API: {e}")
+
+    def _generate_with_retry(self, model, content):
+        """
+        Generate content with retry mechanism.
+
+        Настройки из .env:
+        - API_RETRY_ATTEMPTS (default: 3)
+        - API_RETRY_MIN_WAIT (default: 2 sec)
+        - API_RETRY_MAX_WAIT (default: 10 sec)
+
+        Retry только для временных ошибок (rate limit, timeout).
+        """
+        @retry(
+            stop=stop_after_attempt(self.config.api_retry_attempts),
+            wait=wait_exponential(
+                multiplier=1,
+                min=self.config.api_retry_min_wait,
+                max=self.config.api_retry_max_wait
+            ),
+            retry=retry_if_exception_type((
+                google_exceptions.DeadlineExceeded,
+                google_exceptions.ServiceUnavailable,
+                google_exceptions.TooManyRequests,
+                google_exceptions.InternalServerError
+            )),
+            reraise=True
+        )
+        def _do_generate():
+            logger.debug("Attempting to generate content...")
+            return model.generate_content(content)
+
+        try:
+            return _do_generate()
+        except Exception as e:
+            # Последняя попытка провалилась
+            logger.error(f"All {self.config.api_retry_attempts} retry attempts failed")
+            raise
 
     def _get_generation_config(self, max_tokens: Optional[int] = None, use_seed: bool = True) -> Dict[str, Any]:
         """
@@ -145,11 +183,14 @@ class GeminiClient:
             logger.info(f"Sending request to Gemini with {len(images)} image(s)")
             logger.info(f"Cache-bypass via system_instruction: {cache_bypass_id[:16]}...")
 
-            # ЛОГИКА ИЗ СТАРОГО ПРОЕКТА: Прямой вызов без таймаута
+            # RETRY механизм: настраивается через .env
+            # - API_RETRY_ATTEMPTS (default: 3)
+            # - API_RETRY_MIN_WAIT (default: 2)
+            # - API_RETRY_MAX_WAIT (default: 10)
             import time
 
             start_time = time.time()
-            response = model.generate_content(content)
+            response = self._generate_with_retry(model, content)
             elapsed = time.time() - start_time
 
             logger.info(f"Response received in {elapsed:.2f}s")

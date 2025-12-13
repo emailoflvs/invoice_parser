@@ -37,3 +37,4 @@ def downgrade() -> None:
     op.drop_index('ix_document_fields_section_label', table_name='document_fields')
     op.drop_column('document_fields', 'section_label')
 
+

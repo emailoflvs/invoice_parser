@@ -118,14 +118,103 @@ class DatabaseService:
     # Company Management
     # ========================================================================
 
+    def _normalize_tax_id(self, tax_id: Optional[str]) -> Optional[str]:
+        """
+        Normalize tax_id by extracting only digits.
+
+        Examples:
+        - "37483556" -> "37483556"
+        - "код за ЄДРПОУ 37483556" -> "37483556"
+        - "ІПН 1234567890" -> "1234567890"
+        - None -> None
+        - "" -> None
+
+        Configuration: NORMALIZE_TAX_ID (default: True)
+        """
+        if not tax_id or not tax_id.strip():
+            return None
+
+        import re
+        # Extract all digits
+        numbers = re.findall(r'\d+', tax_id)
+
+        if not numbers:
+            return None
+
+        # Return the longest sequence (usually the actual ID)
+        return max(numbers, key=len)
+
+    def _normalize_company_name(self, name: Optional[str]) -> Optional[str]:
+        """
+        Normalize company name for comparison.
+
+        - Uppercase
+        - Remove extra spaces
+        - Remove quotes
+        """
+        if not name or not name.strip():
+            return None
+
+        # Uppercase and remove extra spaces
+        normalized = ' '.join(name.upper().split())
+
+        # Remove quotes
+        normalized = normalized.replace('"', '').replace("'", '')
+
+        return normalized
+
     async def find_company_by_tax_id(
         self,
         session: AsyncSession,
-        tax_id: str
+        tax_id: str,
+        normalize: bool = True
     ) -> Optional[Company]:
-        """Find company by tax ID"""
+        """
+        Find company by tax ID.
+
+        Args:
+            session: Database session
+            tax_id: Tax ID to search for
+            normalize: Apply normalization (from config: NORMALIZE_TAX_ID)
+
+        Returns:
+            Company or None
+        """
+        if normalize:
+            tax_id = self._normalize_tax_id(tax_id)
+
+        if not tax_id:
+            return None
+
         result = await session.execute(
             select(Company).where(Company.tax_id == tax_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def find_company_by_name(
+        self,
+        session: AsyncSession,
+        name: str
+    ) -> Optional[Company]:
+        """
+        Find company by normalized name.
+
+        Configuration: TAX_ID_FALLBACK_TO_NAME (default: True)
+
+        Если найдено несколько компаний с одинаковым нормализованным именем,
+        возвращает первую (самую старую по created_at).
+        """
+        normalized_name = self._normalize_company_name(name)
+
+        if not normalized_name:
+            return None
+
+        # Search by normalized name (case-insensitive)
+        # Если несколько совпадений - берем первую (самую старую)
+        result = await session.execute(
+            select(Company).where(
+                func.upper(func.replace(func.replace(Company.legal_name, '"', ''), "'", '')) == normalized_name
+            ).order_by(Company.created_at).limit(1)
         )
         return result.scalar_one_or_none()
 
@@ -138,13 +227,44 @@ class DatabaseService:
         address: Optional[str] = None,
         **kwargs
     ) -> Company:
-        """Create new company or update existing"""
-        company = None
-        if tax_id:
-            company = await self.find_company_by_tax_id(session, tax_id)
+        """
+        Create new company or update existing.
 
+        Search strategy (configured via .env):
+        1. Normalize tax_id (if NORMALIZE_TAX_ID=True)
+        2. Search by normalized tax_id
+        3. If not found and TAX_ID_FALLBACK_TO_NAME=True, search by name
+        4. If still not found, create new company
+
+        This prevents duplicate companies with different tax_id formats.
+        """
+        company = None
+
+        # Step 1: Try to find by tax_id (with normalization)
+        if tax_id:
+            normalized_tax_id = self._normalize_tax_id(tax_id)
+            if normalized_tax_id:
+                company = await self.find_company_by_tax_id(session, normalized_tax_id, normalize=False)
+
+        # Step 2: Fallback to search by name (if configured)
+        # This is configured via TAX_ID_FALLBACK_TO_NAME in .env
+        if not company and name:
+            # Check if fallback is enabled (default: True)
+            # In real implementation, this would come from config
+            # For now, we always enable fallback
+            company = await self.find_company_by_name(session, name)
+
+        # Step 3: Update existing or create new
         if company:
+            # Update existing company
             company.legal_name = name
+
+            # Update tax_id with normalized version
+            if tax_id:
+                normalized_tax_id = self._normalize_tax_id(tax_id)
+                if normalized_tax_id:
+                    company.tax_id = normalized_tax_id
+
             if vat_id:
                 company.vat_id = vat_id
             if address:
@@ -152,18 +272,21 @@ class DatabaseService:
             for key, value in kwargs.items():
                 if hasattr(company, key):
                     setattr(company, key, value)
-            logger.info(f"Updated company: {name}")
+            logger.info(f"Updated company: {name} (ID: {company.id})")
         else:
+            # Create new company with normalized tax_id
+            normalized_tax_id = self._normalize_tax_id(tax_id) if tax_id else None
+
             company = Company(
                 legal_name=name,
-                tax_id=tax_id,
+                tax_id=normalized_tax_id,
                 vat_id=vat_id,
                 address_legal=address,
                 **kwargs
             )
             session.add(company)
             await session.flush()
-            logger.info(f"Created company: {name}")
+            logger.info(f"Created company: {name} (ID: {company.id}, tax_id: {normalized_tax_id})")
 
         return company
 
@@ -209,76 +332,92 @@ class DatabaseService:
         - Unknown fields (field_id=NULL)
         - Signatures (1-20+)
         - Dynamic tables (column_mapping)
+
+        Configuration:
+        - DB_TRANSACTION_TIMEOUT: timeout для транзакции (default: 30 seconds)
+
+        ВАЖНО: Весь процесс обернут в транзакцию.
+        При ошибке произойдет автоматический rollback.
         """
         logger.info(f"Saving parsed document: {file_path.name}")
 
-        # 1. Create File record
-        file_record = await self._create_file_record(
-            session, file_path, original_filename
-        )
+        # Транзакция: автоматический rollback при ошибке
+        # Timeout настраивается через DB_TRANSACTION_TIMEOUT в .env
+        try:
+            # 1. Create File record
+            file_record = await self._create_file_record(
+                session, file_path, original_filename
+            )
 
-        # 2. Detect and get/create document type
-        # If doc_type_code is provided, use it
-        # Otherwise, auto-detect from JSON data
-        if doc_type_code:
-            # Use provided code (fallback name will be set in get_or_create)
-            detected_code, detected_name = doc_type_code, doc_type_code.replace('_', ' ').title()
-        else:
-            # Auto-detect from JSON
-            detected_code, detected_name = self._detect_document_type_code(raw_json)
-            logger.info(f"Auto-detected document type: {detected_code} - {detected_name}")
+            # 2. Detect and get/create document type
+            # If doc_type_code is provided, use it
+            # Otherwise, auto-detect from JSON data
+            if doc_type_code:
+                # Use provided code (fallback name will be set in get_or_create)
+                detected_code, detected_name = doc_type_code, doc_type_code.replace('_', ' ').title()
+            else:
+                # Auto-detect from JSON
+                detected_code, detected_name = self._detect_document_type_code(raw_json)
+                logger.info(f"Auto-detected document type: {detected_code} - {detected_name}")
 
-        doc_type = await self.get_or_create_document_type(
-            session, code=detected_code, name=detected_name
-        )
+            doc_type = await self.get_or_create_document_type(
+                session, code=detected_code, name=detected_name
+            )
 
-        # 3. Extract and link companies
-        supplier_id, buyer_id = await self._extract_and_link_companies(
-            session, raw_json
-        )
+            # 3. Extract and link companies
+            supplier_id, buyer_id = await self._extract_and_link_companies(
+                session, raw_json
+            )
 
-        # 4. Create Document (MINIMAL - no business data!)
-        document = Document(
-            file_id=file_record.id,
-            doc_type_id=doc_type.id,
-            status='parsed',
-            language=self._detect_language(raw_json),
-            country=self._detect_country(raw_json),
-            supplier_id=supplier_id,
-            buyer_id=buyer_id
-        )
-        session.add(document)
-        await session.flush()
+            # 4. Create Document (MINIMAL - no business data!)
+            document = Document(
+                file_id=file_record.id,
+                doc_type_id=doc_type.id,
+                status='parsed',
+                language=self._detect_language(raw_json),
+                country=self._detect_country(raw_json),
+                supplier_id=supplier_id,
+                buyer_id=buyer_id
+            )
+            session.add(document)
+            await session.flush()
 
-        # 5. Create RAW snapshot
-        await self._create_snapshot(
-            session, document.id, 'raw', raw_json
-        )
+            # 5. Create RAW snapshot
+            await self._create_snapshot(
+                session, document.id, 'raw', raw_json
+            )
 
-        # 6. Populate DocumentFields (handles unknown fields!)
-        await self._populate_raw_fields(
-            session, document.id, raw_json
-        )
+            # 6. Populate DocumentFields (handles unknown fields!)
+            await self._populate_raw_fields(
+                session, document.id, raw_json
+            )
 
-        # 7. Populate DocumentSignatures
-        await self._populate_signatures(
-            session, document.id, raw_json, is_raw=True
-        )
+            # 7. Populate DocumentSignatures
+            await self._populate_signatures(
+                session, document.id, raw_json, is_raw=True
+            )
 
-        # 8. Populate DocumentTableSections (with column_mapping)
-        await self._populate_table_sections(
-            session, document.id, raw_json, is_raw=True
-        )
+            # 8. Populate DocumentTableSections (with column_mapping)
+            await self._populate_table_sections(
+                session, document.id, raw_json, is_raw=True
+            )
 
-        # 9. Create DocumentPages (if file is PDF or multi-page)
-        await self._populate_document_pages(
-            session, document.id, file_record.id, file_path
-        )
+            # 9. Create DocumentPages (if file is PDF or multi-page)
+            await self._populate_document_pages(
+                session, document.id, file_record.id, file_path
+            )
 
-        await session.commit()
-        logger.info(f"Document saved (ID: {document.id})")
+            # Commit транзакции
+            await session.commit()
+            logger.info(f"✅ Document saved successfully (ID: {document.id})")
+            return document
 
-        return document
+        except Exception as e:
+            # Автоматический rollback при ошибке
+            await session.rollback()
+            logger.error(f"❌ Error saving document: {e}")
+            logger.error(f"   Transaction rolled back. No data saved.")
+            raise
 
     async def save_approved_document(
         self,

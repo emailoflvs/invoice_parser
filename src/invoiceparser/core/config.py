@@ -94,6 +94,56 @@ class Config(BaseSettings):
     db_max_overflow: int = Field(alias="DB_MAX_OVERFLOW", default=20)  # Increased for high load (was 10)
     db_auto_migrate: bool = Field(alias="DB_AUTO_MIGRATE", default=True)  # Auto-run migrations on startup
 
+    # Database maintenance settings
+    archive_partitions_older_than_years: int = Field(
+        alias="ARCHIVE_PARTITIONS_OLDER_THAN_YEARS",
+        default=2
+    )  # Архивировать партиции старше N лет
+    duplicate_check_window_seconds: int = Field(
+        alias="DUPLICATE_CHECK_WINDOW_SECONDS",
+        default=60
+    )  # Окно проверки дублей при парсинге (в секундах)
+
+    # Database search settings
+    fts_languages: str = Field(
+        alias="FTS_LANGUAGES",
+        default="simple,russian,english"
+    )  # Языки для FTS индексов (через запятую)
+    fts_partial_index_languages: str = Field(
+        alias="FTS_PARTIAL_INDEX_LANGUAGES",
+        default="ru,uk"
+    )  # Языки для partial FTS индексов (через запятую)
+
+    # Company normalization settings
+    normalize_tax_id: bool = Field(
+        alias="NORMALIZE_TAX_ID",
+        default=True
+    )  # Включить нормализацию tax_id
+    tax_id_fallback_to_name: bool = Field(
+        alias="TAX_ID_FALLBACK_TO_NAME",
+        default=True
+    )  # Искать по имени, если tax_id не найден
+
+    # Transaction settings
+    db_transaction_timeout: int = Field(
+        alias="DB_TRANSACTION_TIMEOUT",
+        default=30
+    )  # Timeout для транзакций (в секундах)
+
+    # Retry settings for external APIs
+    api_retry_attempts: int = Field(
+        alias="API_RETRY_ATTEMPTS",
+        default=3
+    )  # Количество попыток retry для AI API
+    api_retry_min_wait: int = Field(
+        alias="API_RETRY_MIN_WAIT",
+        default=2
+    )  # Минимальная задержка между попытками (секунды)
+    api_retry_max_wait: int = Field(
+        alias="API_RETRY_MAX_WAIT",
+        default=10
+    )  # Максимальная задержка между попытками (секунды)
+
     @classmethod
     def load(cls) -> "Config":
         """
