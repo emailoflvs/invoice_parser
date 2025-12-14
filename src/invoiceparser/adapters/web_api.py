@@ -3,6 +3,7 @@ Web API адаптер для REST API
 """
 import logging
 import tempfile
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 from fastapi import FastAPI, UploadFile, File, HTTPException, Header, Depends, Request, Query
@@ -16,6 +17,15 @@ from typing import Optional, List
 
 from ..core.config import Config
 from ..services.orchestrator import Orchestrator
+from ..auth import (
+    authenticate_user,
+    create_access_token,
+    get_password_hash,
+    get_current_active_user
+)
+from ..auth.auth import get_user_by_username
+from ..database.models import User
+from ..database import get_session
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +60,44 @@ class HealthResponse(BaseModel):
     status: str
     version: str
     database: Optional[str] = None
+
+
+class LoginRequest(BaseModel):
+    """Модель запроса на логин"""
+    username: str
+    password: str
+
+
+class LoginResponse(BaseModel):
+    """Модель ответа на логин"""
+    access_token: str
+    token_type: str = "bearer"
+    user_id: int
+    username: str
+
+
+class RegisterRequest(BaseModel):
+    """Модель запроса на регистрацию"""
+    username: str
+    email: Optional[str] = None
+    password: str
+
+
+class RegisterResponse(BaseModel):
+    """Модель ответа на регистрацию"""
+    success: bool
+    message: str
+    user_id: int
+    username: str
+
+
+class UserResponse(BaseModel):
+    """Модель ответа с информацией о пользователе"""
+    id: int
+    username: str
+    email: Optional[str] = None
+    is_active: bool
+    created_at: str
 
 
 class WebAPI:
@@ -233,6 +281,137 @@ class WebAPI:
     def _setup_routes(self):
         """Настройка маршрутов"""
 
+        # Authentication endpoints
+        @self.app.post("/api/auth/login", response_model=LoginResponse, tags=["Auth"])
+        async def login(login_request: LoginRequest):
+            """
+            Login with username and password
+
+            Returns:
+                JWT access token
+            """
+            async for session in get_session():
+                user = await authenticate_user(session, login_request.username, login_request.password)
+                if not user:
+                    raise HTTPException(
+                        status_code=401,
+                        detail="Incorrect username or password"
+                    )
+
+                # Create access token
+                access_token = create_access_token(data={"sub": user.username})
+
+                # Update last login
+                user.last_login = datetime.utcnow()
+                await session.commit()
+
+                return LoginResponse(
+                    access_token=access_token,
+                    token_type="bearer",
+                    user_id=user.id,
+                    username=user.username
+                )
+
+        @self.app.post("/api/auth/register", response_model=RegisterResponse, tags=["Auth"])
+        async def register(register_request: RegisterRequest):
+            """
+            Register a new user
+
+            Returns:
+                Registration result
+            """
+            try:
+                async for session in get_session():
+                    # Validate password length (bcrypt limit is 72 bytes)
+                    if len(register_request.password.encode('utf-8')) > 72:
+                        raise HTTPException(
+                            status_code=400,
+                            detail="Password is too long (maximum 72 bytes)"
+                        )
+                    
+                    # Validate username
+                    if not register_request.username or len(register_request.username.strip()) == 0:
+                        raise HTTPException(
+                            status_code=400,
+                            detail="Username cannot be empty"
+                        )
+                    
+                    # Check if user already exists
+                    existing_user = await get_user_by_username(session, register_request.username)
+                    if existing_user:
+                        raise HTTPException(
+                            status_code=400,
+                            detail="Username already registered"
+                        )
+
+                    # Check email if provided
+                    if register_request.email:
+                        from sqlalchemy import select
+                        result = await session.execute(
+                            select(User).where(User.email == register_request.email)
+                        )
+                        if result.scalar_one_or_none():
+                            raise HTTPException(
+                                status_code=400,
+                                detail="Email already registered"
+                            )
+
+                    # Create new user
+                    try:
+                        hashed_password = get_password_hash(register_request.password)
+                    except Exception as e:
+                        logger.error(f"Failed to hash password: {e}", exc_info=True)
+                        raise HTTPException(
+                            status_code=500,
+                            detail="Failed to process password"
+                        )
+                    
+                    new_user = User(
+                        username=register_request.username.strip(),
+                        email=register_request.email.strip() if register_request.email else None,
+                        hashed_password=hashed_password,
+                        is_active=True,
+                        is_superuser=False
+                    )
+                    session.add(new_user)
+                    await session.commit()
+                    await session.refresh(new_user)
+
+                    logger.info(f"New user registered: {new_user.username} (ID: {new_user.id})")
+
+                    return RegisterResponse(
+                        success=True,
+                        message="User registered successfully",
+                        user_id=new_user.id,
+                        username=new_user.username
+                    )
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Registration error: {e}", exc_info=True)
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Registration failed: {str(e)}"
+                )
+
+        @self.app.get("/api/auth/me", response_model=UserResponse, tags=["Auth"])
+        async def get_current_user_info(
+            current_user: User = Depends(get_current_active_user)
+        ):
+            """
+            Get current user information
+
+            Returns:
+                Current user data
+            """
+            return UserResponse(
+                id=current_user.id,
+                username=current_user.username,
+                email=current_user.email,
+                is_active=current_user.is_active,
+                created_at=current_user.created_at.isoformat() if current_user.created_at else ""
+            )
+
         @self.app.get("/health", response_model=HealthResponse)
         async def health():
             """Health check endpoint"""
@@ -279,7 +458,7 @@ class WebAPI:
             language: str = Query("simple", description="Language: 'simple' (any), 'russian', 'english'"),
             use_ocr: bool = Query(True, description="Search in OCR text"),
             use_fields: bool = Query(True, description="Search in field values"),
-            token: Optional[str] = Header(None, alias="Authorization")
+            current_user: User = Depends(get_current_active_user)
         ):
             """
             Full-text search in documents.
@@ -289,8 +468,6 @@ class WebAPI:
             - 'russian': Optimized for Russian text
             - 'english': Optimized for English text
             """
-            if not self._verify_token(token):
-                raise HTTPException(status_code=401, detail="Unauthorized")
 
             try:
                 from ..database import get_session
@@ -328,7 +505,7 @@ class WebAPI:
         async def parse_document(
             file: UploadFile = File(...),
             mode: str = "detailed",
-            token: Optional[str] = Header(None, alias="Authorization")
+            current_user: User = Depends(get_current_active_user)
         ):
             """
             Parse uploaded document
@@ -336,14 +513,11 @@ class WebAPI:
             Args:
                 file: Uploaded document (PDF or image)
                 mode: Режим обработки - "fast" (быстрый) или "detailed" (детальный)
-                token: Authorization token
+                current_user: Current authenticated user
 
             Returns:
                 Parsing result
             """
-            # Проверка авторизации
-            if not self._verify_token(token):
-                raise HTTPException(status_code=401, detail="Unauthorized")
 
             # Проверка типа файла
             allowed_extensions = ['.pdf', '.jpg', '.jpeg', '.png', '.tiff', '.bmp']
@@ -452,21 +626,18 @@ class WebAPI:
         @self.app.post("/save", response_model=SaveResponse)
         async def save_edited_data(
             save_request: SaveRequest,
-            token: Optional[str] = Header(None, alias="Authorization")
+            current_user: User = Depends(get_current_active_user)
         ):
             """
             Save edited document data to JSON file
 
             Args:
                 save_request: Request with original filename and edited data
-                token: Authorization token
+                current_user: Current authenticated user
 
             Returns:
                 Save result with new filename
             """
-            # Проверка авторизации
-            if not self._verify_token(token):
-                raise HTTPException(status_code=401, detail="Unauthorized")
 
             try:
                 import json
@@ -492,7 +663,7 @@ class WebAPI:
                 document_id = save_request.data.get('document_id')  # ID документа из RAW сохранения
                 if document_id:
                     try:
-                        await self._save_approved_to_database(document_id, save_request.data)
+                        await self._save_approved_to_database(document_id, save_request.data, current_user.id)
                         logger.info(f"✅ APPROVED data saved to database (document_id: {document_id})")
                     except Exception as e:
                         logger.error(f"Failed to save APPROVED data to database: {e}", exc_info=True)
@@ -557,13 +728,14 @@ class WebAPI:
                     }
                 }
 
-    async def _save_approved_to_database(self, document_id: int, approved_data: dict) -> None:
+    async def _save_approved_to_database(self, document_id: int, approved_data: dict, user_id: int) -> None:
         """
         Сохранение APPROVED данных в базу данных
 
         Args:
             document_id: ID документа в БД
             approved_data: Утвержденные данные
+            user_id: ID пользователя, который утвердил данные
         """
         try:
             from ..database import get_session
@@ -582,7 +754,7 @@ class WebAPI:
                     session=session,
                     document_id=document_id,
                     approved_json=approved_data,
-                    user_id=None  # TODO: добавить user_id когда будет аутентификация
+                    user_id=user_id
                 )
                 break
         except Exception as e:

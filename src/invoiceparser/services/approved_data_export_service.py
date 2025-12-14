@@ -3,14 +3,12 @@
 Управляет экспортом в различные форматы (Excel, Google Sheets и т.д.)
 """
 import logging
-import re
 from pathlib import Path
 from typing import Dict, Any, Optional, List
-from datetime import datetime
-from decimal import Decimal
 
 from ..core.config import Config
 from ..core.models import InvoiceData, InvoiceHeader, DocumentItem
+from .invoice_data_transformer import InvoiceDataTransformer
 
 logger = logging.getLogger(__name__)
 
@@ -210,36 +208,22 @@ class ApprovedDataExportService:
         # Создаем InvoiceHeader
         invoice_header = InvoiceHeader(**header_data)
 
-        # Извлекаем items
-        items_list = []
-        column_mapping = {}
-
-        if 'items' in approved_data:
-            items_list = approved_data['items']
-        elif 'table_data' in approved_data:
-            if 'line_items' in approved_data['table_data']:
-                items_list = approved_data['table_data']['line_items']
-            if 'column_mapping' in approved_data['table_data']:
-                column_mapping = approved_data['table_data']['column_mapping']
+        # Извлекаем items с использованием трансформера
+        items_list, column_mapping = InvoiceDataTransformer.extract_items_from_structured_data(approved_data)
 
         # Преобразуем items в DocumentItem
         document_items = []
-        for item in items_list:
-            if isinstance(item, dict):
-                # Преобразуем поля согласно column_mapping
-                mapped_item = self._map_item_fields(item, column_mapping)
-                # Используем extra="allow" для поддержки дополнительных полей
-                try:
-                    document_items.append(DocumentItem(**mapped_item))
-                except Exception as e:
-                    # Если не удалось создать DocumentItem, пытаемся с минимальными полями
-                    logger.warning(f"Failed to create DocumentItem from {item}: {e}")
-                    # Создаем с обязательным полем name
-                    if 'name' not in mapped_item and 'tovar' in mapped_item:
-                        mapped_item['name'] = str(mapped_item.get('tovar', 'Unknown'))
-                    if 'name' not in mapped_item:
-                        mapped_item['name'] = 'Unknown'
-                    document_items.append(DocumentItem(**mapped_item))
+        for mapped_item in items_list:
+            # Используем extra="allow" для поддержки дополнительных полей
+            try:
+                document_items.append(DocumentItem(**mapped_item))
+            except Exception as e:
+                # Если не удалось создать DocumentItem, пытаемся с минимальными полями
+                logger.warning(f"Failed to create DocumentItem from {mapped_item}: {e}")
+                # Создаем с обязательным полем name
+                if 'name' not in mapped_item:
+                    mapped_item['name'] = 'Unknown'
+                document_items.append(DocumentItem(**mapped_item))
 
         # Создаем InvoiceData
         return InvoiceData(
@@ -247,147 +231,4 @@ class ApprovedDataExportService:
             items=document_items
         )
 
-    def _map_item_fields(self, item: Dict[str, Any], column_mapping: Dict[str, str]) -> Dict[str, Any]:
-        """
-        Преобразование полей item согласно column_mapping
-
-        Args:
-            item: Исходный item из line_items
-            column_mapping: Маппинг колонок (например, {"tovar": "Товар", "name": "Наименование"})
-
-        Returns:
-            Преобразованный item с нормализованными именами полей
-        """
-        mapped = {}
-
-        # Обратный маппинг: ищем нормализованные ключи по значениям column_mapping
-        reverse_mapping = {v: k for k, v in column_mapping.items()}
-
-        # Стандартные маппинги для общих полей
-        field_mappings = {
-            'tovar': 'name',
-            'product_name': 'name',
-            'product': 'name',
-            'наименование': 'name',
-            'товар': 'name',
-            'no': 'line_number',
-            'number': 'line_number',
-            'номер': 'line_number',
-            'kilkist': 'quantity',
-            'quantity': 'quantity',
-            'количество': 'quantity',
-            'tsina': 'price',
-            'price': 'price',
-            'цена': 'price',
-            'suma': 'amount',
-            'amount': 'amount',
-            'сумма': 'amount',
-            'sku': 'sku',
-            'артикул': 'sku',
-            'unit': 'unit',
-            'единица': 'unit',
-            'vat': 'vat_rate',
-            'nds': 'vat_rate',
-            'пдв': 'vat_rate',
-        }
-
-        # Преобразуем поля
-        for key, value in item.items():
-            # Пропускаем служебные поля
-            if key in ['raw', '_meta']:
-                continue
-
-            # Пытаемся найти стандартный маппинг
-            normalized_key = field_mappings.get(key.lower(), key)
-
-            # Если это уже нормализованный ключ, используем его
-            if normalized_key in ['name', 'line_number', 'quantity', 'price', 'amount', 'sku', 'unit', 'vat_rate', 'vat_amount']:
-                # Обрабатываем числовые поля
-                if normalized_key in ['quantity', 'price', 'amount', 'vat_amount']:
-                    mapped[normalized_key] = self._parse_numeric_value(value)
-                elif normalized_key == 'line_number':
-                    mapped[normalized_key] = self._parse_integer_value(value)
-                else:
-                    mapped[normalized_key] = value
-            else:
-                # Сохраняем оригинальное поле (extra="allow" позволяет это)
-                mapped[key] = value
-
-        # Убеждаемся, что есть обязательное поле name
-        if 'name' not in mapped:
-            # Пытаемся найти название товара в разных полях
-            for possible_name_field in ['tovar', 'product_name', 'product', 'наименование', 'товар']:
-                if possible_name_field in mapped:
-                    mapped['name'] = str(mapped.pop(possible_name_field))
-                    break
-
-            # Если все еще нет name, используем первое текстовое поле
-            if 'name' not in mapped:
-                for key, value in item.items():
-                    if isinstance(value, str) and value.strip() and key not in ['raw']:
-                        mapped['name'] = str(value)
-                        break
-
-            # Если совсем ничего не нашли, используем дефолтное значение
-            if 'name' not in mapped:
-                mapped['name'] = 'Unknown'
-
-        return mapped
-
-    def _parse_numeric_value(self, value: Any) -> Optional[Decimal]:
-        """
-        Парсинг числового значения из строки или числа
-
-        Args:
-            value: Значение для парсинга
-
-        Returns:
-            Decimal или None
-        """
-        if value is None:
-            return None
-
-        if isinstance(value, (int, float, Decimal)):
-            return Decimal(str(value))
-
-        if isinstance(value, str):
-            # Извлекаем число из строки (например, "2 шт" -> "2")
-            match = re.search(r'[\d.,]+', value.replace(',', '.'))
-            if match:
-                try:
-                    return Decimal(match.group().replace(',', '.'))
-                except (ValueError, TypeError):
-                    pass
-
-        return None
-
-    def _parse_integer_value(self, value: Any) -> Optional[int]:
-        """
-        Парсинг целого числа из строки или числа
-
-        Args:
-            value: Значение для парсинга
-
-        Returns:
-            int или None
-        """
-        if value is None:
-            return None
-
-        if isinstance(value, int):
-            return value
-
-        if isinstance(value, (float, Decimal)):
-            return int(value)
-
-        if isinstance(value, str):
-            # Извлекаем число из строки
-            match = re.search(r'\d+', value)
-            if match:
-                try:
-                    return int(match.group())
-                except (ValueError, TypeError):
-                    pass
-
-        return None
 

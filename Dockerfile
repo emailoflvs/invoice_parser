@@ -20,6 +20,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY src/ /app/src/
 COPY prompts/ /app/prompts/
 COPY static/ /app/static/
+COPY scripts/ /app/scripts/
+COPY alembic.ini /app/alembic.ini
+COPY alembic/ /app/alembic/
 
 # Создаём необходимые директории
 RUN mkdir -p /app/invoices /app/output /app/temp /app/logs /app/examples

@@ -27,6 +27,41 @@ class Base(DeclarativeBase):
 
 
 # ============================================================================
+# User Authentication
+# ============================================================================
+
+class User(Base):
+    """
+    User accounts for authentication.
+    """
+    __tablename__ = 'users'
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    username: Mapped[str] = mapped_column(String(100), unique=True, index=True,
+                                          comment='Unique username')
+    email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, unique=True,
+                                                 comment='User email address')
+    hashed_password: Mapped[str] = mapped_column(String(255),
+                                                 comment='Hashed password (bcrypt)')
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True,
+                                            comment='User account is active')
+    is_superuser: Mapped[bool] = mapped_column(Boolean, default=False,
+                                               comment='User has superuser privileges')
+
+    # Metadata
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now(),
+                                                  onupdate=func.now())
+    last_login: Mapped[Optional[datetime]] = mapped_column(nullable=True,
+                                                            comment='Last login timestamp')
+
+    __table_args__ = (
+        Index('ix_users_username', 'username'),
+        Index('ix_users_email', 'email'),
+    )
+
+
+# ============================================================================
 # Reference Tables (Dictionaries)
 # ============================================================================
 

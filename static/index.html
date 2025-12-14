@@ -132,31 +132,137 @@
         </div>
     </div>
 
-    <!-- Settings Modal (для токена) -->
+    <!-- Settings Modal (для токена или логина/пароля) -->
     <div class="modal" id="settingsModal">
         <div class="modal-content">
             <div class="modal-header">
                 <h3>
                     <i class="fas fa-cog"></i>
-                    Налаштування
+                    Налаштування авторизації
                 </h3>
                 <button class="modal-close" id="closeModal">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
             <div class="modal-body">
-                <div class="form-group">
-                    <label for="authToken">
+                <!-- Переключатель режима -->
+                <div class="auth-mode-switcher">
+                    <button class="mode-btn active" id="modeTokenBtn" data-mode="token">
                         <i class="fas fa-key"></i>
-                        Authorization Token
-                    </label>
-                    <input type="password" id="authToken" placeholder="Введіть токен авторизації">
-                    <small>Токен потрібен для доступу до API</small>
+                        Токен
+                    </button>
+                    <button class="mode-btn" id="modeLoginBtn" data-mode="login">
+                        <i class="fas fa-user"></i>
+                        Логін / Пароль
+                    </button>
+                </div>
+
+                <!-- Режим: Токен -->
+                <div class="auth-mode-content" id="tokenMode">
+                    <div class="form-group">
+                        <label for="authToken">
+                            <i class="fas fa-key"></i>
+                            Authorization Token
+                        </label>
+                        <div class="input-with-icon">
+                            <input type="password" id="authToken" placeholder="Введіть токен авторизації">
+                            <button type="button" class="toggle-password" id="toggleTokenVisibility">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                        <small>Токен потрібен для доступу до API</small>
+                    </div>
+                </div>
+
+                <!-- Режим: Логин / Пароль -->
+                <div class="auth-mode-content" id="loginMode" style="display: none;">
+                    <div class="form-group">
+                        <label for="loginUsername">
+                            <i class="fas fa-user"></i>
+                            Ім'я користувача
+                        </label>
+                        <input type="text" id="loginUsername" placeholder="Введіть ім'я користувача" autocomplete="username">
+                    </div>
+                    <div class="form-group">
+                        <label for="loginPassword">
+                            <i class="fas fa-lock"></i>
+                            Пароль
+                        </label>
+                        <div class="input-with-icon">
+                            <input type="password" id="loginPassword" placeholder="Введіть пароль" autocomplete="current-password">
+                            <button type="button" class="toggle-password" id="togglePasswordVisibility">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <button class="btn-link" id="registerLink" type="button">
+                            <i class="fas fa-user-plus"></i>
+                            Немає облікового запису? Зареєструватися
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Сообщения об ошибках/успехе -->
+                <div class="auth-message" id="authMessage" style="display: none;">
+                    <i class="fas" id="authMessageIcon"></i>
+                    <span id="authMessageText"></span>
                 </div>
             </div>
             <div class="modal-footer">
                 <button class="btn-secondary" id="cancelSettings">Скасувати</button>
-                <button class="btn-primary" id="saveSettings">Зберегти</button>
+                <button class="btn-primary" id="saveSettings">Увійти</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal для регистрации -->
+    <div class="modal" id="registerModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>
+                    <i class="fas fa-user-plus"></i>
+                    Реєстрація
+                </h3>
+                <button class="modal-close" id="closeRegisterModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="registerUsername">
+                        <i class="fas fa-user"></i>
+                        Ім'я користувача
+                    </label>
+                    <input type="text" id="registerUsername" placeholder="Введіть ім'я користувача" autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label for="registerEmail">
+                        <i class="fas fa-envelope"></i>
+                        Email (необов'язково)
+                    </label>
+                    <input type="email" id="registerEmail" placeholder="Введіть email" autocomplete="email">
+                </div>
+                <div class="form-group">
+                    <label for="registerPassword">
+                        <i class="fas fa-lock"></i>
+                        Пароль
+                    </label>
+                    <div class="input-with-icon">
+                        <input type="password" id="registerPassword" placeholder="Введіть пароль" autocomplete="new-password">
+                        <button type="button" class="toggle-password" id="toggleRegisterPasswordVisibility">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="auth-message" id="registerMessage" style="display: none;">
+                    <i class="fas" id="registerMessageIcon"></i>
+                    <span id="registerMessageText"></span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="cancelRegister">Скасувати</button>
+                <button class="btn-primary" id="saveRegister">Зареєструватися</button>
             </div>
         </div>
     </div>

@@ -98,9 +98,14 @@ class Config(BaseSettings):
     # Настройки Web API
     web_host: str = Field(alias="WEB_HOST", default="0.0.0.0")
     web_port: int = Field(alias="WEB_PORT", default=8000)
-    web_auth_token: str = Field(alias="WEB_AUTH_TOKEN", default="")
+    web_auth_token: str = Field(alias="WEB_AUTH_TOKEN", default="")  # Deprecated: используется JWT
     max_file_size_mb: int = Field(alias="MAX_FILE_SIZE_MB", default=50)  # Максимальный размер загружаемого файла в МБ
     reload_dirs: str = Field(alias="RELOAD_DIRS", default="")  # Директории для auto-reload (через запятую, пусто = автоматически)
+
+    # JWT settings
+    jwt_secret_key: str = Field(alias="JWT_SECRET_KEY", default="your-secret-key-change-in-production")
+    jwt_algorithm: str = Field(alias="JWT_ALGORITHM", default="HS256")
+    jwt_access_token_expire_minutes: int = Field(alias="JWT_ACCESS_TOKEN_EXPIRE_MINUTES", default=43200)  # 30 дней
 
     # Настройки Telegram Bot
     telegram_bot_token: str = Field(alias="TELEGRAM_BOT_TOKEN", default="")

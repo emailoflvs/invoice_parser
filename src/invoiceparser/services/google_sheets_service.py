@@ -8,6 +8,10 @@ from datetime import datetime, date
 from decimal import Decimal
 
 from ..core.config import Config
+from .invoice_data_transformer import InvoiceDataTransformer
+from ..exporters.excel_formatter import ExcelFormatter
+
+logger = logging.getLogger(__name__)
 
 logger = logging.getLogger(__name__)
 
@@ -116,25 +120,15 @@ class GoogleSheetsService:
             return False
 
         try:
-            # Извлечение данных
-            # Поддерживаем как старый формат (header/items), так и новый структурированный (document_info/parties/table_data)
+            # Извлечение данных с использованием общего трансформера
             header = {}
             items = []
 
             # Проверяем новый структурированный формат
             if 'document_info' in approved_data or 'parties' in approved_data or 'table_data' in approved_data:
-                # Новый формат - извлекаем данные из структурированного JSON
-                header = self._extract_header_from_structured_data(approved_data)
-
-                # Извлекаем items из table_data.line_items
-                table_data = approved_data.get('table_data', {})
-                items_raw = table_data.get('line_items', [])
-                column_mapping = table_data.get('column_mapping', {})
-
-                # Преобразуем items в стандартный формат
-                for item in items_raw:
-                    mapped_item = self._map_item_for_sheets(item, column_mapping)
-                    items.append(mapped_item)
+                # Новый формат - используем трансформер
+                header = InvoiceDataTransformer.extract_header_from_structured_data(approved_data)
+                items, _ = InvoiceDataTransformer.extract_items_from_structured_data(approved_data)
             else:
                 # Старый формат - используем header и items напрямую
                 if hasattr(approved_data.get('header'), 'model_dump'):
@@ -152,8 +146,8 @@ class GoogleSheetsService:
             # Сохраняем header в отдельный лист
             await self._save_header_sheet(header, approved_data)
 
-            # Сохраняем items в отдельный лист
-            await self._save_items_sheet(header, items)
+            # Сохраняем items в отдельный лист (передаем полные данные для форматтера)
+            await self._save_items_sheet(header, items, approved_data)
 
             return True
 
@@ -194,6 +188,7 @@ class GoogleSheetsService:
     async def _save_header_sheet(self, header: Dict[str, Any], approved_data: Dict[str, Any]):
         """
         Сохранение данных заголовка в лист "Реквизиты"
+        Использует ту же логику форматирования, что и локальный Excel
 
         Args:
             header: Данные заголовка
@@ -204,212 +199,128 @@ class GoogleSheetsService:
 
         # Проверяем, есть ли заголовки (если лист пустой, добавляем)
         existing_values = worksheet.get_all_values()
-        if not existing_values or len(existing_values) == 0:
-            # Добавляем заголовки колонок
-            worksheet.append_row(['Поле', 'Значение'])
-            # Форматируем первую строку как заголовок
-            worksheet.format('A1:B1', {
-                'backgroundColor': {'red': 0.21, 'green': 0.38, 'blue': 0.57},
-                'textFormat': {'bold': True, 'foregroundColor': {'red': 1.0, 'green': 1.0, 'blue': 1.0}}
-            })
+        is_empty = not existing_values or len(existing_values) == 0
 
-        # Подготавливаем данные для сохранения
-        rows_to_append = []
-
-        # Если есть структурированные данные, используем их
+        # Используем общий форматтер для единообразия с локальным Excel
         if 'document_info' in approved_data or 'parties' in approved_data:
-            # Информация о документе
-            doc_info = approved_data.get('document_info', {})
-            if doc_info:
-                rows_to_append.append(['Тип документа', doc_info.get('document_type', '')])
-                rows_to_append.append(['Номер документа', doc_info.get('document_number', '')])
-                rows_to_append.append(['Дата документа', doc_info.get('document_date', '')])
-                rows_to_append.append(['Дата (нормалізована)', doc_info.get('document_date_normalized', '')])
-                rows_to_append.append(['Місце складання', doc_info.get('location', '')])
-                rows_to_append.append(['Валюта', doc_info.get('currency', '')])
-                rows_to_append.append(['', ''])  # Пустая строка
-
-            # Поставщик
-            parties = approved_data.get('parties', {})
-            supplier = parties.get('supplier', {})
-            if supplier:
-                rows_to_append.append(['Постачальник', ''])
-                rows_to_append.append(['  Назва', supplier.get('name', '')])
-                rows_to_append.append(['  Адреса', supplier.get('address', '')])
-                rows_to_append.append(['  Телефон', supplier.get('phone', '')])
-                rows_to_append.append(['  ЄДРПОУ', supplier.get('tax_id', '')])
-                rows_to_append.append(['  ІПН', supplier.get('vat_id', '')])
-                rows_to_append.append(['  Номер рахунку', supplier.get('account_number', '')])
-                rows_to_append.append(['  Банк', supplier.get('bank', '')])
-                rows_to_append.append(['', ''])  # Пустая строка
-
-            # Покупатель
-            customer = parties.get('customer', {})
-            if customer:
-                rows_to_append.append(['Покупець', ''])
-                rows_to_append.append(['  Назва', customer.get('name', '')])
-                rows_to_append.append(['  Адреса', customer.get('address', '')])
-                rows_to_append.append(['  ЄДРПОУ', customer.get('tax_id', '')])
-                rows_to_append.append(['  ІПН', customer.get('vat_id', '')])
-                rows_to_append.append(['', ''])  # Пустая строка
-
-            # Договір та замовлення
-            references = approved_data.get('references', {})
-            if references:
-                rows_to_append.append(['Договір та замовлення', ''])
-                if 'contract' in references and references['contract'].get('value'):
-                    rows_to_append.append(['  Договір', references['contract']['value']])
-                if 'order' in references and references['order'].get('value'):
-                    rows_to_append.append(['  Замовлення', references['order']['value']])
-                rows_to_append.append(['', ''])  # Пустая строка
-
-            # Підсумки
-            totals = approved_data.get('totals', {})
-            if totals:
-                rows_to_append.append(['Підсумки', ''])
-                if totals.get('subtotal'):
-                    rows_to_append.append(['  Сума без ПДВ', totals.get('subtotal')])
-                if totals.get('vat'):
-                    rows_to_append.append(['  ПДВ', totals.get('vat')])
-                if totals.get('total'):
-                    rows_to_append.append(['  Всього', totals.get('total')])
+            formatted_rows = ExcelFormatter.format_header_data(approved_data)
         else:
             # Старый формат - просто выводим все поля header
+            formatted_rows = []
             for key, value in header.items():
                 if value is not None:
-                    rows_to_append.append([key, str(value)])
+                    formatted_rows.append(('FIELD', key, str(value)))
+
+        # Преобразуем форматированные строки в формат для Google Sheets
+        rows_to_append = []
+        header_added = not is_empty  # Если лист не пустой, заголовки уже есть
+        header_parts = []  # Для сбора обеих частей заголовка
+
+        for row_type, *row_data in formatted_rows:
+            if row_type == 'SECTION':
+                # Секция - в Google Sheets это одна строка с названием секции в первой колонке
+                rows_to_append.append([row_data[0], ''])
+            elif row_type == 'HEADER':
+                # Заголовки колонок - собираем обе части
+                # ExcelFormatter возвращает два отдельных HEADER: ('HEADER', 'Поле') и ('HEADER', 'Значение')
+                if is_empty and not header_added:
+                    header_parts.append(row_data[0] if row_data else '')
+                    # Когда собрали обе части, добавляем строку заголовка
+                    if len(header_parts) == 2:
+                        rows_to_append.append([header_parts[0], header_parts[1]])
+                        header_added = True
+                        header_parts = []
+            elif row_type == 'FIELD':
+                # Поле данных
+                field_name, value = row_data[0], row_data[1]
+                # Преобразуем все значения в строки для единообразия
+                rows_to_append.append([str(field_name) if field_name else '', str(value) if value else ''])
+            elif row_type == 'EMPTY':
+                # Пустая строка
+                rows_to_append.append(['', ''])
 
         if rows_to_append:
             worksheet.append_rows(rows_to_append, value_input_option='USER_ENTERED')
+
+            # Форматируем заголовки, если они были добавлены
+            if is_empty and header_added:
+                # Находим строку с заголовками (первая строка после секции "Інформація про документ")
+                header_row = 2  # После секции идет заголовок
+                header_range = f'A{header_row}:B{header_row}'
+                worksheet.format(header_range, {
+                    'backgroundColor': {'red': 0.21, 'green': 0.38, 'blue': 0.57},
+                    'textFormat': {'bold': True, 'foregroundColor': {'red': 1.0, 'green': 1.0, 'blue': 1.0}}
+                })
+
             logger.info(f"✅ Saved header data to Google Sheets (sheet: {sheet_name})")
 
-    async def _save_items_sheet(self, header: Dict[str, Any], items: List[Dict[str, Any]]):
+    async def _save_items_sheet(self, header: Dict[str, Any], items: List[Dict[str, Any]], approved_data: Dict[str, Any]):
         """
         Сохранение позиций в лист "Позиции"
+        Использует ту же логику форматирования, что и локальный Excel
 
         Args:
             header: Данные заголовка документа
-            items: Список позиций
+            items: Список позиций (уже преобразованные через трансформер)
+            approved_data: Полные данные документа (для получения column_mapping)
         """
         sheet_name = self.config.sheets_items_sheet
         worksheet = await self._get_or_create_worksheet(sheet_name)
 
         # Проверяем, есть ли заголовки (если лист пустой, добавляем)
         existing_values = worksheet.get_all_values()
-        if not existing_values or len(existing_values) == 0:
-            await self._add_items_headers(worksheet)
+        is_empty = not existing_values or len(existing_values) == 0
 
-        # Подготовка строк для вставки
-        rows_to_append = []
-
-        for item in items:
-            row = self._format_item_row(header, item)
-            rows_to_append.append(row)
-
-        if not rows_to_append:
+        if not items:
             logger.warning("No items to save to Google Sheets")
             return
 
-        # Добавляем данные в лист
-        worksheet.append_rows(rows_to_append, value_input_option='USER_ENTERED')
-        logger.info(f"✅ Saved {len(rows_to_append)} rows to Google Sheets (sheet: {sheet_name})")
+        # Используем общий форматтер для items
+        # Берем оригинальные данные из approved_data (как в локальном Excel)
+        # НЕ используем преобразованные items, а берем напрямую из table_data
+        table_data = approved_data.get('table_data', {})
+        if not table_data or 'line_items' not in table_data:
+            logger.warning("No table_data.line_items found in approved_data")
+            return
 
-    async def _add_items_headers(self, worksheet):
-        """
-        Добавление заголовков в лист позиций
+        # Используем оригинальные line_items и column_mapping из approved_data
+        data_for_formatter = {'table_data': table_data}
+        headers, rows = ExcelFormatter.format_items_data(data_for_formatter)
 
-        Args:
-            worksheet: Рабочий лист Google Sheets
-        """
-        headers = [
-            'Дата сохранения',
-            'Номер документа',
-            'Дата документа',
-            'Поставщик',
-            'ИНН поставщика',
-            'Покупатель',
-            'ИНН покупателя',
-            'Валюта',
-            'Сумма документа',
-            'НДС',
-            '№ строки',
-            'Наименование',
-            'Артикул',
-            'Единица измерения',
-            'Количество',
-            'Цена',
-            'Сумма',
-            'Ставка НДС',
-            'Сумма НДС'
-        ]
+        if not headers or not rows:
+            logger.warning("No formatted items data to save")
+            return
 
-        # Очищаем первую строку и добавляем заголовки
-        worksheet.clear()
-        worksheet.append_row(headers)
-        # Форматируем первую строку как заголовок
-        worksheet.format('A1:S1', {
-            'backgroundColor': {'red': 0.21, 'green': 0.38, 'blue': 0.57},
-            'textFormat': {'bold': True, 'foregroundColor': {'red': 1.0, 'green': 1.0, 'blue': 1.0}}
-        })
-        logger.info(f"Added headers to sheet: {worksheet.title}")
+        # Если лист пустой, добавляем заголовки
+        if is_empty:
+            worksheet.append_row(headers)
+            # Форматируем заголовки
+            import gspread.utils
+            header_range = f'A1:{gspread.utils.get_column_letter(len(headers))}1'
+            worksheet.format(header_range, {
+                'backgroundColor': {'red': 0.21, 'green': 0.38, 'blue': 0.57},
+                'textFormat': {'bold': True, 'foregroundColor': {'red': 1.0, 'green': 1.0, 'blue': 1.0}}
+            })
 
-    def _format_item_row(self, header: Dict[str, Any], item: Dict[str, Any]) -> List[Any]:
-        """
-        Форматирование строки позиции для вставки в Google Sheets
+        # Добавляем данные
+        # Преобразуем все значения в строки, чтобы избежать неправильной интерпретации типов
+        # (например, Google Sheets может интерпретировать числа как даты)
+        rows_as_strings = []
+        for row in rows:
+            row_as_strings = []
+            for value in row:
+                if value is None:
+                    row_as_strings.append('')
+                elif isinstance(value, (int, float)):
+                    # Для чисел сохраняем как строку, чтобы Google Sheets не интерпретировал их как даты
+                    row_as_strings.append(str(value))
+                else:
+                    row_as_strings.append(str(value))
+            rows_as_strings.append(row_as_strings)
 
-        Args:
-            header: Данные заголовка документа
-            item: Данные позиции
+        worksheet.append_rows(rows_as_strings, value_input_option='USER_ENTERED')
+        logger.info(f"✅ Saved {len(rows)} rows to Google Sheets (sheet: {sheet_name})")
 
-        Returns:
-            Список значений для строки
-        """
-        # Текущая дата и время сохранения
-        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
-        # Данные заголовка
-        document_number = self._safe_get(header, ['invoice_number', 'document_number'])
-        document_date = self._format_date(self._safe_get(header, ['date', 'document_date']))
-        supplier_name = self._safe_get(header, ['supplier_name'])
-        supplier_inn = self._safe_get(header, ['supplier_inn'])
-        buyer_name = self._safe_get(header, ['buyer_name'])
-        buyer_inn = self._safe_get(header, ['buyer_inn'])
-        currency = self._safe_get(header, ['currency'])
-        total_amount = self._format_decimal(self._safe_get(header, ['total_amount']))
-        total_vat = self._format_decimal(self._safe_get(header, ['total_vat']))
-
-        # Данные позиции
-        line_number = self._safe_get(item, ['line_number'])
-        name = self._safe_get(item, ['name'])
-        sku = self._safe_get(item, ['sku'])
-        unit = self._safe_get(item, ['unit'])
-        quantity = self._format_decimal(self._safe_get(item, ['quantity']))
-        price = self._format_decimal(self._safe_get(item, ['price']))
-        amount = self._format_decimal(self._safe_get(item, ['amount']))
-        vat_rate = self._safe_get(item, ['vat_rate'])
-        vat_amount = self._format_decimal(self._safe_get(item, ['vat_amount']))
-
-        return [
-            now,
-            document_number,
-            document_date,
-            supplier_name,
-            supplier_inn,
-            buyer_name,
-            buyer_inn,
-            currency,
-            total_amount,
-            total_vat,
-            line_number,
-            name,
-            sku,
-            unit,
-            quantity,
-            price,
-            amount,
-            vat_rate,
-            vat_amount
-        ]
 
     def _safe_get(self, data: Dict[str, Any], keys: List[str], default: Any = '') -> Any:
         """
@@ -473,164 +384,4 @@ class GoogleSheetsService:
         else:
             return value
 
-    def _extract_header_from_structured_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Извлечение данных заголовка из структурированного JSON
-
-        Args:
-            data: Структурированные данные документа
-
-        Returns:
-            Словарь с данными заголовка в стандартном формате
-        """
-        header = {}
-
-        # Информация о документе
-        doc_info = data.get('document_info', {})
-        header['document_number'] = doc_info.get('document_number')
-        header['date'] = doc_info.get('document_date') or doc_info.get('document_date_normalized')
-        header['currency'] = doc_info.get('currency')
-
-        # Поставщик
-        parties = data.get('parties', {})
-        supplier = parties.get('supplier', {})
-        header['supplier_name'] = supplier.get('name')
-        header['supplier_inn'] = supplier.get('tax_id') or supplier.get('vat_id')
-
-        # Покупатель
-        customer = parties.get('customer', {})
-        header['buyer_name'] = customer.get('name')
-        header['buyer_inn'] = customer.get('tax_id') or customer.get('vat_id')
-
-        # П totals
-        totals = data.get('totals', {})
-        header['total_amount'] = totals.get('total')
-        header['total_vat'] = totals.get('vat')
-
-        # Альтернативные имена для совместимости
-        header['invoice_number'] = header.get('document_number')
-        header['document_date'] = header.get('date')
-
-        return header
-
-    def _map_item_for_sheets(self, item: Dict[str, Any], column_mapping: Dict[str, str]) -> Dict[str, Any]:
-        """
-        Преобразование item из table_data в стандартный формат для Google Sheets
-
-        Args:
-            item: Исходный item из line_items
-            column_mapping: Маппинг колонок
-
-        Returns:
-            Преобразованный item
-        """
-        mapped = {}
-
-        # Стандартные маппинги
-        field_mappings = {
-            'tovar': 'name',
-            'product_name': 'name',
-            'product': 'name',
-            'наименование': 'name',
-            'товар': 'name',
-            'no': 'line_number',
-            'number': 'line_number',
-            'номер': 'line_number',
-            'kilkist': 'quantity',
-            'quantity': 'quantity',
-            'количество': 'quantity',
-            'tsina': 'price',
-            'tsina_bez_pdv': 'price',
-            'price': 'price',
-            'цена': 'price',
-            'suma': 'amount',
-            'suma_bez_pdv': 'amount',
-            'amount': 'amount',
-            'сумма': 'amount',
-            'sku': 'sku',
-            'артикул': 'sku',
-            'unit': 'unit',
-            'единица': 'unit',
-            'vat': 'vat_rate',
-            'nds': 'vat_rate',
-            'пдв': 'vat_rate',
-        }
-
-        # Преобразуем поля
-        for key, value in item.items():
-            if key in ['raw', '_meta']:
-                continue
-
-            normalized_key = field_mappings.get(key.lower(), key)
-
-            # Обрабатываем числовые поля
-            if normalized_key in ['quantity', 'price', 'amount', 'vat_amount']:
-                mapped[normalized_key] = self._parse_numeric_value(value)
-            elif normalized_key == 'line_number':
-                mapped[normalized_key] = self._parse_integer_value(value)
-            elif normalized_key in ['name', 'sku', 'unit', 'vat_rate']:
-                mapped[normalized_key] = str(value) if value is not None else None
-            else:
-                # Сохраняем оригинальное поле
-                mapped[key] = value
-
-        # Убеждаемся, что есть обязательное поле name
-        if 'name' not in mapped:
-            for possible_name_field in ['tovar', 'product_name', 'product', 'наименование', 'товар']:
-                if possible_name_field in mapped:
-                    mapped['name'] = str(mapped.pop(possible_name_field))
-                    break
-
-        if 'name' not in mapped:
-            # Ищем первое текстовое поле
-            for key, value in item.items():
-                if isinstance(value, str) and value.strip() and key not in ['raw']:
-                    mapped['name'] = str(value)
-                    break
-
-        if 'name' not in mapped:
-            mapped['name'] = 'Unknown'
-
-        return mapped
-
-    def _parse_numeric_value(self, value: Any) -> Optional[float]:
-        """Парсинг числового значения"""
-        if value is None:
-            return None
-
-        if isinstance(value, (int, float, Decimal)):
-            return float(value)
-
-        if isinstance(value, str):
-            import re
-            match = re.search(r'[\d.,]+', value.replace(',', '.'))
-            if match:
-                try:
-                    return float(match.group().replace(',', '.'))
-                except (ValueError, TypeError):
-                    pass
-
-        return None
-
-    def _parse_integer_value(self, value: Any) -> Optional[int]:
-        """Парсинг целого числа"""
-        if value is None:
-            return None
-
-        if isinstance(value, int):
-            return value
-
-        if isinstance(value, (float, Decimal)):
-            return int(value)
-
-        if isinstance(value, str):
-            import re
-            match = re.search(r'\d+', value)
-            if match:
-                try:
-                    return int(match.group())
-                except (ValueError, TypeError):
-                    pass
-
-        return None
 
