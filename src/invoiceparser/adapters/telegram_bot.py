@@ -129,7 +129,7 @@ class TelegramBot:
             f"Режим: {self.config.mode}\n"
             f"Улучшение изображений: {'✓' if self.config.enable_image_enhancement else '✗'}\n"
             f"Режим PDF: {self.config.pdf_processing_mode}\n"
-            f"Экспорт в Excel: {'✓' if self.config.export_excel_enabled else '✗'}"
+            f"Экспорт в Excel (локальный): {'✓' if self.config.export_local_excel_enabled else '✗'}"
         )
 
         await update.message.reply_text(info_text)

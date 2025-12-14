@@ -45,6 +45,8 @@ class CLIApp:
             self._handle_test(parsed_args)
         elif parsed_args.command == 'info':
             self._handle_info(parsed_args)
+        elif parsed_args.command == 'approve':
+            self._handle_approve(parsed_args)
         else:
             parser.print_help()
 
@@ -91,6 +93,20 @@ class CLIApp:
 
         # Команда info
         info_parser = subparsers.add_parser('info', help='Show configuration info')
+
+        # Команда approve
+        approve_parser = subparsers.add_parser('approve', help='Approve parsed data and export to configured formats')
+        approve_parser.add_argument(
+            '--json',
+            type=str,
+            required=True,
+            help='Path to JSON file with parsed data'
+        )
+        approve_parser.add_argument(
+            '--original-filename',
+            type=str,
+            help='Original filename (for export naming)'
+        )
 
         return parser
 
@@ -298,10 +314,84 @@ class CLIApp:
         print(f"  Max Pages: {self.config.pdf_max_pages}")
 
         print(f"\nExport:")
-        print(f"  Excel: {self.config.export_excel_enabled}")
+        print(f"  Excel (локальный): {self.config.export_local_excel_enabled}")
+        print(f"  Excel (онлайн, Google Sheets): {self.config.export_online_excel_enabled}")
         print(f"  CRM: {self.config.export_crm_enabled}")
 
         print(f"\n{'=' * 60}\n")
+
+    def _handle_approve(self, args):
+        """
+        Обработка команды approve - подтверждение данных и экспорт
+
+        Args:
+            args: Аргументы команды
+        """
+        import json
+        import asyncio
+        from pathlib import Path
+
+        json_path = Path(args.json)
+
+        if not json_path.exists():
+            print(f"✗ Error: JSON file not found: {json_path}")
+            sys.exit(1)
+
+        print(f"\n{'=' * 60}")
+        print(f"Approving data from: {json_path}")
+        print(f"{'=' * 60}\n")
+
+        try:
+            # Загружаем данные из JSON
+            with open(json_path, 'r', encoding='utf-8') as f:
+                approved_data = json.load(f)
+
+            # Получаем оригинальное имя файла
+            original_filename = args.original_filename
+            if not original_filename:
+                # Пытаемся извлечь из данных или использовать имя JSON файла
+                original_filename = approved_data.get('_meta', {}).get('source_file', json_path.stem)
+                if isinstance(original_filename, str) and '/' in original_filename:
+                    original_filename = Path(original_filename).name
+
+            print(f"Original filename: {original_filename}")
+            print(f"Exporting to configured formats...\n")
+
+            # Инициализируем сервис экспорта
+            from ..services.approved_data_export_service import ApprovedDataExportService
+            export_service = ApprovedDataExportService(self.config)
+
+            # Экспортируем данные
+            async def export():
+                results = await export_service.export_approved_data(
+                    approved_data=approved_data,
+                    original_filename=original_filename
+                )
+                return results
+
+            results = asyncio.run(export())
+
+            # Выводим результаты
+            print(f"{'=' * 60}")
+            print("Export Results:")
+            print(f"{'=' * 60}\n")
+
+            if results.get('excel', {}).get('success'):
+                print(f"✓ Local Excel exported: {results['excel']['path']}")
+            elif results.get('excel', {}).get('error'):
+                print(f"✗ Local Excel export failed: {results['excel']['error']}")
+
+            if results.get('sheets', {}).get('success'):
+                print(f"✓ Online Excel (Google Sheets) exported successfully")
+            elif results.get('sheets', {}).get('error'):
+                print(f"✗ Online Excel (Google Sheets) export failed: {results['sheets']['error']}")
+
+            print(f"\n{'=' * 60}\n")
+
+        except Exception as e:
+            print(f"\n✗ Error: {e}")
+            logger.error(f"Approve command failed: {e}", exc_info=True)
+            sys.exit(1)
 
 
 def main(args: Optional[list] = None):

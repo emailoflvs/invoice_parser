@@ -30,6 +30,7 @@ services:
       - ./logs:/app/logs
       - ./examples:/app/examples
       - ./.env:/app/.env
+      - ./google_sheets_credentials.json:/app/google_sheets_credentials.json
       # Код и ресурсы
       # ВНИМАНИЕ: volume для src/ монтируется для удобства разработки
       # Для PRODUCTION: пересоберите образ (docker compose build) перед запуском,

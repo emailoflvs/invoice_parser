@@ -16,7 +16,7 @@ from ..preprocessing.image_preprocessor import ImagePreprocessor
 from ..services.gemini_client import GeminiClient
 from ..services.post_processor import InvoicePostProcessor
 from ..exporters.json_exporter import JSONExporter
-from ..exporters.excel_exporter import ExcelExporter
+# ExcelExporter больше не используется здесь - экспорт Excel происходит только после утверждения
 from ..utils.file_ops import ensure_dir, get_file_hash
 
 logger = logging.getLogger(__name__)
@@ -50,7 +50,7 @@ class Orchestrator:
         self.gemini_client = GeminiClient(config)
         self.post_processor = InvoicePostProcessor()
         self.json_exporter = JSONExporter(config)
-        self.excel_exporter = ExcelExporter(config)
+        # ExcelExporter инициализируется в web_api.py только для утвержденных данных
 
         # Инициализация DatabaseService (ленивая загрузка)
         try:
@@ -669,7 +669,10 @@ class Orchestrator:
                 json_path = self.json_exporter.export(document_path, invoice_data, original_filename)
                 logger.info(f"Exported to JSON: {json_path}")
 
-            # Экспорт в Excel отключен (только JSON)
+            # Экспорт в Excel отключен на этапе обработки
+            # Excel экспорт происходит только после утверждения документа (в web_api.py)
+            # Это гарантирует, что в Excel попадают только утвержденные данные
+
             return json_path
 
         except Exception as e:

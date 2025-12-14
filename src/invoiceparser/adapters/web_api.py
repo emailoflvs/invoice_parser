@@ -64,6 +64,17 @@ class WebAPI:
         """
         self.config = config
         self.orchestrator = Orchestrator(config)
+
+        # Инициализация сервиса экспорта утвержденных данных
+        self.export_service = None
+        try:
+            from ..services.approved_data_export_service import ApprovedDataExportService
+            self.export_service = ApprovedDataExportService(config)
+            logger.info("ApprovedDataExportService initialized")
+        except Exception as e:
+            logger.warning(f"Failed to initialize ApprovedDataExportService: {e}")
+            self.export_service = None
+
         self.app = FastAPI(
             title="Анализ документов API",
             description="API для обработки и анализа счетов и накладных",
@@ -488,6 +499,28 @@ class WebAPI:
                         # Не падаем, файл уже сохранен
                 else:
                     logger.warning("No document_id in save request, skipping database save")
+
+                # Экспорт APPROVED данных во все включенные форматы (Excel, Google Sheets)
+                if self.export_service:
+                    try:
+                        export_results = await self.export_service.export_approved_data(
+                            approved_data=save_request.data,
+                            original_filename=save_request.original_filename
+                        )
+
+                        # Логируем результаты
+                        if export_results.get('excel', {}).get('success'):
+                            logger.info(f"✅ APPROVED data exported to Excel: {export_results['excel']['path']}")
+                        elif export_results.get('excel', {}).get('error'):
+                            logger.warning(f"Excel export failed: {export_results['excel']['error']}")
+
+                        if export_results.get('sheets', {}).get('success'):
+                            logger.info(f"✅ APPROVED data exported to Google Sheets")
+                        elif export_results.get('sheets', {}).get('error'):
+                            logger.warning(f"Google Sheets export failed: {export_results['sheets']['error']}")
+                    except Exception as e:
+                        logger.error(f"Failed to export APPROVED data: {e}", exc_info=True)
+                        # Не падаем, данные уже сохранены в файл и БД
 
                 return SaveResponse(
                     success=True,

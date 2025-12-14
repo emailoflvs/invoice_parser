@@ -37,12 +37,17 @@ class ExcelExporter:
         output_path = self.output_dir / f"{filename_base}.xlsx"
 
         wb = Workbook()
-        if 'Sheet' in wb.sheetnames:
-            wb.remove(wb['Sheet'])
+        # Удаляем стандартный лист если он существует
+        default_sheet_name = self.config.excel_default_sheet_name
+        if default_sheet_name in wb.sheetnames:
+            wb.remove(wb[default_sheet_name])
 
         # Header sheet
-        ws1 = wb.create_sheet("Реквизиты")
-        ws1['A1'], ws1['B1'] = "Поле", "Значение"
+        header_sheet_name = self.config.excel_sheet_header_name
+        ws1 = wb.create_sheet(header_sheet_name)
+        field_column = self.config.excel_header_field_column
+        value_column = self.config.excel_header_value_column
+        ws1['A1'], ws1['B1'] = field_column, value_column
         header_dict = invoice_data.header.model_dump()
         row = 2
         for key, value in header_dict.items():
@@ -51,7 +56,8 @@ class ExcelExporter:
             row += 1
 
         # Items sheet
-        ws2 = wb.create_sheet("Позиции")
+        items_sheet_name = self.config.excel_sheet_items_name
+        ws2 = wb.create_sheet(items_sheet_name)
         if invoice_data.items:
             headers = list(invoice_data.items[0].model_dump().keys())
             for col_idx, header in enumerate(headers, start=1):

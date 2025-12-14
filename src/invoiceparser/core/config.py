@@ -70,8 +70,30 @@ class Config(BaseSettings):
     pdf_text_threshold: int = Field(alias="PDF_TEXT_THRESHOLD")
 
     # Настройки экспорта
-    export_excel_enabled: bool = Field(alias="EXPORT_EXCEL_ENABLED")
+    export_local_excel_enabled: bool = Field(alias="EXPORT_LOCAL_EXCEL_ENABLED")
     export_crm_enabled: bool = Field(alias="EXPORT_CRM_ENABLED")
+
+    # Настройки Excel экспорта
+    excel_sheet_header_name: str = Field(
+        alias="EXCEL_SHEET_HEADER_NAME",
+        default="Реквизиты"
+    )  # Название листа для реквизитов документа
+    excel_sheet_items_name: str = Field(
+        alias="EXCEL_SHEET_ITEMS_NAME",
+        default="Позиции"
+    )  # Название листа для позиций документа
+    excel_header_field_column: str = Field(
+        alias="EXCEL_HEADER_FIELD_COLUMN",
+        default="Поле"
+    )  # Название колонки для полей в листе реквизитов
+    excel_header_value_column: str = Field(
+        alias="EXCEL_HEADER_VALUE_COLUMN",
+        default="Значение"
+    )  # Название колонки для значений в листе реквизитов
+    excel_default_sheet_name: str = Field(
+        alias="EXCEL_DEFAULT_SHEET_NAME",
+        default="Sheet"
+    )  # Название стандартного листа openpyxl для удаления
 
     # Настройки Web API
     web_host: str = Field(alias="WEB_HOST", default="0.0.0.0")
@@ -143,6 +165,24 @@ class Config(BaseSettings):
         alias="API_RETRY_MAX_WAIT",
         default=10
     )  # Максимальная задержка между попытками (секунды)
+
+    # Google Sheets (Online Excel) settings
+    export_online_excel_enabled: bool = Field(
+        alias="EXPORT_ONLINE_EXCEL_ENABLED",
+        default=False
+    )  # Включить экспорт в Google Sheets (онлайн Excel)
+    sheets_spreadsheet_id: str = Field(
+        alias="SHEETS_SPREADSHEET_ID",
+        default=""
+    )  # ID Google Spreadsheet
+    sheets_credentials_path: str = Field(
+        alias="SHEETS_CREDENTIALS_PATH",
+        default=""
+    )  # Путь к JSON файлу с credentials для Google Sheets API
+    sheets_items_sheet: str = Field(
+        alias="SHEETS_ITEMS_SHEET",
+        default="Gemini"
+    )  # Название листа для сохранения позиций
 
     @classmethod
     def load(cls) -> "Config":
