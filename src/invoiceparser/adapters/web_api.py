@@ -328,14 +328,14 @@ class WebAPI:
                             status_code=400,
                             detail="Password is too long (maximum 72 bytes)"
                         )
-                    
+
                     # Validate username
                     if not register_request.username or len(register_request.username.strip()) == 0:
                         raise HTTPException(
                             status_code=400,
                             detail="Username cannot be empty"
                         )
-                    
+
                     # Check if user already exists
                     existing_user = await get_user_by_username(session, register_request.username)
                     if existing_user:
@@ -365,7 +365,7 @@ class WebAPI:
                             status_code=500,
                             detail="Failed to process password"
                         )
-                    
+
                     new_user = User(
                         username=register_request.username.strip(),
                         email=register_request.email.strip() if register_request.email else None,
@@ -708,6 +708,28 @@ class WebAPI:
                         "message": f"Не удалось сохранить данные: {str(e)}"
                     }
                 )
+
+        @self.app.get("/login.html")
+        async def login_page():
+            """Страница входа"""
+            static_dir = Path(__file__).parent.parent.parent.parent / "static"
+            login_file = static_dir / "login.html"
+
+            if not login_file.exists():
+                raise HTTPException(status_code=404, detail="Login page not found")
+
+            with open(login_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+            return Response(
+                content=content,
+                media_type="text/html",
+                headers={
+                    "Cache-Control": "no-cache, no-store, must-revalidate",
+                    "Pragma": "no-cache",
+                    "Expires": "0"
+                }
+            )
 
         @self.app.get("/")
         async def root():

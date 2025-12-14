@@ -40,39 +40,8 @@ const elements = {
     backBtn: document.getElementById('backBtn'),
     saveAndContinueBtn: document.getElementById('saveAndContinueBtn'),
 
-    settingsBtn: document.getElementById('settingsBtn'),
-    settingsModal: document.getElementById('settingsModal'),
-    closeModal: document.getElementById('closeModal'),
-    cancelSettings: document.getElementById('cancelSettings'),
-    saveSettings: document.getElementById('saveSettings'),
-    authTokenInput: document.getElementById('authToken'),
-
-    // Новые элементы для логина/пароля
-    modeTokenBtn: document.getElementById('modeTokenBtn'),
-    modeLoginBtn: document.getElementById('modeLoginBtn'),
-    tokenMode: document.getElementById('tokenMode'),
-    loginMode: document.getElementById('loginMode'),
-    loginUsername: document.getElementById('loginUsername'),
-    loginPassword: document.getElementById('loginPassword'),
-    toggleTokenVisibility: document.getElementById('toggleTokenVisibility'),
-    togglePasswordVisibility: document.getElementById('togglePasswordVisibility'),
-    registerLink: document.getElementById('registerLink'),
-    authMessage: document.getElementById('authMessage'),
-    authMessageIcon: document.getElementById('authMessageIcon'),
-    authMessageText: document.getElementById('authMessageText'),
-
-    // Элементы регистрации
-    registerModal: document.getElementById('registerModal'),
-    closeRegisterModal: document.getElementById('closeRegisterModal'),
-    cancelRegister: document.getElementById('cancelRegister'),
-    saveRegister: document.getElementById('saveRegister'),
-    registerUsername: document.getElementById('registerUsername'),
-    registerEmail: document.getElementById('registerEmail'),
-    registerPassword: document.getElementById('registerPassword'),
-    toggleRegisterPasswordVisibility: document.getElementById('toggleRegisterPasswordVisibility'),
-    registerMessage: document.getElementById('registerMessage'),
-    registerMessageIcon: document.getElementById('registerMessageIcon'),
-    registerMessageText: document.getElementById('registerMessageText')
+    logoutBtn: document.getElementById('logoutBtn'),
+    authWarning: document.getElementById('authWarning')
 };
 
 // Загрузка правил интерфейса
@@ -110,19 +79,19 @@ async function loadConfig() {
 
 // Инициализация
 async function init() {
+    // Проверяем авторизацию - если нет токена, перенаправляем на страницу входа
+    if (!state.authToken) {
+        window.location.href = '/login.html';
+        return;
+    }
+
     // Загружаем конфигурацию и правила интерфейса
     await Promise.all([loadConfig(), loadInterfaceRules()]);
 
     setupEventListeners();
 
-    // Проверяем токен при загрузке
-    if (!state.authToken) {
-        showModal();
-        disableFileUpload(); // Блокируем загрузку файлов до авторизации
-    } else {
-        elements.authTokenInput.value = state.authToken;
-        enableFileUpload(); // Разрешаем загрузку файлов
-    }
+    // Токен есть, разрешаем загрузку файлов
+    enableFileUpload();
 }
 
 // Настройка обработчиков событий
@@ -158,149 +127,12 @@ function setupEventListeners() {
     elements.backBtn.addEventListener('click', resetApp);
     elements.saveAndContinueBtn.addEventListener('click', saveAndContinue);
 
-    // Settings
-    elements.settingsBtn.addEventListener('click', showModal);
-    elements.closeModal.addEventListener('click', hideModal);
-    elements.cancelSettings.addEventListener('click', hideModal);
-    elements.saveSettings.addEventListener('click', saveSettings);
-
-    // Modal backdrop click
-    elements.settingsModal.addEventListener('click', (e) => {
-        if (e.target === elements.settingsModal) {
-            hideModal();
-        }
-    });
-
-    // Переключение режима авторизации
-    if (elements.modeTokenBtn) {
-        elements.modeTokenBtn.addEventListener('click', () => switchAuthMode('token'));
-    }
-    if (elements.modeLoginBtn) {
-        elements.modeLoginBtn.addEventListener('click', () => switchAuthMode('login'));
-    }
-
-    // Переключение видимости паролей
-    if (elements.toggleTokenVisibility) {
-        elements.toggleTokenVisibility.addEventListener('click', () => {
-            const type = elements.authTokenInput.type === 'password' ? 'text' : 'password';
-            elements.authTokenInput.type = type;
-            const icon = elements.toggleTokenVisibility.querySelector('i');
-            icon.classList.toggle('fa-eye');
-            icon.classList.toggle('fa-eye-slash');
-        });
-    }
-
-    if (elements.togglePasswordVisibility) {
-        elements.togglePasswordVisibility.addEventListener('click', () => {
-            const type = elements.loginPassword.type === 'password' ? 'text' : 'password';
-            elements.loginPassword.type = type;
-            const icon = elements.togglePasswordVisibility.querySelector('i');
-            icon.classList.toggle('fa-eye');
-            icon.classList.toggle('fa-eye-slash');
-        });
-    }
-
-    if (elements.toggleRegisterPasswordVisibility) {
-        elements.toggleRegisterPasswordVisibility.addEventListener('click', () => {
-            const type = elements.registerPassword.type === 'password' ? 'text' : 'password';
-            elements.registerPassword.type = type;
-            const icon = elements.toggleRegisterPasswordVisibility.querySelector('i');
-            icon.classList.toggle('fa-eye');
-            icon.classList.toggle('fa-eye-slash');
-        });
-    }
-
-    // Ссылка на регистрацию
-    if (elements.registerLink) {
-        elements.registerLink.addEventListener('click', () => {
-            hideModal();
-            showRegisterModal();
-        });
-    }
-
-    // Модальное окно регистрации
-    if (elements.closeRegisterModal) {
-        elements.closeRegisterModal.addEventListener('click', hideRegisterModal);
-    }
-    if (elements.cancelRegister) {
-        elements.cancelRegister.addEventListener('click', hideRegisterModal);
-    }
-    if (elements.saveRegister) {
-        elements.saveRegister.addEventListener('click', handleRegister);
-    }
-
-    // Обработка Enter в формах
-    if (elements.loginPassword) {
-        elements.loginPassword.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                saveSettings();
-            }
-        });
-    }
-    if (elements.registerPassword) {
-        elements.registerPassword.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                handleRegister();
-            }
-        });
-    }
-
-    // Закрытие модального окна регистрации по клику вне его
-    if (elements.registerModal) {
-        elements.registerModal.addEventListener('click', (e) => {
-            if (e.target === elements.registerModal) {
-                hideRegisterModal();
-            }
-        });
+    // Logout
+    if (elements.logoutBtn) {
+        elements.logoutBtn.addEventListener('click', handleLogout);
     }
 }
 
-// Показать модальное окно регистрации
-function showRegisterModal() {
-    elements.registerModal.classList.add('active');
-    elements.registerUsername.focus();
-}
-
-// Обработка регистрации
-async function handleRegister() {
-    const username = elements.registerUsername.value.trim();
-    const email = elements.registerEmail.value.trim();
-    const password = elements.registerPassword.value.trim();
-
-    if (!username || !password) {
-        showRegisterMessage('Будь ласка, заповніть всі обов\'язкові поля', true);
-        return;
-    }
-
-    // Показываем загрузку
-    elements.saveRegister.disabled = true;
-    elements.saveRegister.textContent = 'Реєстрація...';
-    clearRegisterMessages();
-
-    const result = await registerUser(username, email || null, password);
-
-    elements.saveRegister.disabled = false;
-    elements.saveRegister.textContent = 'Зареєструватися';
-
-    if (result.success) {
-        showRegisterMessage('Реєстрація успішна! Виконується вхід...', false);
-
-        // Автоматически входим после регистрации
-        setTimeout(async () => {
-            const loginResult = await loginWithCredentials(username, password);
-            if (loginResult.success) {
-                hideRegisterModal();
-                showToast('Реєстрація та вхід виконано успішно');
-                // Активируем загрузку файлов после авторизации
-                enableFileUpload();
-            } else {
-                showRegisterMessage('Реєстрація успішна, але вхід не вдався. Спробуйте увійти вручну.', true);
-            }
-        }, 1000);
-    } else {
-        showRegisterMessage(result.error || 'Помилка реєстрації', true);
-    }
-}
 
 // File handling
 function handleDragOver(e) {
@@ -383,7 +215,7 @@ function showAuthRequiredMessage() {
     showToast('Будь ласка, спочатку увійдіть в систему', true);
     // Автоматически открываем модальное окно авторизации
     setTimeout(() => {
-        showModal();
+                window.location.href = '/login.html';
     }, 500);
 }
 
@@ -467,7 +299,7 @@ async function parseDocument(mode = 'detailed') {
     }
 
     if (!state.authToken) {
-        showModal();
+                window.location.href = '/login.html';
         return;
     }
 
@@ -499,9 +331,11 @@ async function parseDocument(mode = 'detailed') {
             let userMessage = '';
 
             if (response.status === 401) {
-                userMessage = '🔐 Невірна авторизація. Перевірте токен в налаштуваннях.';
-                // Открываем модальное окно настроек
-                setTimeout(() => showModal(), 1000);
+                userMessage = '🔐 Невірна авторизація. Будь ласка, увійдіть знову.';
+                // Перенаправляем на страницу входа
+                setTimeout(() => {
+                    window.location.href = '/login.html';
+                }, 2000);
             } else if (errorInfo.error_code) {
                 // Новый формат с кодами ошибок
                 const code = errorInfo.error_code;
@@ -655,202 +489,19 @@ function resetApp() {
     showSection('upload');
 }
 
-// Settings modal
-function showModal() {
-    elements.settingsModal.classList.add('active');
-    // Показываем режим токена по умолчанию
-    switchAuthMode('token');
-    if (state.authToken) {
-        elements.authTokenInput.value = state.authToken;
-    }
-    elements.authTokenInput.focus();
-}
+// Выход из системы
+function handleLogout() {
+    if (confirm('Ви впевнені, що хочете вийти з системи?')) {
+        // Удаляем токен
+        state.authToken = '';
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('rememberMe');
 
-function hideModal() {
-    elements.settingsModal.classList.remove('active');
-    clearAuthMessages();
-}
-
-function hideRegisterModal() {
-    elements.registerModal.classList.remove('active');
-    clearRegisterMessages();
-}
-
-// Переключение режима авторизации
-function switchAuthMode(mode) {
-    // Обновляем кнопки
-    elements.modeTokenBtn.classList.toggle('active', mode === 'token');
-    elements.modeLoginBtn.classList.toggle('active', mode === 'login');
-
-    // Показываем/скрываем соответствующие формы
-    elements.tokenMode.style.display = mode === 'token' ? 'block' : 'none';
-    elements.loginMode.style.display = mode === 'login' ? 'block' : 'none';
-
-    // Обновляем текст кнопки
-    elements.saveSettings.textContent = mode === 'token' ? 'Зберегти' : 'Увійти';
-
-    clearAuthMessages();
-}
-
-// Показать сообщение об авторизации
-function showAuthMessage(text, isError = false) {
-    elements.authMessage.style.display = 'flex';
-    elements.authMessageIcon.className = `fas ${isError ? 'fa-exclamation-circle' : 'fa-check-circle'}`;
-    elements.authMessageText.textContent = text;
-    elements.authMessage.className = `auth-message ${isError ? 'error' : 'success'}`;
-}
-
-function clearAuthMessages() {
-    elements.authMessage.style.display = 'none';
-    elements.authMessageText.textContent = '';
-}
-
-function showRegisterMessage(text, isError = false) {
-    elements.registerMessage.style.display = 'flex';
-    elements.registerMessageIcon.className = `fas ${isError ? 'fa-exclamation-circle' : 'fa-check-circle'}`;
-    elements.registerMessageText.textContent = text;
-    elements.registerMessage.className = `auth-message ${isError ? 'error' : 'success'}`;
-}
-
-function clearRegisterMessages() {
-    elements.registerMessage.style.display = 'none';
-    elements.registerMessageText.textContent = '';
-}
-
-// Вход по логину/паролю
-async function loginWithCredentials(username, password) {
-    try {
-        const response = await fetch('/api/auth/login', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ username, password })
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-            throw new Error(data.detail || 'Помилка входу');
-        }
-
-        // Сохраняем токен
-        const token = data.access_token;
-        state.authToken = token;
-        localStorage.setItem('authToken', token);
-
-        return { success: true, token };
-    } catch (error) {
-        return { success: false, error: error.message };
+        // Перенаправляем на страницу входа
+        window.location.href = '/login.html';
     }
 }
 
-// Регистрация нового пользователя
-async function registerUser(username, email, password) {
-    try {
-        const response = await fetch('/api/auth/register', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                username,
-                email: email || null,
-                password
-            })
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-            throw new Error(data.detail || 'Помилка реєстрації');
-        }
-
-        return { success: true, data };
-    } catch (error) {
-        return { success: false, error: error.message };
-    }
-}
-
-function saveSettings() {
-    const currentMode = elements.modeTokenBtn.classList.contains('active') ? 'token' : 'login';
-
-    if (currentMode === 'token') {
-        // Режим токена
-        const token = elements.authTokenInput.value.trim();
-        if (!token) {
-            showAuthMessage('Будь ласка, введіть токен авторизації', true);
-            return;
-        }
-
-        state.authToken = token;
-        localStorage.setItem('authToken', token);
-        hideModal();
-        showToast('Токен збережено');
-        // Активируем загрузку файлов после авторизации
-        enableFileUpload();
-    } else {
-        // Режим логина/пароля
-        const username = elements.loginUsername.value.trim();
-        const password = elements.loginPassword.value.trim();
-
-        if (!username || !password) {
-            showAuthMessage('Будь ласка, введіть ім\'я користувача та пароль', true);
-            return;
-        }
-
-        // Показываем загрузку
-        elements.saveSettings.disabled = true;
-        elements.saveSettings.textContent = 'Вхід...';
-        showAuthMessage('Виконується вхід...', false);
-
-        loginWithCredentials(username, password).then(result => {
-            elements.saveSettings.disabled = false;
-            elements.saveSettings.textContent = 'Увійти';
-
-            if (result.success) {
-                showAuthMessage('Успішний вхід!', false);
-                setTimeout(() => {
-                    hideModal();
-                    showToast('Вхід виконано успішно');
-                    // Активируем загрузку файлов после авторизации
-                    enableFileUpload();
-                }, 1000);
-            } else {
-                showAuthMessage(result.error || 'Помилка входу', true);
-            }
-        });
-    }
-}
-
-// Keyboard shortcuts
-document.addEventListener('keydown', (e) => {
-    // ESC to close modal
-    if (e.key === 'Escape') {
-        if (elements.settingsModal.classList.contains('active')) {
-            hideModal();
-        }
-        if (elements.registerModal && elements.registerModal.classList.contains('active')) {
-            hideRegisterModal();
-        }
-    }
-
-    // Enter to save settings (только если фокус в модальном окне)
-    if (e.key === 'Enter') {
-        if (elements.settingsModal.classList.contains('active') &&
-            (document.activeElement === elements.authTokenInput ||
-             document.activeElement === elements.loginUsername ||
-             document.activeElement === elements.loginPassword)) {
-            saveSettings();
-        }
-        if (elements.registerModal && elements.registerModal.classList.contains('active') &&
-            (document.activeElement === elements.registerUsername ||
-             document.activeElement === elements.registerEmail ||
-             document.activeElement === elements.registerPassword)) {
-            handleRegister();
-        }
-    }
-});
 
 // Field label mappings (Russian labels for fields)
 const fieldLabels = {
@@ -1666,7 +1317,7 @@ async function saveAndContinue() {
     }
 
     if (!state.authToken) {
-        showModal();
+                window.location.href = '/login.html';
         return;
     }
 
