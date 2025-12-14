@@ -118,15 +118,24 @@ async function init() {
     // Проверяем токен при загрузке
     if (!state.authToken) {
         showModal();
+        disableFileUpload(); // Блокируем загрузку файлов до авторизации
     } else {
         elements.authTokenInput.value = state.authToken;
+        enableFileUpload(); // Разрешаем загрузку файлов
     }
 }
 
 // Настройка обработчиков событий
 function setupEventListeners() {
     // Upload area
-    elements.uploadArea.addEventListener('click', () => elements.fileInput.click());
+    elements.uploadArea.addEventListener('click', () => {
+        // Проверяем авторизацию перед открытием диалога выбора файла
+        if (!state.authToken) {
+            showAuthRequiredMessage();
+            return;
+        }
+        elements.fileInput.click();
+    });
     elements.uploadArea.addEventListener('dragover', handleDragOver);
     elements.uploadArea.addEventListener('dragleave', handleDragLeave);
     elements.uploadArea.addEventListener('drop', handleDrop);
@@ -282,6 +291,8 @@ async function handleRegister() {
             if (loginResult.success) {
                 hideRegisterModal();
                 showToast('Реєстрація та вхід виконано успішно');
+                // Активируем загрузку файлов после авторизации
+                enableFileUpload();
             } else {
                 showRegisterMessage('Реєстрація успішна, але вхід не вдався. Спробуйте увійти вручну.', true);
             }
@@ -294,6 +305,11 @@ async function handleRegister() {
 // File handling
 function handleDragOver(e) {
     e.preventDefault();
+    // Проверяем авторизацию перед drag over
+    if (!state.authToken) {
+        showAuthRequiredMessage();
+        return;
+    }
     elements.uploadArea.classList.add('drag-over');
 }
 
@@ -306,6 +322,12 @@ function handleDrop(e) {
     e.preventDefault();
     elements.uploadArea.classList.remove('drag-over');
 
+    // Проверяем авторизацию перед drop
+    if (!state.authToken) {
+        showAuthRequiredMessage();
+        return;
+    }
+
     const files = e.dataTransfer.files;
     if (files.length > 0) {
         handleFile(files[0]);
@@ -313,6 +335,13 @@ function handleDrop(e) {
 }
 
 function handleFileSelect(e) {
+    // Проверяем авторизацию перед выбором файла
+    if (!state.authToken) {
+        e.target.value = ''; // Очищаем выбор
+        showAuthRequiredMessage();
+        return;
+    }
+
     const files = e.target.files;
     if (files.length > 0) {
         handleFile(files[0]);
@@ -320,6 +349,12 @@ function handleFileSelect(e) {
 }
 
 function handleFile(file) {
+    // Проверка авторизации перед обработкой файла
+    if (!state.authToken) {
+        showAuthRequiredMessage();
+        return;
+    }
+
     // Проверка типа файла
     const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/tiff', 'image/bmp'];
     const allowedExtensions = ['.pdf', '.jpg', '.jpeg', '.png', '.tiff', '.bmp'];
@@ -341,6 +376,15 @@ function handleFile(file) {
     state.selectedFile = file;
     state.originalFilename = file.name;
     displayFileInfo(file);
+}
+
+// Показать сообщение о необходимости авторизации
+function showAuthRequiredMessage() {
+    showToast('Будь ласка, спочатку увійдіть в систему', true);
+    // Автоматически открываем модальное окно авторизации
+    setTimeout(() => {
+        showModal();
+    }, 500);
 }
 
 function displayFileInfo(file) {
@@ -369,6 +413,42 @@ function removeFile() {
         elements.parseDetailedBtn.disabled = true;
     }
     elements.fileInput.value = '';
+}
+
+// Включить/выключить загрузку файлов в зависимости от авторизации
+function enableFileUpload() {
+    if (state.authToken) {
+        // Разрешаем загрузку
+        elements.uploadArea.style.pointerEvents = 'auto';
+        elements.uploadArea.style.opacity = '1';
+        elements.uploadArea.style.cursor = 'pointer';
+        elements.fileInput.disabled = false;
+        // Скрываем предупреждение
+        const authWarning = document.getElementById('authWarning');
+        if (authWarning) {
+            authWarning.style.display = 'none';
+        }
+    } else {
+        // Блокируем загрузку
+        disableFileUpload();
+    }
+}
+
+// Отключить загрузку файлов (при выходе)
+function disableFileUpload() {
+    elements.uploadArea.style.pointerEvents = 'none';
+    elements.uploadArea.style.opacity = '0.6';
+    elements.uploadArea.style.cursor = 'not-allowed';
+    elements.fileInput.disabled = true;
+    // Показываем предупреждение
+    const authWarning = document.getElementById('authWarning');
+    if (authWarning) {
+        authWarning.style.display = 'block';
+    }
+    // Удаляем выбранный файл, если есть
+    if (state.selectedFile) {
+        removeFile();
+    }
 }
 
 function formatFileSize(bytes) {
@@ -707,6 +787,8 @@ function saveSettings() {
         localStorage.setItem('authToken', token);
         hideModal();
         showToast('Токен збережено');
+        // Активируем загрузку файлов после авторизации
+        enableFileUpload();
     } else {
         // Режим логина/пароля
         const username = elements.loginUsername.value.trim();
@@ -731,6 +813,8 @@ function saveSettings() {
                 setTimeout(() => {
                     hideModal();
                     showToast('Вхід виконано успішно');
+                    // Активируем загрузку файлов после авторизации
+                    enableFileUpload();
                 }, 1000);
             } else {
                 showAuthMessage(result.error || 'Помилка входу', true);

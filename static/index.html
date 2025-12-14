@@ -30,9 +30,12 @@
                 </div>
                 <h2>Завантажте документ</h2>
                 <p class="upload-description">Підтримувані формати: PDF, JPG, JPEG, PNG, TIFF, BMP</p>
+                <p class="upload-warning" id="authWarning" style="display: none; color: #ef4444; margin-top: 10px; font-size: 0.9rem;">
+                    <i class="fas fa-lock"></i> Для завантаження документів потрібна авторизація
+                </p>
 
                 <div class="upload-area" id="uploadArea">
-                    <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png,.tiff,.bmp" hidden>
+                    <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png,.tiff,.bmp" hidden disabled>
                     <div class="upload-content">
                         <i class="fas fa-file-upload"></i>
                         <p>Перетягніть файл сюди або <span class="browse-link">виберіть файл</span></p>
