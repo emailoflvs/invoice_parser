@@ -130,11 +130,17 @@ class ApprovedDataExportService:
             invoice_data_model = self._convert_to_invoice_data(approved_data)
 
             # Создаем путь для экспорта (используем оригинальное имя файла)
+            # original_filename уже содержит правильное имя без расширения (например: invoice_755_web_14121807)
             if original_filename:
-                original_path = Path(original_filename)
+                # Убираем расширение, если есть, и добавляем .xlsx
+                # original_filename уже содержит полный формат: invoice_755_web_14121807
+                original_stem = Path(original_filename).stem
+                original_path = Path(f"{original_stem}.xlsx")
             else:
-                # Генерируем имя на основе данных
-                document_number = approved_data.get('header', {}).get('invoice_number') or \
+                # Fallback: генерируем имя на основе данных
+                doc_info = approved_data.get('document_info', {}) if isinstance(approved_data, dict) else {}
+                document_number = doc_info.get('document_number') or doc_info.get('invoice_number') or \
+                                approved_data.get('header', {}).get('invoice_number') or \
                                 approved_data.get('header', {}).get('document_number') or \
                                 'document'
                 original_path = Path(f"{document_number}.xlsx")

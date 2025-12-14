@@ -183,7 +183,7 @@ class EmailPoller:
             for attachment_path in attachments:
                 try:
                     import asyncio
-                    result = asyncio.run(self.orchestrator.process_document(attachment_path))
+                    result = asyncio.run(self.orchestrator.process_document(attachment_path, source="email"))
 
                     if result["success"]:
                         logger.info(f"Successfully processed: {attachment_path}")

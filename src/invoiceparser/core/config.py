@@ -111,6 +111,16 @@ class Config(BaseSettings):
     telegram_bot_token: str = Field(alias="TELEGRAM_BOT_TOKEN", default="")
     telegram_allowed_user_ids: str = Field(alias="TELEGRAM_ALLOWED_USER_IDS", default="")
 
+    # Настройки Email Poller
+    email_host: str = Field(alias="EMAIL_HOST", default="")
+    email_port: int = Field(alias="EMAIL_PORT", default=993)
+    email_use_ssl: bool = Field(alias="EMAIL_USE_SSL", default=True)
+    email_login: str = Field(alias="EMAIL_LOGIN", default="")
+    email_password: str = Field(alias="EMAIL_PASSWORD", default="")
+    email_allowed_senders: str = Field(alias="EMAIL_ALLOWED_SENDERS", default="")
+    email_poll_interval: int = Field(alias="EMAIL_POLL_INTERVAL", default=300)  # 5 минут
+    email_poll_retry_delay: int = Field(alias="EMAIL_POLL_RETRY_DELAY", default=60)  # 1 минута
+
     # Database settings
     database_url: str = Field(
         alias="DATABASE_URL",

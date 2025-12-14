@@ -218,6 +218,23 @@ def setup_env():
         'PROMPT_HEADER_PATH',
         'PROMPT_ITEMS_PATH',
         'PROMPT_ITEMS_HEADER',
+        'TELEGRAM_BOT_TOKEN',
+        'TELEGRAM_ALLOWED_USER_IDS',
+        # Email settings
+        'EMAIL_HOST',
+        'EMAIL_PORT',
+        'EMAIL_USE_SSL',
+        'EMAIL_LOGIN',
+        'EMAIL_PASSWORD',
+        'EMAIL_ALLOWED_SENDERS',
+        'EMAIL_POLL_INTERVAL',
+        'EMAIL_POLL_RETRY_DELAY',
+        # Google Sheets
+        'SHEETS_SPREADSHEET_ID',
+        'SHEETS_CREDENTIALS_PATH',
+        'SHEETS_HEADER_SHEET',
+        'SHEETS_ITEMS_SHEET',
+        'EXPORT_ONLINE_EXCEL_ENABLED',
     ]
 
     for key in important_keys:

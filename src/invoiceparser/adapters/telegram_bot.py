@@ -185,8 +185,14 @@ class TelegramBot:
 
             logger.info(f"Received document from user {user_id}: {file_name}")
 
-            # Обработка документа
-            result = await self.orchestrator.process_document(tmp_path)
+            # Обработка документа (передаем original_filename, mode и source)
+            # Используем режим "detailed" по умолчанию для Telegram (как в веб-форме)
+            result = await self.orchestrator.process_document(
+                tmp_path,
+                original_filename=file_name,
+                mode="detailed",
+                source="telegram"
+            )
 
             # Очистка временного файла
             tmp_path.unlink(missing_ok=True)
@@ -195,14 +201,36 @@ class TelegramBot:
             if result["success"]:
                 data = result["data"]
 
+                # Извлекаем данные из dict структуры
+                # Структура: document_info, parties, table_data, totals
+                doc_info = data.get("document_info", {}) if isinstance(data, dict) else {}
+                parties = data.get("parties", {}) if isinstance(data, dict) else {}
+                table_data = data.get("table_data", {}) if isinstance(data, dict) else {}
+                totals = data.get("totals", {}) if isinstance(data, dict) else {}
+
+                # Извлекаем информацию о документе
+                invoice_number = doc_info.get("document_number") or doc_info.get("invoice_number") or "N/A"
+                date = doc_info.get("document_date") or doc_info.get("date") or "N/A"
+
+                # Извлекаем информацию о поставщике
+                supplier = parties.get("supplier", {}) if isinstance(parties, dict) else {}
+                supplier_name = supplier.get("name") if isinstance(supplier, dict) else "N/A"
+
+                # Извлекаем сумму
+                total_amount = totals.get("total_amount") or totals.get("total") or totals.get("total_with_vat") or "N/A"
+
+                # Извлекаем позиции
+                line_items = table_data.get("line_items", []) if isinstance(table_data, dict) else []
+                items_count = len(line_items) if isinstance(line_items, list) else 0
+
                 # Формирование ответа
                 response_text = (
                     "✅ Документ обработан успешно!\n\n"
-                    f"📋 Номер счета: {data.header.invoice_number}\n"
-                    f"📅 Дата: {data.header.date}\n"
-                    f"🏢 Поставщик: {data.header.supplier_name}\n"
-                    f"💰 Сумма: {data.header.total_amount}\n"
-                    f"📦 Позиций: {len(data.items)}"
+                    f"📋 Номер счета: {invoice_number}\n"
+                    f"📅 Дата: {date}\n"
+                    f"🏢 Поставщик: {supplier_name}\n"
+                    f"💰 Сумма: {total_amount}\n"
+                    f"📦 Позиций: {items_count}"
                 )
 
                 await status_message.edit_text(response_text)
@@ -214,7 +242,7 @@ class TelegramBot:
 
                 await update.message.reply_document(
                     document=json_str.encode('utf-8'),
-                    filename=f"{data.header.invoice_number or 'result'}.json",
+                    filename=f"{invoice_number or 'result'}.json",
                     caption="📄 Полные данные в JSON"
                 )
 

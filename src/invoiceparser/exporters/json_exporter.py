@@ -69,7 +69,7 @@ class JSONExporter:
         self.output_dir = config.output_dir
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-    def export(self, document_path: Path, invoice_data: Dict[str, Any], original_filename: Optional[str] = None) -> Path:
+    def export(self, document_path: Path, invoice_data: Dict[str, Any], original_filename: Optional[str] = None, source: Optional[str] = None) -> Path:
         """
         Экспорт данных счета в JSON
 
@@ -77,29 +77,78 @@ class JSONExporter:
             document_path: Путь к исходному документу
             invoice_data: Данные счета (dict)
             original_filename: Оригинальное имя файла (если отличается от document_path)
+            source: Источник документа ("telegram" или "web")
 
         Returns:
             Путь к созданному JSON файлу
         """
         try:
-            # Используем оригинальное имя файла, если оно передано, иначе берем из document_path
-            if original_filename:
-                filename_base = Path(original_filename).stem
-            else:
-                filename_base = document_path.stem
+            import re
 
-            # Транслитерируем в латиницу
-            filename_base = transliterate_to_latin(filename_base)
+            # Извлекаем номер документа из распарсенных данных
+            doc_info = invoice_data.get("document_info", {}) if isinstance(invoice_data, dict) else {}
+            invoice_number = doc_info.get("document_number") or doc_info.get("invoice_number")
+            invoice_number = str(invoice_number).strip() if invoice_number else None
+            if invoice_number:
+                invoice_number = re.sub(r'[<>:"/\\|?*]', '', invoice_number)
+
+            # Логика формирования имени файла зависит от источника
+            if source == "telegram":
+                # Для Telegram: НЕ используем original_filename (это file_id), используем только номер документа
+                if invoice_number:
+                    filename_base = invoice_number
+                else:
+                    filename_base = "invoice"
+            elif source == "web":
+                # Для Web: оригинальное имя файла + номер документа
+                if original_filename:
+                    original_stem = Path(original_filename).stem
+                    # Транслитерируем в латиницу
+                    original_stem = transliterate_to_latin(original_stem)
+                    # Удаляем недопустимые символы
+                    original_stem = re.sub(r'[<>:"/\\|?*]', '', original_stem)
+                    # Ограничиваем длину
+                    if len(original_stem) > 50:
+                        original_stem = original_stem[:50]
+
+                    # Формируем: original_filename + document_number
+                    if invoice_number:
+                        filename_base = f"{original_stem}_{invoice_number}"
+                    else:
+                        filename_base = original_stem
+                else:
+                    # Если нет оригинального имени, используем номер документа или "invoice"
+                    if invoice_number:
+                        filename_base = invoice_number
+                    else:
+                        filename_base = "invoice"
+            else:
+                # Для других источников (email, CLI): используем оригинальное имя или номер документа
+                if original_filename:
+                    filename_base = Path(original_filename).stem
+                    filename_base = transliterate_to_latin(filename_base)
+                    filename_base = re.sub(r'[<>:"/\\|?*]', '', filename_base)
+                    if len(filename_base) > 60:
+                        filename_base = filename_base[:60]
+                elif invoice_number:
+                    filename_base = invoice_number
+                else:
+                    filename_base = document_path.stem if document_path.stem else "invoice"
+                    filename_base = transliterate_to_latin(filename_base)
+                    filename_base = re.sub(r'[<>:"/\\|?*]', '', filename_base)
 
             now = datetime.now()
             timestamp = f"{now.day:02d}{now.month:02d}{now.hour:02d}{now.minute:02d}"
 
+            # Добавляем источник в имя файла
+            source_suffix = f"_{source}" if source else ""
+
             # Проверяем наличие результатов теста
             if 'test_results' in invoice_data and invoice_data['test_results']:
                 error_count = invoice_data['test_results'].get('errors', 0)
-                output_path = self.output_dir / f"{filename_base}_{timestamp}_{error_count}errors.json"
+                output_path = self.output_dir / f"{filename_base}{source_suffix}_{timestamp}_{error_count}errors.json"
             else:
-                output_path = self.output_dir / f"{filename_base}_{timestamp}.json"
+                output_path = self.output_dir / f"{filename_base}{source_suffix}_{timestamp}.json"
 
             logger.debug(f"Exporting to JSON: {output_path.name}")
 

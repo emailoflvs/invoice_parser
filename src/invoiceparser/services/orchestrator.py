@@ -71,7 +71,8 @@ class Orchestrator:
         document_path: Path,
         compare_with: Optional[Path] = None,
         original_filename: Optional[str] = None,
-        mode: str = "detailed"  # НОВОЕ: "fast" или "detailed"
+        mode: str = "detailed",  # НОВОЕ: "fast" или "detailed"
+        source: Optional[str] = None  # НОВОЕ: "telegram" или "web"
     ) -> Dict[str, Any]:
         """
         Обработка документа
@@ -81,6 +82,7 @@ class Orchestrator:
             compare_with: Опциональный путь к эталонному JSON файлу для сравнения
             original_filename: Оригинальное имя файла (для генерации имени выходного файла)
             mode: Режим обработки - "fast" (быстрый) или "detailed" (детальный)
+            source: Источник документа - "telegram" или "web" (для формирования имени файла)
 
         Returns:
             Результат обработки
@@ -114,17 +116,19 @@ class Orchestrator:
                 # Добавляем результаты теста в данные
                 result['test_results'] = test_result
 
-            # Экспорт результатов
-            output_file = self._export_results(document_path, result, original_filename)
-
-            # Сохранение RAW данных в базу данных
+            # Сохранение RAW данных в базу данных (перед экспортом, чтобы добавить document_id в JSON)
             document_id = None
             if self.db_service:
                 try:
                     document_id = await self._save_raw_to_database(document_path, result, original_filename)
                     logger.info(f"✅ RAW data saved to database (document_id: {document_id})")
+                    # Добавляем document_id в данные для экспорта
+                    result['document_id'] = document_id
                 except Exception as e:
                     logger.error(f"Failed to save RAW data to database: {e}", exc_info=True)
+
+            # Экспорт результатов (после сохранения в БД, чтобы document_id был в JSON)
+            output_file = self._export_results(document_path, result, original_filename, source=source)
 
             elapsed_time = time.time() - start_time
             logger.info(f"Document processing completed: {document_path} (took {elapsed_time:.2f}s)")
@@ -598,7 +602,7 @@ class Orchestrator:
             logger.error(f"Database save error: {e}", exc_info=True)
             raise
 
-    def _export_results(self, document_path: Path, invoice_data: Dict[str, Any], original_filename: Optional[str] = None) -> Optional[Path]:
+    def _export_results(self, document_path: Path, invoice_data: Dict[str, Any], original_filename: Optional[str] = None, source: Optional[str] = None) -> Optional[Path]:
         """
         Экспорт результатов
 
@@ -606,6 +610,7 @@ class Orchestrator:
             document_path: Путь к исходному документу
             invoice_data: Данные счета (может содержать test_results)
             original_filename: Оригинальное имя файла (для генерации имени выходного файла)
+            source: Источник документа ("telegram" или "web")
 
         Returns:
             Путь к сохраненному JSON файлу
@@ -662,11 +667,11 @@ class Orchestrator:
                         export_data_with_test[key] = value
 
                 # Экспорт в JSON с результатами теста
-                json_path = self.json_exporter.export(document_path, export_data_with_test, original_filename)
+                json_path = self.json_exporter.export(document_path, export_data_with_test, original_filename, source=source)
                 logger.info(f"Exported to JSON with test results: {json_path}")
             else:
                 # Экспорт в JSON без результатов теста
-                json_path = self.json_exporter.export(document_path, invoice_data, original_filename)
+                json_path = self.json_exporter.export(document_path, invoice_data, original_filename, source=source)
                 logger.info(f"Exported to JSON: {json_path}")
 
             # Экспорт в Excel отключен на этапе обработки

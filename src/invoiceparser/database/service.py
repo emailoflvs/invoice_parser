@@ -468,6 +468,54 @@ class DatabaseService:
 
         return document
 
+    async def reject_approved_document(
+        self,
+        session: AsyncSession,
+        document_id: int,
+        user_id: Optional[int] = None
+    ) -> Document:
+        """
+        Отменить подтверждение документа (вернуть статус в 'parsed' или 'rejected').
+
+        Args:
+            session: Database session
+            document_id: ID документа
+            user_id: ID пользователя, который отменяет подтверждение
+
+        Returns:
+            Updated Document
+        """
+        logger.info(f"Rejecting approved document: {document_id}")
+
+        # Load document
+        result = await session.execute(
+            select(Document).where(Document.id == document_id)
+        )
+        document = result.scalar_one_or_none()
+
+        if not document:
+            raise ValueError(f"Document {document_id} not found")
+
+        # Проверяем, что документ был подтвержден
+        if document.status != 'approved':
+            logger.warning(f"Document {document_id} is not approved (status: {document.status})")
+            # Можно вернуть статус в 'parsed' если он был 'in_review'
+            if document.status == 'in_review':
+                document.status = 'parsed'
+            else:
+                # Если уже 'parsed' или 'rejected', просто обновляем
+                document.status = 'rejected'
+        else:
+            # Отменяем подтверждение - возвращаем статус в 'parsed'
+            document.status = 'parsed'
+            document.updated_by = user_id
+            document.updated_at = utcnow()
+
+        await session.commit()
+        logger.info(f"Document approval rejected (ID: {document.id}, status: {document.status})")
+
+        return document
+
     # ========================================================================
     # Helper Methods
     # ========================================================================

@@ -578,8 +578,8 @@ class WebAPI:
                 if mode not in ["fast", "detailed"]:
                     mode = "detailed"  # По умолчанию детальный режим
 
-                # Обработка документа (передаем оригинальное имя файла и режим)
-                result = await self.orchestrator.process_document(tmp_path, original_filename=file.filename, mode=mode)
+                # Обработка документа (передаем оригинальное имя файла, режим и источник)
+                result = await self.orchestrator.process_document(tmp_path, original_filename=file.filename, mode=mode, source="web")
 
                 # Очистка временного файла
                 tmp_path.unlink(missing_ok=True)
@@ -654,17 +654,146 @@ class WebAPI:
 
             try:
                 import json
+                import re
                 from ..utils.datetime_utils import now
+                from ..exporters.json_exporter import transliterate_to_latin
+                from ..database import get_session
+                from ..database.models import Document, File
+                from sqlalchemy import select
+                from sqlalchemy.orm import selectinload
 
                 # Создаем директорию output если её нет
                 output_dir = Path(self.config.output_dir)
                 output_dir.mkdir(parents=True, exist_ok=True)
 
-                # Генерируем имя файла
-                # Формат времени: ddmmhhmm (день, месяц, час, минута)
-                timestamp = now().strftime("%d%m%H%M")
-                base_name = Path(save_request.original_filename).stem
-                new_filename = f"{base_name}_{timestamp}_saved.json"
+                # Получаем document_id из данных
+                document_id = save_request.data.get('document_id')
+
+                # Извлекаем номер документа из approved данных
+                doc_info = save_request.data.get("document_info", {}) if isinstance(save_request.data, dict) else {}
+                invoice_number = doc_info.get("document_number") or doc_info.get("invoice_number")
+                invoice_number = str(invoice_number).strip() if invoice_number else None
+                if invoice_number:
+                    invoice_number = re.sub(r'[<>:"/\\|?*]', '', invoice_number)
+
+                # Ищем соответствующий raw файл и используем его имя как основу
+                raw_file_name = None
+
+                logger.info(f"Looking for raw file: document_id={document_id}, invoice_number={invoice_number}")
+
+                if document_id:
+                    try:
+                        raw_files = []
+
+                        # Метод 1: Ищем по document_id в метаданных JSON файлов (самый надежный)
+                        for json_file in output_dir.glob("*.json"):
+                            if "_saved" in json_file.name:
+                                continue
+                            try:
+                                with open(json_file, 'r', encoding='utf-8') as f:
+                                    data = json.load(f)
+                                    # Проверяем document_id в разных местах
+                                    file_doc_id = data.get('document_id') or data.get('_meta', {}).get('document_id')
+                                    if file_doc_id == document_id:
+                                        raw_files.append(json_file)
+                                        logger.info(f"Found raw file by document_id: {json_file.name}")
+                            except Exception as e:
+                                pass
+
+                        # Метод 2: Если не нашли, ищем по номеру документа в имени файла
+                        if not raw_files and invoice_number:
+                            for pattern in [
+                                f"*{invoice_number}_*.json",
+                                f"*_{invoice_number}_*.json"
+                            ]:
+                                found = list(output_dir.glob(pattern))
+                                found = [f for f in found if "_saved" not in f.name]
+                                raw_files.extend(found)
+                                if found:
+                                    logger.info(f"Found raw file by invoice_number pattern: {[f.name for f in found]}")
+
+                        if raw_files:
+                            # Берем самый свежий файл
+                            raw_file = max(raw_files, key=lambda f: f.stat().st_mtime)
+                            raw_file_name = raw_file.stem  # Без расширения
+                            logger.info(f"Using raw file name: {raw_file_name}")
+                        else:
+                            logger.warning(f"No raw file found for document_id={document_id}, invoice_number={invoice_number}")
+                    except Exception as e:
+                        logger.error(f"Failed to find raw file: {e}", exc_info=True)
+
+                # Если нашли raw файл, используем его имя + _saved
+                if raw_file_name:
+                    new_filename = f"{raw_file_name}_saved.json"
+                    # Сохраняем базовое имя для экспорта (без _saved)
+                    export_filename_base = raw_file_name
+                else:
+                    # Fallback: формируем имя по той же логике, что и в json_exporter
+                    original_filename = None
+                    source = None
+
+                    if document_id:
+                        try:
+                            async for session in get_session():
+                                result = await session.execute(
+                                    select(Document)
+                                    .options(selectinload(Document.file))
+                                    .where(Document.id == document_id)
+                                )
+                                document = result.scalar_one_or_none()
+
+                                if document and document.file:
+                                    original_filename = document.file.original_filename
+                                break
+                        except Exception as e:
+                            logger.warning(f"Failed to get document info from DB: {e}")
+
+                    # Используем ту же логику формирования имени, что и в json_exporter
+                    if source == "telegram":
+                        if invoice_number:
+                            filename_base = invoice_number
+                        else:
+                            filename_base = "invoice"
+                    elif source == "web":
+                        if original_filename:
+                            original_stem = Path(original_filename).stem
+                            original_stem = transliterate_to_latin(original_stem)
+                            original_stem = re.sub(r'[<>:"/\\|?*]', '', original_stem)
+                            if len(original_stem) > 50:
+                                original_stem = original_stem[:50]
+
+                            if invoice_number:
+                                filename_base = f"{original_stem}_{invoice_number}"
+                            else:
+                                filename_base = original_stem
+                        else:
+                            if invoice_number:
+                                filename_base = invoice_number
+                            else:
+                                filename_base = "invoice"
+                    else:
+                        # Fallback
+                        if save_request.original_filename:
+                            filename_base = Path(save_request.original_filename).stem
+                            filename_base = transliterate_to_latin(filename_base)
+                            filename_base = re.sub(r'[<>:"/\\|?*]', '', filename_base)
+                            if len(filename_base) > 60:
+                                filename_base = filename_base[:60]
+                        elif invoice_number:
+                            filename_base = invoice_number
+                        else:
+                            filename_base = "invoice"
+
+                    # Формат времени: ddmmhhmm (день, месяц, час, минута)
+                    timestamp = now().strftime("%d%m%H%M")
+
+                    # Добавляем источник в имя файла
+                    source_suffix = f"_{source}" if source else ""
+
+                    # Формируем имя файла с суффиксом _saved
+                    new_filename = f"{filename_base}{source_suffix}_{timestamp}_saved.json"
+                    # Сохраняем базовое имя для экспорта (без _saved)
+                    export_filename_base = f"{filename_base}{source_suffix}_{timestamp}"
                 output_path = output_dir / new_filename
 
                 # Сохраняем данные в файл
@@ -688,9 +817,15 @@ class WebAPI:
                 # Экспорт APPROVED данных во все включенные форматы (Excel, Google Sheets)
                 if self.export_service:
                     try:
+                        # Используем сохраненное базовое имя для экспорта (уже без _saved)
+                        # Если не было установлено выше, используем fallback
+                        if 'export_filename_base' not in locals():
+                            export_filename_base = Path(new_filename).stem.replace("_saved", "")
+
+                        # Передаем сформированное имя для правильного именования экспортируемых файлов
                         export_results = await self.export_service.export_approved_data(
                             approved_data=save_request.data,
-                            original_filename=save_request.original_filename
+                            original_filename=export_filename_base
                         )
 
                         # Логируем результаты

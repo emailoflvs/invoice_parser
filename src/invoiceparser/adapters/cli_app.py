@@ -146,7 +146,7 @@ class CLIApp:
         try:
             # Обработка документа
             import asyncio
-            result = asyncio.run(self.orchestrator.process_document(document_path, compare_with=compare_with))
+            result = asyncio.run(self.orchestrator.process_document(document_path, compare_with=compare_with, source=None))
 
             # Вывод результата
             if result["success"]:
