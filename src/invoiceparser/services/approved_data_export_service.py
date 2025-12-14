@@ -141,8 +141,8 @@ class ApprovedDataExportService:
                                 'document'
                 original_path = Path(f"{document_number}.xlsx")
 
-            # Экспортируем в Excel
-            excel_path = self.excel_exporter.export(original_path, invoice_data_model)
+            # Экспортируем в Excel (передаем raw_data для структурированного экспорта)
+            excel_path = self.excel_exporter.export(original_path, invoice_data_model, raw_data=approved_data)
             logger.info(f"✅ APPROVED data exported to Excel: {excel_path}")
 
             return {
