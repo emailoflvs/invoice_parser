@@ -55,6 +55,19 @@ class SaveResponse(BaseModel):
     error: Optional[str] = None
 
 
+class RejectRequest(BaseModel):
+    """Модель запроса на отмену подтверждения"""
+    document_id: int
+
+
+class RejectResponse(BaseModel):
+    """Модель ответа на отмену подтверждения"""
+    success: bool
+    message: str
+    document_id: int
+    new_status: str
+
+
 class HealthResponse(BaseModel):
     """Модель ответа health check"""
     status: str
@@ -648,9 +661,10 @@ class WebAPI:
                 output_dir.mkdir(parents=True, exist_ok=True)
 
                 # Генерируем имя файла
-                timestamp = now().strftime("%Y%m%d_%H%M")
+                # Формат времени: ddmmhhmm (день, месяц, час, минута)
+                timestamp = now().strftime("%d%m%H%M")
                 base_name = Path(save_request.original_filename).stem
-                new_filename = f"{base_name}_saved_{timestamp}.json"
+                new_filename = f"{base_name}_{timestamp}_saved.json"
                 output_path = output_dir / new_filename
 
                 # Сохраняем данные в файл
@@ -706,6 +720,69 @@ class WebAPI:
                     detail={
                         "error_code": "SAVE_ERROR",
                         "message": f"Не удалось сохранить данные: {str(e)}"
+                    }
+                )
+
+        @self.app.post("/reject", response_model=RejectResponse)
+        async def reject_approved_document(
+            reject_request: RejectRequest,
+            current_user: User = Depends(get_current_active_user)
+        ):
+            """
+            Отменить подтверждение документа (вернуть статус в 'parsed')
+
+            Args:
+                reject_request: Request with document_id
+                current_user: Current authenticated user
+
+            Returns:
+                Reject result with new status
+            """
+            try:
+                from ..database import get_session
+                from ..database.service import DatabaseService
+
+                # Создаем DatabaseService если еще нет
+                db_service = DatabaseService(
+                    database_url=self.config.database_url,
+                    echo=self.config.db_echo,
+                    pool_size=self.config.db_pool_size,
+                    max_overflow=self.config.db_max_overflow
+                )
+
+                async for session in get_session():
+                    document = await db_service.reject_approved_document(
+                        session=session,
+                        document_id=reject_request.document_id,
+                        user_id=current_user.id
+                    )
+                    break
+
+                logger.info(f"✅ Document approval rejected (document_id: {reject_request.document_id}, status: {document.status})")
+
+                return RejectResponse(
+                    success=True,
+                    message="Подтверждение документа отменено",
+                    document_id=reject_request.document_id,
+                    new_status=document.status
+                )
+
+            except ValueError as e:
+                logger.error(f"Document not found: {e}")
+                raise HTTPException(
+                    status_code=404,
+                    detail={
+                        "error_code": "DOCUMENT_NOT_FOUND",
+                        "message": f"Документ не найден: {str(e)}"
+                    }
+                )
+            except Exception as e:
+                logger.error(f"Failed to reject document: {e}", exc_info=True)
+                raise HTTPException(
+                    status_code=500,
+                    detail={
+                        "error_code": "REJECT_ERROR",
+                        "message": f"Не удалось отменить подтверждение: {str(e)}"
                     }
                 )
 

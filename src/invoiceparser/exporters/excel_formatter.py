@@ -114,11 +114,25 @@ class ExcelFormatter:
         if references:
             rows.append(('SECTION', 'Договір та замовлення'))
 
-            if 'contract' in references and references['contract'].get('value'):
-                rows.append(('FIELD', 'Договір', str(references['contract']['value'])))
+            # Проверяем contract - может быть dict или str
+            if 'contract' in references:
+                contract_value = None
+                if isinstance(references['contract'], dict):
+                    contract_value = references['contract'].get('value')
+                elif isinstance(references['contract'], str):
+                    contract_value = references['contract']
+                if contract_value:
+                    rows.append(('FIELD', 'Договір', str(contract_value)))
 
-            if 'order' in references and references['order'].get('value'):
-                rows.append(('FIELD', 'Замовлення', str(references['order']['value'])))
+            # Проверяем order - может быть dict или str
+            if 'order' in references:
+                order_value = None
+                if isinstance(references['order'], dict):
+                    order_value = references['order'].get('value')
+                elif isinstance(references['order'], str):
+                    order_value = references['order']
+                if order_value:
+                    rows.append(('FIELD', 'Замовлення', str(order_value)))
 
             rows.append(('EMPTY', ''))  # Пустая строка
 

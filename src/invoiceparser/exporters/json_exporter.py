@@ -94,15 +94,12 @@ class JSONExporter:
             now = datetime.now()
             timestamp = f"{now.day:02d}{now.month:02d}{now.hour:02d}{now.minute:02d}"
 
-            # Используем модель gemini (как указано в требованиях)
-            model_name = "gemini"
-
             # Проверяем наличие результатов теста
             if 'test_results' in invoice_data and invoice_data['test_results']:
                 error_count = invoice_data['test_results'].get('errors', 0)
-                output_path = self.output_dir / f"{filename_base}_{model_name}_{timestamp}_{error_count}errors.json"
+                output_path = self.output_dir / f"{filename_base}_{timestamp}_{error_count}errors.json"
             else:
-                output_path = self.output_dir / f"{filename_base}_{model_name}_{timestamp}.json"
+                output_path = self.output_dir / f"{filename_base}_{timestamp}.json"
 
             logger.debug(f"Exporting to JSON: {output_path.name}")
 
