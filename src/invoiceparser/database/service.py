@@ -131,12 +131,22 @@ class DatabaseService:
 
         Configuration: NORMALIZE_TAX_ID (default: True)
         """
-        if not tax_id or not tax_id.strip():
+        # Проверяем тип - tax_id может быть строкой или словарем
+        if not tax_id:
+            return None
+
+        # Если это словарь, извлекаем значение
+        if isinstance(tax_id, dict):
+            tax_id = tax_id.get('value') or tax_id.get('tax_id') or str(tax_id)
+
+        # Преобразуем в строку и проверяем
+        tax_id_str = str(tax_id).strip() if tax_id else ""
+        if not tax_id_str:
             return None
 
         import re
-        # Extract all digits
-        numbers = re.findall(r'\d+', tax_id)
+        # Extract all digits (используем строковое представление)
+        numbers = re.findall(r'\d+', tax_id_str)
 
         if not numbers:
             return None

@@ -79,9 +79,19 @@ async function loadConfig() {
 
 // Инициализация
 async function init() {
+    // Обновляем токен из localStorage (на случай, если он был сохранен на странице входа)
+    state.authToken = localStorage.getItem('authToken') || '';
+
     // Проверяем авторизацию - если нет токена, перенаправляем на страницу входа
+    // Сохраняем document_id в URL при редиректе, чтобы не потерять его
     if (!state.authToken) {
-        window.location.href = '/login.html';
+        const urlParams = new URLSearchParams(window.location.search);
+        const documentId = urlParams.get('document_id');
+        if (documentId) {
+            window.location.href = `/login.html?redirect=/?document_id=${documentId}`;
+        } else {
+            window.location.href = '/login.html';
+        }
         return;
     }
 
@@ -92,6 +102,91 @@ async function init() {
 
     // Токен есть, разрешаем загрузку файлов
     enableFileUpload();
+
+    // Проверяем, есть ли document_id в URL для загрузки документа
+    const urlParams = new URLSearchParams(window.location.search);
+    const documentId = urlParams.get('document_id');
+    if (documentId) {
+        console.log(`Loading document ${documentId} for editing...`);
+        await loadDocumentForEditing(parseInt(documentId));
+    }
+}
+
+// Загрузка документа для редактирования
+async function loadDocumentForEditing(documentId) {
+    try {
+        console.log(`loadDocumentForEditing called with documentId: ${documentId}, authToken: ${state.authToken ? 'present' : 'missing'}`);
+
+        if (!state.authToken) {
+            console.error('No auth token, redirecting to login...');
+            const urlParams = new URLSearchParams(window.location.search);
+            const documentId = urlParams.get('document_id');
+            if (documentId) {
+                window.location.href = `/login.html?redirect=/?document_id=${documentId}`;
+            } else {
+                window.location.href = '/login.html';
+            }
+            return;
+        }
+
+        showProgress();
+        setProgress(10, 'Загрузка документа...');
+
+        console.log(`Fetching /api/documents/${documentId}...`);
+        const response = await fetch(`/api/documents/${documentId}`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${state.authToken}`
+            }
+        });
+
+        console.log(`Response status: ${response.status}`);
+
+        if (!response.ok) {
+            if (response.status === 401) {
+                // Токен истек, перенаправляем на страницу входа
+                localStorage.removeItem('authToken');
+                window.location.href = '/login.html';
+                return;
+            }
+            throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+        }
+
+        setProgress(50, 'Обработка данных...');
+        const result = await response.json();
+
+        if (result.success && result.data) {
+            setProgress(90, 'Отображение формы...');
+
+            // Устанавливаем данные для редактирования
+            state.parsedData = {
+                success: true,
+                data: result.data,
+                processed_at: new Date().toISOString()
+            };
+
+            // Устанавливаем original_filename из данных или используем дефолтное значение
+            state.originalFilename = result.data.original_filename || `document_${documentId}`;
+
+            // Показываем форму редактирования
+            hideProgress();
+
+            // Показываем секцию результатов
+            showSection('results');
+
+            // Отображаем данные
+            displayEditableData(result.data);
+
+            setProgress(100, 'Готово');
+            setTimeout(() => hideProgress(), 500);
+        } else {
+            throw new Error('Документ не найден или данные недоступны');
+        }
+    } catch (error) {
+        console.error('Error loading document:', error);
+        hideProgress();
+        showError(`Не удалось загрузить документ: ${error.message}`);
+    }
 }
 
 // Настройка обработчиков событий
@@ -401,6 +496,26 @@ function updateProgress(percentage) {
     percentage = Math.min(100, Math.max(0, percentage));
     elements.progressFill.style.width = percentage + '%';
     elements.progressPercentage.textContent = Math.round(percentage) + '%';
+}
+
+function showProgress() {
+    if (elements.progressSection) {
+        elements.progressSection.style.display = 'block';
+        elements.uploadSection.style.display = 'none';
+        elements.resultsSection.style.display = 'none';
+        elements.errorSection.style.display = 'none';
+    }
+}
+
+function hideProgress() {
+    if (elements.progressSection) {
+        elements.progressSection.style.display = 'none';
+    }
+}
+
+function setProgress(percentage, message) {
+    updateProgress(percentage);
+    // Можно добавить отображение сообщения, если есть элемент для этого
 }
 
 // Display results

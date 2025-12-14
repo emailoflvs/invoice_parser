@@ -45,8 +45,14 @@ const elements = {
 
 // Check if already logged in
 if (state.authToken) {
-    // Redirect to main page
-    window.location.href = '/';
+    // Check for redirect parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    const redirect = urlParams.get('redirect');
+    if (redirect) {
+        window.location.href = redirect;
+    } else {
+        window.location.href = '/';
+    }
 }
 
 // Initialize
@@ -167,9 +173,17 @@ async function handleLogin(e) {
         // Show success message
         showLoginMessage('Успішний вхід! Перенаправлення...', false);
 
-        // Redirect to main page
+        // Check for redirect parameter
+        const urlParams = new URLSearchParams(window.location.search);
+        const redirect = urlParams.get('redirect');
+
+        // Redirect to main page or to the redirect URL
         setTimeout(() => {
-            window.location.href = '/';
+            if (redirect) {
+                window.location.href = redirect;
+            } else {
+                window.location.href = '/';
+            }
         }, 1000);
 
     } catch (error) {
@@ -260,8 +274,17 @@ async function handleRegister() {
                     localStorage.setItem('authToken', loginData.access_token);
                     hideRegisterModal();
                     showLoginMessage('Реєстрація та вхід виконано успішно! Перенаправлення...', false);
+
+                    // Check for redirect parameter
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const redirect = urlParams.get('redirect');
+
                     setTimeout(() => {
-                        window.location.href = '/';
+                        if (redirect) {
+                            window.location.href = redirect;
+                        } else {
+                            window.location.href = '/';
+                        }
                     }, 1000);
                 } else {
                     showRegisterMessage('Реєстрація успішна, але вхід не вдався. Спробуйте увійти вручну.', true);

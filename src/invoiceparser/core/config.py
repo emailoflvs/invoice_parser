@@ -1,6 +1,6 @@
 """Конфигурация приложения - загружается из .env"""
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Optional
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -98,6 +98,7 @@ class Config(BaseSettings):
     # Настройки Web API
     web_host: str = Field(alias="WEB_HOST", default="0.0.0.0")
     web_port: int = Field(alias="WEB_PORT", default=8000)
+    web_public_url: Optional[str] = Field(default=None, alias="WEB_PUBLIC_URL")  # Публичный URL для Telegram кнопок (например, http://192.168.1.100:8000)
     web_auth_token: str = Field(alias="WEB_AUTH_TOKEN", default="")  # Deprecated: используется JWT
     max_file_size_mb: int = Field(alias="MAX_FILE_SIZE_MB", default=50)  # Максимальный размер загружаемого файла в МБ
     reload_dirs: str = Field(alias="RELOAD_DIRS", default="")  # Директории для auto-reload (через запятую, пусто = автоматически)

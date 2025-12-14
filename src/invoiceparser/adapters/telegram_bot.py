@@ -5,7 +5,7 @@ import logging
 import tempfile
 from pathlib import Path
 from typing import Optional, List
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -233,17 +233,48 @@ class TelegramBot:
                     f"📦 Позиций: {items_count}"
                 )
 
-                await status_message.edit_text(response_text)
+                # Отправка ссылки на форму редактирования через кнопку
+                document_id = result.get('document_id')
+                keyboard = None
 
-                # Отправка JSON файла
-                import json
-                json_data = data.model_dump() if hasattr(data, "model_dump") else data
-                json_str = json.dumps(json_data, indent=2, ensure_ascii=False)
+                logger.info(f"Document ID from result: {document_id}")
 
-                await update.message.reply_document(
-                    document=json_str.encode('utf-8'),
-                    filename=f"{invoice_number or 'result'}.json",
-                    caption="📄 Полные данные в JSON"
+                if document_id:
+                    try:
+                        # Формируем URL для редактирования документа
+                        # Используем настройки из конфига
+                        web_port = int(self.config.web_port) if self.config.web_port else 8000
+
+                        # Проверяем, есть ли публичный URL в конфиге
+                        public_url = self.config.web_public_url
+
+                        if public_url:
+                            # Используем публичный URL из конфига
+                            web_url = str(public_url).rstrip('/')
+                            logger.info(f"Using public URL from config: {web_url}")
+                        else:
+                            # По умолчанию используем localhost (порт проброшен из контейнера)
+                            # Telegram не принимает localhost, поэтому используем 127.0.0.1
+                            web_url = f"http://127.0.0.1:{web_port}"
+                            logger.info(f"Using default localhost URL: {web_url}")
+
+                        edit_url = f"{web_url}/?document_id={document_id}"
+
+                        logger.info(f"Creating edit button with URL: {edit_url}")
+
+                        # Создаем кнопку со ссылкой
+                        keyboard = InlineKeyboardMarkup([
+                            [InlineKeyboardButton("✏️ Открыть форму редактирования", url=edit_url)]
+                        ])
+                    except Exception as e:
+                        logger.error(f"Failed to create edit button: {e}", exc_info=True)
+                        # Добавляем document_id в сообщение как fallback
+                        response_text += f"\n\n✏️ ID документа для редактирования: {document_id}"
+
+                # Обновляем сообщение с кнопкой (если есть)
+                await status_message.edit_text(
+                    response_text,
+                    reply_markup=keyboard
                 )
 
             else:

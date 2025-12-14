@@ -162,7 +162,8 @@ class WebAPI:
             # ВАЖНО: Регистрируем кастомный роут ПЕРЕД mount, чтобы он имел приоритет
             # FastAPI обрабатывает роуты перед mount, поэтому этот роут будет вызываться первым
             @self.app.get("/static/{file_path:path}")
-            async def serve_static_file(file_path: str):
+            @self.app.head("/static/{file_path:path}")
+            async def serve_static_file(file_path: str, request: Request):
                 """Отдача статических файлов с no-cache заголовками, читая напрямую из файловой системы"""
                 file_full_path = static_dir / file_path
 
@@ -173,7 +174,32 @@ class WebAPI:
                     raise HTTPException(status_code=403, detail="Access denied")
 
                 if file_full_path.exists() and file_full_path.is_file():
-                    # Читаем файл напрямую из файловой системы
+                    # Для HEAD запроса не читаем содержимое, только возвращаем заголовки
+                    if request.method == "HEAD":
+                        file_size = file_full_path.stat().st_size
+
+                        # Определяем media type
+                        if file_path.endswith('.js'):
+                            media_type = "application/javascript"
+                        elif file_path.endswith('.css'):
+                            media_type = "text/css"
+                        elif file_path.endswith('.html'):
+                            media_type = "text/html"
+                        else:
+                            media_type = "application/octet-stream"
+
+                        return Response(
+                            content=b"",
+                            media_type=media_type,
+                            headers={
+                                "Cache-Control": "no-cache, no-store, must-revalidate",
+                                "Pragma": "no-cache",
+                                "Expires": "0",
+                                "Content-Length": str(file_size)
+                            }
+                        )
+
+                    # Для GET запроса читаем и возвращаем содержимое
                     with open(file_full_path, 'rb') as f:
                         content = f.read()
 
@@ -512,6 +538,72 @@ class WebAPI:
                     }
             except Exception as e:
                 logger.error(f"Search failed: {e}", exc_info=True)
+                raise HTTPException(status_code=500, detail=str(e))
+
+        @self.app.get("/api/documents/{document_id}", tags=["Documents"])
+        async def get_document(
+            document_id: int,
+            current_user: User = Depends(get_current_active_user)
+        ):
+            """
+            Получить документ по ID для редактирования
+
+            Returns:
+                Данные документа в формате для редактирования
+            """
+            try:
+                from ..database import get_session
+                from ..database.models import Document, DocumentSnapshot
+                from sqlalchemy import select
+                from sqlalchemy.orm import selectinload
+
+                db_service = self.orchestrator.db_service
+                if not db_service:
+                    raise HTTPException(status_code=503, detail="Database service not available")
+
+                async for session in get_session():
+                    # Получаем документ
+                    result = await session.execute(
+                        select(Document)
+                        .where(Document.id == document_id)
+                    )
+                    document = result.scalar_one_or_none()
+
+                    if not document:
+                        raise HTTPException(status_code=404, detail="Document not found")
+
+                    # Получаем raw snapshot (данные после парсинга)
+                    snapshot_result = await session.execute(
+                        select(DocumentSnapshot)
+                        .where(
+                            DocumentSnapshot.document_id == document_id,
+                            DocumentSnapshot.snapshot_type == 'raw'
+                        )
+                        .order_by(DocumentSnapshot.version.desc())
+                        .limit(1)
+                    )
+                    snapshot = snapshot_result.scalar_one_or_none()
+
+                    if not snapshot:
+                        raise HTTPException(status_code=404, detail="Document data not found")
+
+                    # Возвращаем данные для редактирования
+                    # payload уже JSONB (dict в Python благодаря SQLAlchemy)
+                    document_data = snapshot.payload.copy() if isinstance(snapshot.payload, dict) else dict(snapshot.payload)
+
+                    # Добавляем document_id в данные
+                    document_data['document_id'] = document_id
+
+                    return {
+                        "success": True,
+                        "data": document_data,
+                        "document_id": document_id,
+                        "status": document.status
+                    }
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Failed to get document: {e}", exc_info=True)
                 raise HTTPException(status_code=500, detail=str(e))
 
         @self.app.post("/parse", response_model=ParseResponse)
