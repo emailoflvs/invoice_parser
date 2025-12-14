@@ -179,10 +179,14 @@ class Config(BaseSettings):
         alias="SHEETS_CREDENTIALS_PATH",
         default=""
     )  # Путь к JSON файлу с credentials для Google Sheets API
+    sheets_header_sheet: str = Field(
+        alias="SHEETS_HEADER_SHEET",
+        default="Реквизиты"
+    )  # Название листа для сохранения реквизитов (header) в Google Sheets
     sheets_items_sheet: str = Field(
         alias="SHEETS_ITEMS_SHEET",
-        default="Gemini"
-    )  # Название листа для сохранения позиций
+        default="Позиции"
+    )  # Название листа для сохранения позиций (items) в Google Sheets
 
     @classmethod
     def load(cls) -> "Config":

@@ -116,63 +116,44 @@ class GoogleSheetsService:
             return False
 
         try:
-            # Получение или создание листа
-            sheet_name = self.config.sheets_items_sheet
-            worksheet = None
-
-            try:
-                worksheet = self._spreadsheet.worksheet(sheet_name)
-                # Проверяем, есть ли заголовки (если лист пустой, добавляем)
-                existing_values = worksheet.get_all_values()
-                if not existing_values or len(existing_values) == 0:
-                    await self._add_headers(worksheet)
-            except Exception as e:
-                # Проверяем, что это ошибка "лист не найден"
-                error_str = str(e).lower()
-                error_type = type(e).__name__
-                if "not found" in error_str or "WorksheetNotFound" in error_type:
-                    # Создаем новый лист если его нет
-                    logger.info(f"Sheet '{sheet_name}' not found, creating new sheet")
-                    worksheet = self._spreadsheet.add_worksheet(
-                        title=sheet_name,
-                        rows=1000,
-                        cols=20
-                    )
-                    # Добавляем заголовки
-                    await self._add_headers(worksheet)
-                else:
-                    # Другая ошибка - пробрасываем дальше
-                    raise
-
             # Извлечение данных
-            # Поддерживаем как Pydantic модели, так и dict
-            if hasattr(approved_data.get('header'), 'model_dump'):
-                header = approved_data.get('header').model_dump()
-            else:
-                header = approved_data.get('header', {})
-
-            items_raw = approved_data.get('items', [])
+            # Поддерживаем как старый формат (header/items), так и новый структурированный (document_info/parties/table_data)
+            header = {}
             items = []
-            for item in items_raw:
-                if hasattr(item, 'model_dump'):
-                    items.append(item.model_dump())
+
+            # Проверяем новый структурированный формат
+            if 'document_info' in approved_data or 'parties' in approved_data or 'table_data' in approved_data:
+                # Новый формат - извлекаем данные из структурированного JSON
+                header = self._extract_header_from_structured_data(approved_data)
+
+                # Извлекаем items из table_data.line_items
+                table_data = approved_data.get('table_data', {})
+                items_raw = table_data.get('line_items', [])
+                column_mapping = table_data.get('column_mapping', {})
+
+                # Преобразуем items в стандартный формат
+                for item in items_raw:
+                    mapped_item = self._map_item_for_sheets(item, column_mapping)
+                    items.append(mapped_item)
+            else:
+                # Старый формат - используем header и items напрямую
+                if hasattr(approved_data.get('header'), 'model_dump'):
+                    header = approved_data.get('header').model_dump()
                 else:
-                    items.append(item)
+                    header = approved_data.get('header', {})
 
-            # Подготовка строк для вставки
-            rows_to_append = []
+                items_raw = approved_data.get('items', [])
+                for item in items_raw:
+                    if hasattr(item, 'model_dump'):
+                        items.append(item.model_dump())
+                    else:
+                        items.append(item)
 
-            for item in items:
-                row = self._format_item_row(header, item)
-                rows_to_append.append(row)
+            # Сохраняем header в отдельный лист
+            await self._save_header_sheet(header, approved_data)
 
-            if not rows_to_append:
-                logger.warning("No items to save to Google Sheets")
-                return True
-
-            # Добавляем данные в лист
-            worksheet.append_rows(rows_to_append, value_input_option='USER_ENTERED')
-            logger.info(f"✅ Saved {len(rows_to_append)} rows to Google Sheets (sheet: {sheet_name})")
+            # Сохраняем items в отдельный лист
+            await self._save_items_sheet(header, items)
 
             return True
 
@@ -180,9 +161,162 @@ class GoogleSheetsService:
             logger.error(f"Failed to save to Google Sheets: {e}", exc_info=True)
             return False
 
-    async def _add_headers(self, worksheet):
+    async def _get_or_create_worksheet(self, sheet_name: str) -> Any:
         """
-        Добавление заголовков в лист
+        Получение или создание листа в Google Sheets
+
+        Args:
+            sheet_name: Название листа
+
+        Returns:
+            Рабочий лист
+        """
+        try:
+            worksheet = self._spreadsheet.worksheet(sheet_name)
+            return worksheet
+        except Exception as e:
+            # Проверяем, что это ошибка "лист не найден"
+            error_str = str(e).lower()
+            error_type = type(e).__name__
+            if "not found" in error_str or "WorksheetNotFound" in error_type:
+                # Создаем новый лист если его нет
+                logger.info(f"Sheet '{sheet_name}' not found, creating new sheet")
+                worksheet = self._spreadsheet.add_worksheet(
+                    title=sheet_name,
+                    rows=1000,
+                    cols=20
+                )
+                return worksheet
+            else:
+                # Другая ошибка - пробрасываем дальше
+                raise
+
+    async def _save_header_sheet(self, header: Dict[str, Any], approved_data: Dict[str, Any]):
+        """
+        Сохранение данных заголовка в лист "Реквизиты"
+
+        Args:
+            header: Данные заголовка
+            approved_data: Полные данные документа (для структурированного формата)
+        """
+        sheet_name = self.config.sheets_header_sheet
+        worksheet = await self._get_or_create_worksheet(sheet_name)
+
+        # Проверяем, есть ли заголовки (если лист пустой, добавляем)
+        existing_values = worksheet.get_all_values()
+        if not existing_values or len(existing_values) == 0:
+            # Добавляем заголовки колонок
+            worksheet.append_row(['Поле', 'Значение'])
+            # Форматируем первую строку как заголовок
+            worksheet.format('A1:B1', {
+                'backgroundColor': {'red': 0.21, 'green': 0.38, 'blue': 0.57},
+                'textFormat': {'bold': True, 'foregroundColor': {'red': 1.0, 'green': 1.0, 'blue': 1.0}}
+            })
+
+        # Подготавливаем данные для сохранения
+        rows_to_append = []
+
+        # Если есть структурированные данные, используем их
+        if 'document_info' in approved_data or 'parties' in approved_data:
+            # Информация о документе
+            doc_info = approved_data.get('document_info', {})
+            if doc_info:
+                rows_to_append.append(['Тип документа', doc_info.get('document_type', '')])
+                rows_to_append.append(['Номер документа', doc_info.get('document_number', '')])
+                rows_to_append.append(['Дата документа', doc_info.get('document_date', '')])
+                rows_to_append.append(['Дата (нормалізована)', doc_info.get('document_date_normalized', '')])
+                rows_to_append.append(['Місце складання', doc_info.get('location', '')])
+                rows_to_append.append(['Валюта', doc_info.get('currency', '')])
+                rows_to_append.append(['', ''])  # Пустая строка
+
+            # Поставщик
+            parties = approved_data.get('parties', {})
+            supplier = parties.get('supplier', {})
+            if supplier:
+                rows_to_append.append(['Постачальник', ''])
+                rows_to_append.append(['  Назва', supplier.get('name', '')])
+                rows_to_append.append(['  Адреса', supplier.get('address', '')])
+                rows_to_append.append(['  Телефон', supplier.get('phone', '')])
+                rows_to_append.append(['  ЄДРПОУ', supplier.get('tax_id', '')])
+                rows_to_append.append(['  ІПН', supplier.get('vat_id', '')])
+                rows_to_append.append(['  Номер рахунку', supplier.get('account_number', '')])
+                rows_to_append.append(['  Банк', supplier.get('bank', '')])
+                rows_to_append.append(['', ''])  # Пустая строка
+
+            # Покупатель
+            customer = parties.get('customer', {})
+            if customer:
+                rows_to_append.append(['Покупець', ''])
+                rows_to_append.append(['  Назва', customer.get('name', '')])
+                rows_to_append.append(['  Адреса', customer.get('address', '')])
+                rows_to_append.append(['  ЄДРПОУ', customer.get('tax_id', '')])
+                rows_to_append.append(['  ІПН', customer.get('vat_id', '')])
+                rows_to_append.append(['', ''])  # Пустая строка
+
+            # Договір та замовлення
+            references = approved_data.get('references', {})
+            if references:
+                rows_to_append.append(['Договір та замовлення', ''])
+                if 'contract' in references and references['contract'].get('value'):
+                    rows_to_append.append(['  Договір', references['contract']['value']])
+                if 'order' in references and references['order'].get('value'):
+                    rows_to_append.append(['  Замовлення', references['order']['value']])
+                rows_to_append.append(['', ''])  # Пустая строка
+
+            # Підсумки
+            totals = approved_data.get('totals', {})
+            if totals:
+                rows_to_append.append(['Підсумки', ''])
+                if totals.get('subtotal'):
+                    rows_to_append.append(['  Сума без ПДВ', totals.get('subtotal')])
+                if totals.get('vat'):
+                    rows_to_append.append(['  ПДВ', totals.get('vat')])
+                if totals.get('total'):
+                    rows_to_append.append(['  Всього', totals.get('total')])
+        else:
+            # Старый формат - просто выводим все поля header
+            for key, value in header.items():
+                if value is not None:
+                    rows_to_append.append([key, str(value)])
+
+        if rows_to_append:
+            worksheet.append_rows(rows_to_append, value_input_option='USER_ENTERED')
+            logger.info(f"✅ Saved header data to Google Sheets (sheet: {sheet_name})")
+
+    async def _save_items_sheet(self, header: Dict[str, Any], items: List[Dict[str, Any]]):
+        """
+        Сохранение позиций в лист "Позиции"
+
+        Args:
+            header: Данные заголовка документа
+            items: Список позиций
+        """
+        sheet_name = self.config.sheets_items_sheet
+        worksheet = await self._get_or_create_worksheet(sheet_name)
+
+        # Проверяем, есть ли заголовки (если лист пустой, добавляем)
+        existing_values = worksheet.get_all_values()
+        if not existing_values or len(existing_values) == 0:
+            await self._add_items_headers(worksheet)
+
+        # Подготовка строк для вставки
+        rows_to_append = []
+
+        for item in items:
+            row = self._format_item_row(header, item)
+            rows_to_append.append(row)
+
+        if not rows_to_append:
+            logger.warning("No items to save to Google Sheets")
+            return
+
+        # Добавляем данные в лист
+        worksheet.append_rows(rows_to_append, value_input_option='USER_ENTERED')
+        logger.info(f"✅ Saved {len(rows_to_append)} rows to Google Sheets (sheet: {sheet_name})")
+
+    async def _add_items_headers(self, worksheet):
+        """
+        Добавление заголовков в лист позиций
 
         Args:
             worksheet: Рабочий лист Google Sheets
@@ -212,6 +346,11 @@ class GoogleSheetsService:
         # Очищаем первую строку и добавляем заголовки
         worksheet.clear()
         worksheet.append_row(headers)
+        # Форматируем первую строку как заголовок
+        worksheet.format('A1:S1', {
+            'backgroundColor': {'red': 0.21, 'green': 0.38, 'blue': 0.57},
+            'textFormat': {'bold': True, 'foregroundColor': {'red': 1.0, 'green': 1.0, 'blue': 1.0}}
+        })
         logger.info(f"Added headers to sheet: {worksheet.title}")
 
     def _format_item_row(self, header: Dict[str, Any], item: Dict[str, Any]) -> List[Any]:
@@ -333,4 +472,165 @@ class GoogleSheetsService:
                 return value
         else:
             return value
+
+    def _extract_header_from_structured_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Извлечение данных заголовка из структурированного JSON
+
+        Args:
+            data: Структурированные данные документа
+
+        Returns:
+            Словарь с данными заголовка в стандартном формате
+        """
+        header = {}
+
+        # Информация о документе
+        doc_info = data.get('document_info', {})
+        header['document_number'] = doc_info.get('document_number')
+        header['date'] = doc_info.get('document_date') or doc_info.get('document_date_normalized')
+        header['currency'] = doc_info.get('currency')
+
+        # Поставщик
+        parties = data.get('parties', {})
+        supplier = parties.get('supplier', {})
+        header['supplier_name'] = supplier.get('name')
+        header['supplier_inn'] = supplier.get('tax_id') or supplier.get('vat_id')
+
+        # Покупатель
+        customer = parties.get('customer', {})
+        header['buyer_name'] = customer.get('name')
+        header['buyer_inn'] = customer.get('tax_id') or customer.get('vat_id')
+
+        # П totals
+        totals = data.get('totals', {})
+        header['total_amount'] = totals.get('total')
+        header['total_vat'] = totals.get('vat')
+
+        # Альтернативные имена для совместимости
+        header['invoice_number'] = header.get('document_number')
+        header['document_date'] = header.get('date')
+
+        return header
+
+    def _map_item_for_sheets(self, item: Dict[str, Any], column_mapping: Dict[str, str]) -> Dict[str, Any]:
+        """
+        Преобразование item из table_data в стандартный формат для Google Sheets
+
+        Args:
+            item: Исходный item из line_items
+            column_mapping: Маппинг колонок
+
+        Returns:
+            Преобразованный item
+        """
+        mapped = {}
+
+        # Стандартные маппинги
+        field_mappings = {
+            'tovar': 'name',
+            'product_name': 'name',
+            'product': 'name',
+            'наименование': 'name',
+            'товар': 'name',
+            'no': 'line_number',
+            'number': 'line_number',
+            'номер': 'line_number',
+            'kilkist': 'quantity',
+            'quantity': 'quantity',
+            'количество': 'quantity',
+            'tsina': 'price',
+            'tsina_bez_pdv': 'price',
+            'price': 'price',
+            'цена': 'price',
+            'suma': 'amount',
+            'suma_bez_pdv': 'amount',
+            'amount': 'amount',
+            'сумма': 'amount',
+            'sku': 'sku',
+            'артикул': 'sku',
+            'unit': 'unit',
+            'единица': 'unit',
+            'vat': 'vat_rate',
+            'nds': 'vat_rate',
+            'пдв': 'vat_rate',
+        }
+
+        # Преобразуем поля
+        for key, value in item.items():
+            if key in ['raw', '_meta']:
+                continue
+
+            normalized_key = field_mappings.get(key.lower(), key)
+
+            # Обрабатываем числовые поля
+            if normalized_key in ['quantity', 'price', 'amount', 'vat_amount']:
+                mapped[normalized_key] = self._parse_numeric_value(value)
+            elif normalized_key == 'line_number':
+                mapped[normalized_key] = self._parse_integer_value(value)
+            elif normalized_key in ['name', 'sku', 'unit', 'vat_rate']:
+                mapped[normalized_key] = str(value) if value is not None else None
+            else:
+                # Сохраняем оригинальное поле
+                mapped[key] = value
+
+        # Убеждаемся, что есть обязательное поле name
+        if 'name' not in mapped:
+            for possible_name_field in ['tovar', 'product_name', 'product', 'наименование', 'товар']:
+                if possible_name_field in mapped:
+                    mapped['name'] = str(mapped.pop(possible_name_field))
+                    break
+
+        if 'name' not in mapped:
+            # Ищем первое текстовое поле
+            for key, value in item.items():
+                if isinstance(value, str) and value.strip() and key not in ['raw']:
+                    mapped['name'] = str(value)
+                    break
+
+        if 'name' not in mapped:
+            mapped['name'] = 'Unknown'
+
+        return mapped
+
+    def _parse_numeric_value(self, value: Any) -> Optional[float]:
+        """Парсинг числового значения"""
+        if value is None:
+            return None
+
+        if isinstance(value, (int, float, Decimal)):
+            return float(value)
+
+        if isinstance(value, str):
+            import re
+            match = re.search(r'[\d.,]+', value.replace(',', '.'))
+            if match:
+                try:
+                    return float(match.group().replace(',', '.'))
+                except (ValueError, TypeError):
+                    pass
+
+        return None
+
+    def _parse_integer_value(self, value: Any) -> Optional[int]:
+        """Парсинг целого числа"""
+        if value is None:
+            return None
+
+        if isinstance(value, int):
+            return value
+
+        if isinstance(value, (float, Decimal)):
+            return int(value)
+
+        if isinstance(value, str):
+            import re
+            match = re.search(r'\d+', value)
+            if match:
+                try:
+                    return int(match.group())
+                except (ValueError, TypeError):
+                    pass
+
+        return None
 
