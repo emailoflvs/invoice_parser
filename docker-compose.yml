@@ -1,5 +1,7 @@
 services:
   # PostgreSQL Database
+  # ВАЖНО: Если на сервере уже есть PostgreSQL, используйте внешнюю БД
+  # Для этого закомментируйте сервис db и укажите DATABASE_URL в .env
   db:
     image: postgres:16-alpine
     container_name: invoiceparser_db
@@ -8,15 +10,18 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-invoiceparser_password}
       POSTGRES_DB: ${DB_NAME:-invoiceparser}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - invoiceparser_postgres_data:/var/lib/postgresql/data
     ports:
-      - "${DB_PORT:-5432}:5432"
+      # Используйте другой порт, если 5432 занят другим PostgreSQL
+      - "${DB_EXTERNAL_PORT:-5433}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-invoiceparser}"]
       interval: 10s
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    networks:
+      - invoiceparser_network
 
   # Основное приложение (CLI/Web/API)
   app:
@@ -61,10 +66,11 @@ services:
         python -m invoiceparser.app.main_web
       "
     ports:
-      - "8000:8000"
+      # Используйте другой порт, если 8000 занят другим приложением
+      - "${APP_PORT:-8000}:8000"
     restart: unless-stopped
     networks:
-      - default
+      - invoiceparser_network
 
   # Telegram бот (опционально)
   telegram-bot:
@@ -84,6 +90,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    networks:
+      - invoiceparser_network
     profiles:
       - telegram
 
@@ -105,8 +113,16 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    networks:
+      - invoiceparser_network
     profiles:
       - email
 
+networks:
+  invoiceparser_network:
+    name: invoiceparser_network
+    driver: bridge
+
 volumes:
-  postgres_data:
+  invoiceparser_postgres_data:
+    name: invoiceparser_postgres_data
