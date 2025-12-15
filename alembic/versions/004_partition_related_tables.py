@@ -45,13 +45,13 @@ def upgrade() -> None:
         # Check if table exists
         result = conn.execute(sa.text("""
             SELECT EXISTS (
-                SELECT FROM information_schema.tables 
-                WHERE table_schema = 'public' 
+                SELECT FROM information_schema.tables
+                WHERE table_schema = 'public'
                 AND table_name = 'document_fields'
             );
         """))
         table_exists = result.scalar()
-        
+
         # Check if table has data (only if table exists)
         has_data = False
         if table_exists:
@@ -125,8 +125,8 @@ def upgrade() -> None:
             # Add foreign keys only if referenced tables exist
             result = conn.execute(sa.text("""
                 SELECT EXISTS (
-                    SELECT FROM information_schema.tables 
-                    WHERE table_schema = 'public' 
+                    SELECT FROM information_schema.tables
+                    WHERE table_schema = 'public'
                     AND table_name = 'field_definitions'
                 );
             """))
@@ -143,8 +143,8 @@ def upgrade() -> None:
 
             result = conn.execute(sa.text("""
                 SELECT EXISTS (
-                    SELECT FROM information_schema.tables 
-                    WHERE table_schema = 'public' 
+                    SELECT FROM information_schema.tables
+                    WHERE table_schema = 'public'
                     AND table_name = 'document_pages'
                 );
             """))
@@ -187,20 +187,20 @@ def upgrade() -> None:
             # NOTE: Cannot create FOREIGN KEY on document_id because documents table is partitioned
             # with PRIMARY KEY (id, created_at). PostgreSQL requires FK to reference unique constraint
             # that includes partition key. We rely on application-level integrity instead.
-            
+
             # Check if table exists before dropping
             result = conn.execute(sa.text("""
                 SELECT EXISTS (
-                    SELECT FROM information_schema.tables 
-                    WHERE table_schema = 'public' 
+                    SELECT FROM information_schema.tables
+                    WHERE table_schema = 'public'
                     AND table_name = 'document_fields'
                 );
             """))
             table_exists = result.scalar()
-            
+
             if table_exists:
                 op.execute("DROP TABLE document_fields CASCADE;")
-            
+
             op.execute("""
                 CREATE TABLE document_fields (
                     id BIGSERIAL NOT NULL,
@@ -245,8 +245,8 @@ def upgrade() -> None:
             # Check if field_definitions table exists
             result = conn.execute(sa.text("""
                 SELECT EXISTS (
-                    SELECT FROM information_schema.tables 
-                    WHERE table_schema = 'public' 
+                    SELECT FROM information_schema.tables
+                    WHERE table_schema = 'public'
                     AND table_name = 'field_definitions'
                 );
             """))
@@ -260,8 +260,8 @@ def upgrade() -> None:
             # Check if document_pages table exists
             result = conn.execute(sa.text("""
                 SELECT EXISTS (
-                    SELECT FROM information_schema.tables 
-                    WHERE table_schema = 'public' 
+                    SELECT FROM information_schema.tables
+                    WHERE table_schema = 'public'
                     AND table_name = 'document_pages'
                 );
             """))
@@ -478,6 +478,9 @@ def upgrade() -> None:
         else:
             # No data - create partitioned table
             op.execute("DROP TABLE document_table_sections CASCADE;")
+            # NOTE: Cannot create FOREIGN KEY on document_id because documents table is partitioned
+            # with PRIMARY KEY (id, created_at). PostgreSQL requires FK to reference unique constraint
+            # that includes partition key. We rely on application-level integrity instead.
             op.execute("""
                 CREATE TABLE document_table_sections (
                     id BIGSERIAL NOT NULL,
@@ -493,8 +496,7 @@ def upgrade() -> None:
                     approved_at TIMESTAMP,
                     created_at TIMESTAMP NOT NULL DEFAULT now(),
                     updated_at TIMESTAMP NOT NULL DEFAULT now(),
-                    PRIMARY KEY (id, document_id),
-                    FOREIGN KEY (document_id) REFERENCES documents(id)
+                    PRIMARY KEY (id, document_id)
                 ) PARTITION BY HASH (document_id);
             """)
 
