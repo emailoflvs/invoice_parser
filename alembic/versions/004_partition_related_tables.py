@@ -42,9 +42,24 @@ def upgrade() -> None:
     is_partitioned = result.scalar() > 0
 
     if not is_partitioned:
-        # Check if table has data
-        result = conn.execute(sa.text("SELECT COUNT(*) FROM document_fields;"))
-        has_data = result.scalar() > 0
+        # Check if table exists
+        result = conn.execute(sa.text("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = 'document_fields'
+            );
+        """))
+        table_exists = result.scalar()
+        
+        # Check if table has data (only if table exists)
+        has_data = False
+        if table_exists:
+            try:
+                result = conn.execute(sa.text("SELECT COUNT(*) FROM document_fields;"))
+                has_data = result.scalar() > 0
+            except Exception:
+                has_data = False
 
         if has_data:
             # Create partitioned table structure
@@ -90,14 +105,16 @@ def upgrade() -> None:
                     FOR VALUES WITH (modulus 4, remainder {i});
                 """)
 
-            # Copy data
-            op.execute("""
-                INSERT INTO document_fields_partitioned
-                SELECT * FROM document_fields;
-            """)
+            # Copy data (only if there is data)
+            if has_data:
+                op.execute("""
+                    INSERT INTO document_fields_partitioned
+                    SELECT * FROM document_fields;
+                """)
 
-            # Drop old table and rename
-            op.execute("DROP TABLE document_fields CASCADE;")
+            # Drop old table and rename (only if table existed)
+            if table_exists:
+                op.execute("DROP TABLE document_fields CASCADE;")
             op.execute("ALTER TABLE document_fields_partitioned RENAME TO document_fields;")
 
             # NOTE: Cannot create FOREIGN KEY on document_id because documents table is partitioned
@@ -105,17 +122,42 @@ def upgrade() -> None:
             # that includes partition key. We rely on application-level integrity instead.
             # Foreign key constraint is skipped for partitioned tables.
 
-            op.execute("""
-                ALTER TABLE document_fields
-                ADD CONSTRAINT document_fields_field_id_fkey
-                FOREIGN KEY (field_id) REFERENCES field_definitions(id);
-            """)
+            # Add foreign keys only if referenced tables exist
+            result = conn.execute(sa.text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_schema = 'public' 
+                    AND table_name = 'field_definitions'
+                );
+            """))
+            if result.scalar():
+                try:
+                    op.execute("""
+                        ALTER TABLE document_fields
+                        ADD CONSTRAINT document_fields_field_id_fkey
+                        FOREIGN KEY (field_id) REFERENCES field_definitions(id);
+                    """)
+                except Exception as e:
+                    # Constraint might already exist, skip
+                    pass
 
-            op.execute("""
-                ALTER TABLE document_fields
-                ADD CONSTRAINT document_fields_page_id_fkey
-                FOREIGN KEY (page_id) REFERENCES document_pages(id);
-            """)
+            result = conn.execute(sa.text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_schema = 'public' 
+                    AND table_name = 'document_pages'
+                );
+            """))
+            if result.scalar():
+                try:
+                    op.execute("""
+                        ALTER TABLE document_fields
+                        ADD CONSTRAINT document_fields_page_id_fkey
+                        FOREIGN KEY (page_id) REFERENCES document_pages(id);
+                    """)
+                except Exception as e:
+                    # Constraint might already exist, skip
+                    pass
 
             # Recreate indexes
             op.execute("""
@@ -145,7 +187,20 @@ def upgrade() -> None:
             # NOTE: Cannot create FOREIGN KEY on document_id because documents table is partitioned
             # with PRIMARY KEY (id, created_at). PostgreSQL requires FK to reference unique constraint
             # that includes partition key. We rely on application-level integrity instead.
-            op.execute("DROP TABLE document_fields CASCADE;")
+            
+            # Check if table exists before dropping
+            result = conn.execute(sa.text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_schema = 'public' 
+                    AND table_name = 'document_fields'
+                );
+            """))
+            table_exists = result.scalar()
+            
+            if table_exists:
+                op.execute("DROP TABLE document_fields CASCADE;")
+            
             op.execute("""
                 CREATE TABLE document_fields (
                     id BIGSERIAL NOT NULL,
@@ -187,17 +242,35 @@ def upgrade() -> None:
                 """)
 
             # Add foreign keys (except document_id - see comment above)
-            op.execute("""
-                ALTER TABLE document_fields
-                ADD CONSTRAINT document_fields_field_id_fkey
-                FOREIGN KEY (field_id) REFERENCES field_definitions(id);
-            """)
+            # Check if field_definitions table exists
+            result = conn.execute(sa.text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_schema = 'public' 
+                    AND table_name = 'field_definitions'
+                );
+            """))
+            if result.scalar():
+                op.execute("""
+                    ALTER TABLE document_fields
+                    ADD CONSTRAINT document_fields_field_id_fkey
+                    FOREIGN KEY (field_id) REFERENCES field_definitions(id);
+                """)
 
-            op.execute("""
-                ALTER TABLE document_fields
-                ADD CONSTRAINT document_fields_page_id_fkey
-                FOREIGN KEY (page_id) REFERENCES document_pages(id);
-            """)
+            # Check if document_pages table exists
+            result = conn.execute(sa.text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_schema = 'public' 
+                    AND table_name = 'document_pages'
+                );
+            """))
+            if result.scalar():
+                op.execute("""
+                    ALTER TABLE document_fields
+                    ADD CONSTRAINT document_fields_page_id_fkey
+                    FOREIGN KEY (page_id) REFERENCES document_pages(id);
+                """)
 
             # Create indexes
             op.execute("""
