@@ -142,6 +142,9 @@ def upgrade() -> None:
             """)
         else:
             # No data - just recreate as partitioned
+            # NOTE: Cannot create FOREIGN KEY on document_id because documents table is partitioned
+            # with PRIMARY KEY (id, created_at). PostgreSQL requires FK to reference unique constraint
+            # that includes partition key. We rely on application-level integrity instead.
             op.execute("DROP TABLE document_fields CASCADE;")
             op.execute("""
                 CREATE TABLE document_fields (
@@ -172,10 +175,7 @@ def upgrade() -> None:
                     bbox JSONB,
                     created_at TIMESTAMP NOT NULL DEFAULT now(),
                     updated_at TIMESTAMP NOT NULL DEFAULT now(),
-                    PRIMARY KEY (id, document_id),
-                    FOREIGN KEY (document_id) REFERENCES documents(id),
-                    FOREIGN KEY (field_id) REFERENCES field_definitions(id),
-                    FOREIGN KEY (page_id) REFERENCES document_pages(id)
+                    PRIMARY KEY (id, document_id)
                 ) PARTITION BY HASH (document_id);
             """)
 
@@ -185,6 +185,19 @@ def upgrade() -> None:
                     CREATE TABLE document_fields_p{i} PARTITION OF document_fields
                     FOR VALUES WITH (modulus 4, remainder {i});
                 """)
+
+            # Add foreign keys (except document_id - see comment above)
+            op.execute("""
+                ALTER TABLE document_fields
+                ADD CONSTRAINT document_fields_field_id_fkey
+                FOREIGN KEY (field_id) REFERENCES field_definitions(id);
+            """)
+
+            op.execute("""
+                ALTER TABLE document_fields
+                ADD CONSTRAINT document_fields_page_id_fkey
+                FOREIGN KEY (page_id) REFERENCES document_pages(id);
+            """)
 
             # Create indexes
             op.execute("""
