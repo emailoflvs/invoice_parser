@@ -1,28 +1,4 @@
 services:
-  # PostgreSQL Database
-  # ВАЖНО: Если на сервере уже есть PostgreSQL, используйте внешнюю БД
-  # Для этого закомментируйте сервис db и укажите DATABASE_URL в .env
-  db:
-    image: postgres:16-alpine
-    container_name: invoiceparser_db
-    environment:
-      POSTGRES_USER: ${DB_USER:-invoiceparser}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-invoiceparser_password}
-      POSTGRES_DB: ${DB_NAME:-invoiceparser}
-    volumes:
-      - invoiceparser_postgres_data:/var/lib/postgresql/data
-    ports:
-      # Используйте другой порт, если 5432 занят другим PostgreSQL
-      - "${DB_EXTERNAL_PORT:-5433}:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-invoiceparser}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-    networks:
-      - invoiceparser_network
-
   # Основное приложение (CLI/Web/API)
   app:
     build: .
@@ -68,6 +44,30 @@ services:
     ports:
       # Используйте другой порт, если 8000 занят другим приложением
       - "${APP_PORT:-8000}:8000"
+    restart: unless-stopped
+    networks:
+      - invoiceparser_network
+
+  # PostgreSQL Database
+  # ВАЖНО: Если на сервере уже есть PostgreSQL, используйте внешнюю БД
+  # Для этого закомментируйте сервис db и укажите DATABASE_URL в .env
+  db:
+    image: postgres:16-alpine
+    container_name: invoiceparser_db
+    environment:
+      POSTGRES_USER: ${DB_USER:-invoiceparser}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-invoiceparser_password}
+      POSTGRES_DB: ${DB_NAME:-invoiceparser}
+    volumes:
+      - invoiceparser_postgres_data:/var/lib/postgresql/data
+    ports:
+      # Используйте другой порт, если 5432 занят другим PostgreSQL
+      - "${DB_EXTERNAL_PORT:-5433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-invoiceparser}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
     networks:
       - invoiceparser_network
