@@ -16,9 +16,9 @@ services:
       - ./alembic.ini:/app/alembic.ini
       - ./alembic:/app/alembic
       - ./scripts:/app/scripts
-    depends_on:
-      db:
-        condition: service_healthy
+    # depends_on:
+    #   db:
+    #     condition: service_healthy
     environment:
       - PYTHONPATH=/app/src
       - LOGS_DIR=/app/logs
