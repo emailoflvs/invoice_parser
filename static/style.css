@@ -1158,3 +1158,24 @@ body {
 .btn-fast i, .btn-detailed i {
     font-size: 1.2rem;
 }
+
+/* Confirm Dialog Animations */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
