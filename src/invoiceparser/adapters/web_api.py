@@ -713,7 +713,7 @@ class WebAPI:
                 status_code = 500
                 if error_code == "E001":  # Quota
                     status_code = 503  # Service Unavailable
-                elif error_code in ["E002", "E003"]:  # Config errors
+                elif error_code in ["E002", "E003", "E006"]:  # Config errors
                     status_code = 500  # Internal Server Error
                 elif error_code == "E004":  # Timeout
                     status_code = 504  # Gateway Timeout

@@ -446,7 +446,7 @@ async function parseDocument(mode = 'detailed') {
                 userMessage = `${emoji} ${message}`;
 
                 // Добавляем код ошибки только для технических проблем (не показываем клиенту детали)
-                if (['E002', 'E003', 'E099'].includes(code)) {
+                if (['E002', 'E003', 'E006', 'E099'].includes(code)) {
                     userMessage += ` [${code}]`;
                 }
             } else if (response.status === 400) {
