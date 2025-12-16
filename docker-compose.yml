@@ -12,7 +12,7 @@ services:
       - ${GOOGLE_SHEETS_CREDENTIALS:-./google_sheets_credentials.json}:/app/google_sheets_credentials.json
       - ${SRC_DIR:-./src}:/app/src
       - ${STATIC_DIR:-./static}:/app/static
-      - ${PROMPTS_DIR:-./prompts}:/app/prompts
+      - /opt/docker-projects/invoice_parser/prompts:/app/prompts
       - ./alembic.ini:/app/alembic.ini
       - ./alembic:/app/alembic
       - ./scripts:/app/scripts
@@ -68,7 +68,7 @@ services:
       - ${OUTPUT_DIR:-./output}:/app/output
       - ${LOGS_DIR:-./logs}:/app/logs
       - ${SRC_DIR:-./src}:/app/src
-      - ${PROMPTS_DIR:-./prompts}:/app/prompts
+      - /opt/docker-projects/invoice_parser/prompts:/app/prompts
       - ./.env:/app/.env
     environment:
       - PYTHONPATH=/app/src
