@@ -16,9 +16,9 @@ services:
       - ./alembic.ini:/app/alembic.ini
       - ./alembic:/app/alembic
       - ./scripts:/app/scripts
-    # depends_on:
-    #   db:
-    #     condition: service_healthy
+    depends_on:
+      db:
+        condition: service_healthy
     environment:
       - PYTHONPATH=/app/src
       - LOGS_DIR=/app/logs
@@ -29,6 +29,7 @@ services:
       - PROMPTS_DIR=/app/prompts
     command: >
       sh -c "
+        python scripts/wait_for_db.py &&
         echo '📦 Running database migrations...' &&
         python -m alembic upgrade head &&
         echo '✅ Starting application...' &&
@@ -40,25 +41,25 @@ services:
     networks:
       - invoiceparser_network
 
-  # db:
-  #   image: postgres:16-alpine
-  #   container_name: invoiceparser_db
-  #   environment:
-  #     POSTGRES_USER: ${DB_USER:-invoiceparser}
-  #     POSTGRES_PASSWORD: ${DB_PASSWORD:-invoiceparser_password}
-  #     POSTGRES_DB: ${DB_NAME:-invoiceparser}
-  #   volumes:
-  #     - invoiceparser_postgres_data:/var/lib/postgresql/data
-  #   ports:
-  #     - "${DB_EXTERNAL_PORT:-5433}:5432"
-  #   healthcheck:
-  #     test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-invoiceparser}"]
-  #     interval: 10s
-  #     timeout: 5s
-  #     retries: 5
-  #   restart: unless-stopped
-  #   networks:
-  #     - invoiceparser_network
+  db:
+    image: postgres:16-alpine
+    container_name: invoiceparser_db
+    environment:
+      POSTGRES_USER: ${DB_USER:-invoiceparser}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-invoiceparser_password}
+      POSTGRES_DB: ${DB_NAME:-invoiceparser}
+    volumes:
+      - invoiceparser_postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${DB_EXTERNAL_PORT:-5433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-invoiceparser}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - invoiceparser_network
 
   telegram-bot:
     build: .
