@@ -765,7 +765,9 @@ function displayEditableData(data) {
         // For string/number values
         // Если это JSON строка (начинается с { или [), всегда используем textarea
         const isJsonString = typeof fieldValue === 'string' && (fieldValue.trim().startsWith('{') || fieldValue.trim().startsWith('['));
-        if (isJsonString || (typeof fieldValue === 'string' && fieldValue.length > 60)) {
+        // Для поля name всегда используем textarea (чтобы было видно полностью)
+        const isNameField = key === 'name';
+        if (isJsonString || isNameField || (typeof fieldValue === 'string' && fieldValue.length > 60)) {
             return `
                 <div class="editable-field">
                     <label class="editable-label" for="${fieldId}">${displayLabel}</label>
