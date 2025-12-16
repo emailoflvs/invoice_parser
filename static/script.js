@@ -604,9 +604,139 @@ function resetApp() {
     showSection('upload');
 }
 
+// Кастомный диалог подтверждения в стиле проекта
+function showConfirmDialog(message, title = 'Підтвердження') {
+    return new Promise((resolve) => {
+        // Создаем overlay
+        const overlay = document.createElement('div');
+        overlay.className = 'confirm-overlay';
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            animation: fadeIn 0.2s ease-out;
+        `;
+
+        // Создаем диалог
+        const dialog = document.createElement('div');
+        dialog.className = 'confirm-dialog';
+        dialog.style.cssText = `
+            background: var(--card-background, #ffffff);
+            border-radius: 12px;
+            padding: 24px;
+            max-width: 400px;
+            width: 90%;
+            box-shadow: var(--shadow-lg, 0 20px 25px -5px rgb(0 0 0 / 0.1));
+            animation: slideUp 0.3s ease-out;
+        `;
+
+        // Заголовок
+        const titleEl = document.createElement('div');
+        titleEl.style.cssText = `
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-primary, #1e293b);
+            margin-bottom: 12px;
+        `;
+        titleEl.textContent = title;
+
+        // Сообщение
+        const messageEl = document.createElement('div');
+        messageEl.style.cssText = `
+            color: var(--text-secondary, #64748b);
+            margin-bottom: 24px;
+            line-height: 1.5;
+        `;
+        messageEl.textContent = message;
+
+        // Кнопки
+        const buttonsEl = document.createElement('div');
+        buttonsEl.style.cssText = `
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        `;
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.textContent = 'Скасувати';
+        cancelBtn.style.cssText = `
+            padding: 10px 20px;
+            border: 2px solid var(--border-color, #e2e8f0);
+            border-radius: 8px;
+            background: var(--card-background, #ffffff);
+            color: var(--text-primary, #1e293b);
+            cursor: pointer;
+            font-size: 0.95rem;
+            font-weight: 500;
+            transition: all 0.2s;
+        `;
+        cancelBtn.onmouseover = () => {
+            cancelBtn.style.background = 'var(--background, #f8fafc)';
+        };
+        cancelBtn.onmouseout = () => {
+            cancelBtn.style.background = 'var(--card-background, #ffffff)';
+        };
+        cancelBtn.onclick = () => {
+            document.body.removeChild(overlay);
+            resolve(false);
+        };
+
+        const okBtn = document.createElement('button');
+        okBtn.textContent = 'OK';
+        okBtn.style.cssText = `
+            padding: 10px 20px;
+            border: 2px solid var(--secondary-color, #10b981);
+            border-radius: 8px;
+            background: var(--secondary-color, #10b981);
+            color: white;
+            cursor: pointer;
+            font-size: 0.95rem;
+            font-weight: 500;
+            transition: all 0.2s;
+        `;
+        okBtn.onmouseover = () => {
+            okBtn.style.background = '#059669';
+            okBtn.style.borderColor = '#059669';
+        };
+        okBtn.onmouseout = () => {
+            okBtn.style.background = 'var(--secondary-color, #10b981)';
+            okBtn.style.borderColor = 'var(--secondary-color, #10b981)';
+        };
+        okBtn.onclick = () => {
+            document.body.removeChild(overlay);
+            resolve(true);
+        };
+
+        buttonsEl.appendChild(cancelBtn);
+        buttonsEl.appendChild(okBtn);
+
+        dialog.appendChild(titleEl);
+        dialog.appendChild(messageEl);
+        dialog.appendChild(buttonsEl);
+        overlay.appendChild(dialog);
+        document.body.appendChild(overlay);
+
+        // Закрытие по клику на overlay
+        overlay.onclick = (e) => {
+            if (e.target === overlay) {
+                document.body.removeChild(overlay);
+                resolve(false);
+            }
+        };
+    });
+}
+
 // Выход из системы
-function handleLogout() {
-    if (confirm('Ви впевнені, що хочете вийти з системи?')) {
+async function handleLogout() {
+    const confirmed = await showConfirmDialog('Ви впевнені, що хочете вийти з системи?', 'Підтвердження виходу');
+    if (confirmed) {
         // Удаляем токен
         state.authToken = '';
         localStorage.removeItem('authToken');
@@ -788,11 +918,11 @@ function displayEditableData(data) {
     if (data.document_info) {
         html += '<div class="editable-group">';
         html += '<div class="editable-group-title"><i class="fas fa-file-alt"></i> Інформація про документ</div>';
-        
+
         // Определяем порядок полей: тип документа, номер документа, дата, место, остальное
         const docInfoFieldOrder = ['document_type', 'document_number', 'document_date', 'date', 'document_date_normalized', 'location', 'place_of_compilation', 'compilation_place', 'currency'];
         const processedDocKeys = new Set();
-        
+
         // Обрабатываем поля в заданном порядке
         for (const key of docInfoFieldOrder) {
             if (key in data.document_info && !key.endsWith('_label')) {
@@ -809,7 +939,7 @@ function displayEditableData(data) {
                 }
             }
         }
-        
+
         // Остальные поля document_info (только непустые)
         for (const [key, value] of Object.entries(data.document_info)) {
             if (key.endsWith('_label') || processedDocKeys.has(key)) continue;
@@ -893,7 +1023,7 @@ function displayEditableData(data) {
                         }
                     }
                 }
-                
+
                 // Телефон всегда после адреса
                 if ('phone' in roleData && !processedKeys.has('phone')) {
                     const phoneValue = roleData.phone;
@@ -904,7 +1034,7 @@ function displayEditableData(data) {
                         html += createField('phone', phoneValue, ukrainianLabel, roleData);
                     }
                 }
-                
+
                 // Остальные поля компании (кроме name, bank, account_number, phone и банковских)
                 for (const [key, value] of Object.entries(roleData)) {
                     if (key === '_label' || processedKeys.has(key)) continue;
@@ -912,7 +1042,7 @@ function displayEditableData(data) {
                     if (key.startsWith('bank_')) continue; // Банковские поля обработаем позже
                     // Пропускаем пустые поля
                     if (value === null || value === undefined || value === '') continue;
-                    
+
                     processedKeys.add(key);
                     const ukrainianLabel = fieldLabels[key] || null;
                     if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
@@ -1589,8 +1719,9 @@ async function saveAndContinue() {
         elements.saveAndContinueBtn.innerHTML = '<i class="fas fa-save"></i> Зберегти та продовжити';
 
         // Optional: reset to upload new document
-        setTimeout(() => {
-            if (confirm('Хочете завантажити новий документ?')) {
+        setTimeout(async () => {
+            const confirmed = await showConfirmDialog('Хочете завантажити новий документ?', 'doclogic.eu');
+            if (confirmed) {
                 resetApp();
             }
         }, 1500);
