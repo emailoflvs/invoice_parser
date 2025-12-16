@@ -906,12 +906,13 @@ body {
     width: 100%;
     border-collapse: collapse;
     margin-top: 10px;
+    table-layout: auto; /* Автоматическая раскладка для гибкости */
 }
 
 .editable-items-table th {
     background: var(--primary-color);
     color: white;
-    padding: 12px;
+    padding: 12px 8px;
     text-align: left;
     font-weight: 600;
     font-size: 0.9rem;
@@ -922,12 +923,42 @@ body {
     border-bottom: 1px solid var(--border-color);
 }
 
+/* Колонки с цифрами - минимальная ширина, только для цифр */
+.editable-items-table th.col-numeric,
+.editable-items-table td.col-numeric {
+    width: 1%; /* Минимальная ширина */
+    min-width: 70px;
+    max-width: 120px;
+    white-space: nowrap;
+    text-align: right; /* Выравнивание цифр по правому краю */
+}
+
+.editable-items-table th.col-numeric {
+    text-align: center; /* Заголовки по центру */
+}
+
+/* Колонка с товаром - занимает все оставшееся место */
+.editable-items-table th.col-product,
+.editable-items-table td.col-product {
+    width: auto; /* Автоматическая ширина, занимает оставшееся место */
+    min-width: 250px;
+}
+
+/* Остальные колонки - средняя ширина */
+.editable-items-table th.col-default,
+.editable-items-table td.col-default {
+    width: auto;
+    min-width: 90px;
+    max-width: 180px;
+}
+
 .editable-items-table input {
     width: 100%;
     padding: 8px;
     border: 1px solid var(--border-color);
     border-radius: 6px;
     font-size: 0.95rem;
+    box-sizing: border-box;
 }
 
 .editable-items-table input:focus {

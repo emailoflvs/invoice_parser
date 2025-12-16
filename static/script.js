@@ -685,11 +685,6 @@ const fieldLabels = {
     'customer_name': 'Покупець',
 
     // Additional fields
-    'role': 'Роль',
-    'is_signed': 'Підписано',
-    'is_stamped': 'Печатка',
-    'stamp_content': 'Зміст печатки',
-    'handwritten_date': 'Дата від руки',
     'label_raw': 'Мітка',
     'value_raw': 'Значення'
 };
@@ -833,12 +828,31 @@ function displayEditableData(data) {
 
                 html += '<div class="editable-group">';
                 html += `<div class="editable-group-title"><i class="fas ${roleInfo.icon}"></i> ${roleTitle}</div>`;
+
+                // Определяем порядок полей: name должен быть первым
+                const fieldOrder = ['name', 'account_number', 'bank', 'address', 'phone', 'tax_id', 'vat_id', 'edrpou', 'ipn'];
+
+                // Сначала обрабатываем поля в заданном порядке
+                const processedKeys = new Set();
+                for (const key of fieldOrder) {
+                    if (key in roleData && key !== '_label') {
+                        processedKeys.add(key);
+                        const value = roleData[key];
+                        const ukrainianLabel = fieldLabels[key] || null;
+                        if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+                            html += createField(key, JSON.stringify(value, null, 2), ukrainianLabel, roleData);
+                        } else if (Array.isArray(value)) {
+                            html += createField(key, JSON.stringify(value, null, 2), ukrainianLabel, roleData);
+                        } else {
+                            html += createField(key, value, ukrainianLabel, roleData);
+                        }
+                    }
+                }
+
+                // Затем обрабатываем остальные поля в исходном порядке
                 for (const [key, value] of Object.entries(roleData)) {
-                    // Пропускаем _label, так как он уже использован в заголовке
-                    if (key === '_label') continue;
-                    // Используем украинские названия из fieldLabels
+                    if (key === '_label' || processedKeys.has(key)) continue;
                     const ukrainianLabel = fieldLabels[key] || null;
-                    // Показываем все поля, включая объекты и массивы
                     if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
                         html += createField(key, JSON.stringify(value, null, 2), ukrainianLabel, roleData);
                     } else if (Array.isArray(value)) {
@@ -977,28 +991,6 @@ function displayEditableData(data) {
 
     // amounts_in_words теперь отображаются внутри totals, блок удален
 
-    // Process signatures - в grid
-    // По промпту header_v8.txt: signatures - это ARRAY of objects
-    if (data.signatures && Array.isArray(data.signatures)) {
-        html += '<div class="editable-group">';
-        html += '<div class="editable-group-title"><i class="fas fa-signature"></i> Підписи</div>';
-        data.signatures.forEach((signature, index) => {
-            if (typeof signature === 'object' && signature !== null) {
-                // Добавляем заголовок для каждой подписи, если их несколько
-                if (data.signatures.length > 1) {
-                    html += `<div style="margin-top: ${index > 0 ? '20px' : '0'}; padding-top: ${index > 0 ? '15px' : '0'}; border-top: ${index > 0 ? '1px solid var(--border-color)' : 'none'}; margin-bottom: 10px;"><strong>Підпис ${index + 1}:</strong></div>`;
-                }
-                // Обрабатываем поля подписи согласно промпту: role, name, is_signed, is_stamped, stamp_content, handwritten_date
-                const signatureFields = ['role', 'name', 'is_signed', 'is_stamped', 'stamp_content', 'handwritten_date'];
-                signatureFields.forEach(fieldName => {
-                    const value = signature[fieldName];
-                    const ukrainianLabel = fieldLabels[fieldName] || null;
-                    html += createField(`signature_${index}_${fieldName}`, value, ukrainianLabel, signature);
-                });
-            }
-        });
-        html += '</div>';
-    }
 
     // Process other_fields - в grid
     // Переименовано в "Дополнительная информация" и объединяем label, value, key в одно поле
@@ -1063,7 +1055,7 @@ function displayEditableData(data) {
     // references не обрабатываем - секция удалена по запросу пользователя
     // _meta и test_results - техническая информация, не показываем пользователю
     const processedSections = ['document_info', 'parties', 'references', 'totals', 'amounts_in_words',
-                                'signatures', 'other_fields', 'line_items', 'items', 'column_mapping', 'table_data',
+                                'other_fields', 'line_items', 'items', 'column_mapping', 'table_data',
                                 '_meta', 'test_results'];  // Исключаем техническую информацию
     const remainingFields = Object.entries(data).filter(([key]) =>
         !processedSections.includes(key) &&
@@ -1107,13 +1099,47 @@ function displayEditableData(data) {
         html += '<div class="table-container">';
         html += '<table class="editable-items-table">';
 
+        // Определяем, какие колонки содержат цифры (узкие) и какая колонка - товар (широкая)
+        const numericColumns = ['no', 'line_number', 'number', '№', 'кількість', 'quantity', 'kilkist', 'од. вим.', 'unit',
+                                'ціна', 'price', 'tsina', 'сума', 'amount', 'suma', 'ukt_zed', 'ukt_zed_code', 'код', 'code',
+                                'артикул', 'article', 'шк', 'barcode', 'sku', 'пдв', 'vat', 'vat_amount', 'од.вим'];
+        const productColumns = ['product_name', 'description', 'tovar', 'товар', 'найменування', 'найменування товара',
+                                'товари', 'товари (роботи, послуги)', 'goods', 'services', 'найменування товара'];
+
         // Table header
         const firstItem = items[0];
+        const allKeys = Object.keys(firstItem).filter(key => !key.endsWith('_label') && key !== 'raw');
+
+        // Функция для определения класса колонки
+        const getColumnClass = (key, label) => {
+            const keyLower = key.toLowerCase().trim();
+            const labelLower = (label || '').toLowerCase().trim();
+
+            // Проверяем, является ли колонка товаром
+            if (productColumns.includes(keyLower) ||
+                productColumns.some(pc => labelLower.includes(pc)) ||
+                labelLower.includes('товар') || labelLower.includes('найменування')) {
+                return 'col-product';
+            }
+
+            // Проверяем, является ли колонка числовой
+            if (numericColumns.includes(keyLower) ||
+                numericColumns.some(nc => labelLower.includes(nc)) ||
+                labelLower.includes('№') || labelLower.includes('кількість') ||
+                labelLower.includes('ціна') || labelLower.includes('сума') ||
+                labelLower.includes('пдв') || labelLower.includes('кт') ||
+                labelLower.includes('артикул') || labelLower.includes('код')) {
+                return 'col-numeric';
+            }
+
+            return 'col-default';
+        };
+
         html += '<thead><tr>';
-        for (const key of Object.keys(firstItem)) {
-            if (key.endsWith('_label') || key === 'raw') continue; // Пропускаем _label и raw
+        for (const key of allKeys) {
             const label = column_mapping?.[key] || getLabel(firstItem, key);
-            html += `<th>${label}</th>`;
+            const columnClass = getColumnClass(key, label);
+            html += `<th class="${columnClass}">${label}</th>`;
         }
         html += '</tr></thead>';
 
@@ -1121,9 +1147,12 @@ function displayEditableData(data) {
         html += '<tbody>';
         items.forEach((item, index) => {
             html += '<tr>';
-            for (const [key, value] of Object.entries(item)) {
-                if (key.endsWith('_label') || key === 'raw') continue; // Пропускаем _label и raw
+            for (const key of allKeys) {
+                const value = item[key];
                 const fieldId = `item_${index}_${key}`;
+                const label = column_mapping?.[key] || getLabel(firstItem, key);
+                const columnClass = getColumnClass(key, label);
+
                 // Показываем все значения, включая объекты и массивы
                 let displayValue = '';
                 if (value === null || value === undefined) {
@@ -1133,7 +1162,7 @@ function displayEditableData(data) {
                 } else {
                     displayValue = String(value);
                 }
-                html += `<td><input type="text" id="${fieldId}" class="item-input" data-index="${index}" data-key="${key}" value="${escapeHtml(displayValue)}" title="${escapeHtml(displayValue)}"></td>`;
+                html += `<td class="${columnClass}"><input type="text" id="${fieldId}" class="item-input" data-index="${index}" data-key="${key}" value="${escapeHtml(displayValue)}" title="${escapeHtml(displayValue)}"></td>`;
             }
             html += '</tr>';
         });
@@ -1159,39 +1188,6 @@ function collectEditedData() {
         const key = input.dataset.key;
         let value = input.value;
 
-        // Обработка полей signatures (формат: signature_0_role, signature_0_name и т.д.)
-        if (key.startsWith('signature_')) {
-            const parts = key.split('_');
-            if (parts.length >= 3) {
-                const index = parseInt(parts[1]);
-                const fieldName = parts.slice(2).join('_'); // На случай, если поле содержит подчеркивания
-
-                // Убеждаемся, что signatures - массив
-                if (!Array.isArray(editedData.signatures)) {
-                    editedData.signatures = [];
-                }
-                // Создаем объект подписи, если его нет
-                if (!editedData.signatures[index]) {
-                    editedData.signatures[index] = {};
-                }
-
-                // Конвертируем значение
-                if (input.tagName === 'SELECT') {
-                    value = value === 'true';
-                } else if (fieldName === 'is_signed' || fieldName === 'is_stamped') {
-                    // Boolean поля
-                    value = value === 'true' || value === true || value === '1';
-                } else if (!isNaN(value) && value !== '') {
-                    const originalValue = editedData.signatures[index][fieldName];
-                    if (typeof originalValue === 'number') {
-                        value = parseFloat(value);
-                    }
-                }
-
-                editedData.signatures[index][fieldName] = value;
-                return; // Пропускаем updateNestedValue для signatures
-            }
-        }
 
         // Обработка полей _in_words (формат: total_in_words, vat_in_words и т.д.)
         // Эти поля теперь отображаются внутри totals, под числовыми значениями

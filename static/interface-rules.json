@@ -97,15 +97,6 @@
         }
       }
     },
-    "signatures": {
-      "enabled": true,
-      "title_source": "static",
-      "title": "Підписи",
-      "icon": "fa-signature",
-      "is_array": true,
-      "field_order": ["role", "name", "is_signed", "is_stamped", "stamp_content", "handwritten_date"],
-      "show_index_if_multiple": true
-    },
     "other_fields": {
       "enabled": true,
       "title_source": "static",
@@ -213,7 +204,6 @@
       "references",
       "totals",
       "amounts_in_words",
-      "signatures",
       "other_fields",
       "line_items",
       "items",
@@ -237,6 +227,7 @@
     }
   }
 }
+
 
 
 
