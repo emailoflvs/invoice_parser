@@ -937,11 +937,14 @@ body {
     text-align: center; /* Заголовки по центру */
 }
 
-/* Колонка с товаром - занимает все оставшееся место */
+/* Колонка с товаром - занимает все оставшееся место, многострочный текст */
 .editable-items-table th.col-product,
 .editable-items-table td.col-product {
     width: auto; /* Автоматическая ширина, занимает оставшееся место */
     min-width: 250px;
+    white-space: normal; /* Разрешаем перенос строк */
+    word-wrap: break-word; /* Перенос длинных слов */
+    word-break: break-word; /* Перенос слов при необходимости */
 }
 
 /* Остальные колонки - средняя ширина */
@@ -962,6 +965,28 @@ body {
 }
 
 .editable-items-table input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+/* Textarea для колонки товара - многострочный текст */
+.editable-items-table td.col-product textarea {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 0.95rem;
+    box-sizing: border-box;
+    white-space: pre-wrap; /* Сохраняем переносы строк и переносим текст */
+    word-wrap: break-word;
+    word-break: break-word;
+    min-height: 60px; /* Минимальная высота для многострочного текста */
+    resize: vertical; /* Разрешаем изменение размера по вертикали */
+    font-family: inherit; /* Наследуем шрифт */
+    line-height: 1.4;
+}
+
+.editable-items-table td.col-product textarea:focus {
     outline: none;
     border-color: var(--primary-color);
 }

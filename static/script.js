@@ -829,16 +829,56 @@ function displayEditableData(data) {
                 html += '<div class="editable-group">';
                 html += `<div class="editable-group-title"><i class="fas ${roleInfo.icon}"></i> ${roleTitle}</div>`;
 
-                // Определяем порядок полей: name должен быть первым
-                const fieldOrder = ['name', 'account_number', 'bank', 'address', 'phone', 'tax_id', 'vat_id', 'edrpou', 'ipn'];
-
-                // Сначала обрабатываем поля в заданном порядке
+                // Определяем порядок полей:
+                // 1. Название компании (name)
+                // 2. Данные компании (edrpou, ipn, tax_id, vat_id, address, phone и другие)
+                // 3. Название банка (bank)
+                // 4. Данные банка (bank_edrpou, bank_ipn, bank_address, bank_phone и другие)
+                // 5. Номер рахунку (account_number)
+                
+                const companyDataFields = ['edrpou', 'ipn', 'tax_id', 'vat_id', 'address', 'phone', 'email', 'website', 'contact_person'];
+                const bankDataFields = ['bank_edrpou', 'bank_ipn', 'bank_address', 'bank_phone', 'bank_email', 'bank_contact'];
+                
                 const processedKeys = new Set();
-                for (const key of fieldOrder) {
-                    if (key in roleData && key !== '_label') {
+                
+                // 1. Название компании
+                if ('name' in roleData && roleData.name !== '_label') {
+                    processedKeys.add('name');
+                    const value = roleData.name;
+                    const ukrainianLabel = fieldLabels['name'] || null;
+                    html += createField('name', value, ukrainianLabel, roleData);
+                }
+                
+                // 2. Данные компании (все поля кроме name, bank, account_number и банковских)
+                for (const [key, value] of Object.entries(roleData)) {
+                    if (key === '_label' || processedKeys.has(key)) continue;
+                    if (key === 'name' || key === 'bank' || key === 'account_number') continue;
+                    if (key.startsWith('bank_')) continue; // Банковские поля обработаем позже
+                    
+                    processedKeys.add(key);
+                    const ukrainianLabel = fieldLabels[key] || null;
+                    if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+                        html += createField(key, JSON.stringify(value, null, 2), ukrainianLabel, roleData);
+                    } else if (Array.isArray(value)) {
+                        html += createField(key, JSON.stringify(value, null, 2), ukrainianLabel, roleData);
+                    } else {
+                        html += createField(key, value, ukrainianLabel, roleData);
+                    }
+                }
+                
+                // 3. Название банка
+                if ('bank' in roleData) {
+                    processedKeys.add('bank');
+                    const value = roleData.bank;
+                    const ukrainianLabel = fieldLabels['bank'] || null;
+                    html += createField('bank', value, ukrainianLabel, roleData);
+                }
+                
+                // 4. Данные банка (поля начинающиеся с bank_)
+                for (const [key, value] of Object.entries(roleData)) {
+                    if (key.startsWith('bank_') && !processedKeys.has(key)) {
                         processedKeys.add(key);
-                        const value = roleData[key];
-                        const ukrainianLabel = fieldLabels[key] || null;
+                        const ukrainianLabel = fieldLabels[key] || fieldLabels[key.replace('bank_', '')] || null;
                         if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
                             html += createField(key, JSON.stringify(value, null, 2), ukrainianLabel, roleData);
                         } else if (Array.isArray(value)) {
@@ -848,8 +888,16 @@ function displayEditableData(data) {
                         }
                     }
                 }
-
-                // Затем обрабатываем остальные поля в исходном порядке
+                
+                // 5. Номер рахунку
+                if ('account_number' in roleData) {
+                    processedKeys.add('account_number');
+                    const value = roleData.account_number;
+                    const ukrainianLabel = fieldLabels['account_number'] || null;
+                    html += createField('account_number', value, ukrainianLabel, roleData);
+                }
+                
+                // Остальные поля (если есть какие-то необработанные)
                 for (const [key, value] of Object.entries(roleData)) {
                     if (key === '_label' || processedKeys.has(key)) continue;
                     const ukrainianLabel = fieldLabels[key] || null;
@@ -1152,7 +1200,7 @@ function displayEditableData(data) {
                 const fieldId = `item_${index}_${key}`;
                 const label = column_mapping?.[key] || getLabel(firstItem, key);
                 const columnClass = getColumnClass(key, label);
-
+                
                 // Показываем все значения, включая объекты и массивы
                 let displayValue = '';
                 if (value === null || value === undefined) {
@@ -1162,7 +1210,13 @@ function displayEditableData(data) {
                 } else {
                     displayValue = String(value);
                 }
-                html += `<td class="${columnClass}"><input type="text" id="${fieldId}" class="item-input" data-index="${index}" data-key="${key}" value="${escapeHtml(displayValue)}" title="${escapeHtml(displayValue)}"></td>`;
+                
+                // Для колонки товара используем textarea для многострочного текста
+                if (columnClass === 'col-product') {
+                    html += `<td class="${columnClass}"><textarea id="${fieldId}" class="item-input" data-index="${index}" data-key="${key}" title="${escapeHtml(displayValue)}">${escapeHtml(displayValue)}</textarea></td>`;
+                } else {
+                    html += `<td class="${columnClass}"><input type="text" id="${fieldId}" class="item-input" data-index="${index}" data-key="${key}" value="${escapeHtml(displayValue)}" title="${escapeHtml(displayValue)}"></td>`;
+                }
             }
             html += '</tr>';
         });
