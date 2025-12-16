@@ -29,7 +29,6 @@ services:
       - PROMPTS_DIR=/app/prompts
     command: >
       sh -c "
-        python scripts/wait_for_db.py &&
         echo '📦 Running database migrations...' &&
         python -m alembic upgrade head &&
         echo '✅ Starting application...' &&
@@ -83,27 +82,27 @@ services:
     profiles:
       - telegram
 
-  email-poller:
-    build: .
-    container_name: invoiceparser_email
-    volumes:
-      - ${INVOICES_DIR:-./invoices}:/app/invoices
-      - ${OUTPUT_DIR:-./output}:/app/output
-      - ${LOGS_DIR:-./logs}:/app/logs
-      - ${SRC_DIR:-./src}:/app/src
-      - ${PROMPTS_DIR:-./prompts}:/app/prompts
-      - ./.env:/app/.env
-    environment:
-      - PYTHONPATH=/app/src
-    command: python -m invoiceparser.app.main_email
-    restart: unless-stopped
-    # depends_on:
-    #   db:
-    #     condition: service_healthy
-    networks:
-      - invoiceparser_network
-    profiles:
-      - email
+  # email-poller:
+  #   build: .
+  #   container_name: invoiceparser_email
+  #   volumes:
+  #     - ${INVOICES_DIR:-./invoices}:/app/invoices
+  #     - ${OUTPUT_DIR:-./output}:/app/output
+  #     - ${LOGS_DIR:-./logs}:/app/logs
+  #     - ${SRC_DIR:-./src}:/app/src
+  #     - ${PROMPTS_DIR:-./prompts}:/app/prompts
+  #     - ./.env:/app/.env
+  #   environment:
+  #     - PYTHONPATH=/app/src
+  #   command: python -m invoiceparser.app.main_email
+  #   restart: unless-stopped
+  #   # depends_on:
+  #   #   db:
+  #   #     condition: service_healthy
+  #   networks:
+  #     - invoiceparser_network
+  #   profiles:
+  #     - email
 
 networks:
   invoiceparser_network:
