@@ -786,15 +786,36 @@ function displayEditableData(data) {
     if (data.document_info) {
         html += '<div class="editable-group">';
         html += '<div class="editable-group-title"><i class="fas fa-file-alt"></i> Інформація про документ</div>';
+        
+        // Определяем порядок полей: тип документа, номер документа, дата, место, остальное
+        const docInfoFieldOrder = ['document_type', 'document_number', 'document_date', 'date', 'document_date_normalized', 'location', 'place_of_compilation', 'compilation_place', 'currency'];
+        const processedDocKeys = new Set();
+        
+        // Обрабатываем поля в заданном порядке
+        for (const key of docInfoFieldOrder) {
+            if (key in data.document_info && !key.endsWith('_label')) {
+                const value = data.document_info[key];
+                // Пропускаем пустые поля
+                if (value === null || value === undefined || value === '') continue;
+                processedDocKeys.add(key);
+                if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+                    html += createField(key, JSON.stringify(value, null, 2), fieldLabels[key] || null, data.document_info);
+                } else if (Array.isArray(value)) {
+                    html += createField(key, JSON.stringify(value, null, 2), fieldLabels[key] || null, data.document_info);
+                } else {
+                    html += createField(key, value, fieldLabels[key] || null, data.document_info);
+                }
+            }
+        }
+        
+        // Остальные поля document_info (только непустые)
         for (const [key, value] of Object.entries(data.document_info)) {
-            // Пропускаем _label
-            if (key.endsWith('_label')) continue;
-            // Показываем все поля, включая объекты и массивы
+            if (key.endsWith('_label') || processedDocKeys.has(key)) continue;
+            // Пропускаем пустые поля
+            if (value === null || value === undefined || value === '') continue;
             if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-                // Для объектов показываем как JSON строку
                 html += createField(key, JSON.stringify(value, null, 2), fieldLabels[key] || null, data.document_info);
             } else if (Array.isArray(value)) {
-                // Для массивов показываем как JSON строку
                 html += createField(key, JSON.stringify(value, null, 2), fieldLabels[key] || null, data.document_info);
             } else {
                 html += createField(key, value, fieldLabels[key] || null, data.document_info);
@@ -835,25 +856,60 @@ function displayEditableData(data) {
                 // 3. Название банка (bank)
                 // 4. Данные банка (bank_edrpou, bank_ipn, bank_address, bank_phone и другие)
                 // 5. Номер рахунку (account_number)
-                
+
                 const companyDataFields = ['edrpou', 'ipn', 'tax_id', 'vat_id', 'address', 'phone', 'email', 'website', 'contact_person'];
                 const bankDataFields = ['bank_edrpou', 'bank_ipn', 'bank_address', 'bank_phone', 'bank_email', 'bank_contact'];
-                
+
                 const processedKeys = new Set();
-                
-                // 1. Название компании
+
+                // 1. Название компании (только если не пустое)
                 if ('name' in roleData && roleData.name !== '_label') {
-                    processedKeys.add('name');
-                    const value = roleData.name;
-                    const ukrainianLabel = fieldLabels['name'] || null;
-                    html += createField('name', value, ukrainianLabel, roleData);
+                    const nameValue = roleData.name;
+                    if (nameValue !== null && nameValue !== undefined && nameValue !== '') {
+                        processedKeys.add('name');
+                        const ukrainianLabel = fieldLabels['name'] || null;
+                        html += createField('name', nameValue, ukrainianLabel, roleData);
+                    }
+                }
+
+                // 2. Данные компании (все поля кроме name, bank, account_number, phone и банковских)
+                // Сначала обрабатываем поля в определенном порядке: edrpou, ipn, tax_id, vat_id, address
+                const companyFieldOrder = ['edrpou', 'ipn', 'tax_id', 'vat_id', 'address'];
+                for (const key of companyFieldOrder) {
+                    if (key in roleData && key !== '_label' && !processedKeys.has(key)) {
+                        processedKeys.add(key);
+                        const value = roleData[key];
+                        // Пропускаем пустые поля
+                        if (value === null || value === undefined || value === '') continue;
+                        const ukrainianLabel = fieldLabels[key] || null;
+                        if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+                            html += createField(key, JSON.stringify(value, null, 2), ukrainianLabel, roleData);
+                        } else if (Array.isArray(value)) {
+                            html += createField(key, JSON.stringify(value, null, 2), ukrainianLabel, roleData);
+                        } else {
+                            html += createField(key, value, ukrainianLabel, roleData);
+                        }
+                    }
                 }
                 
-                // 2. Данные компании (все поля кроме name, bank, account_number и банковских)
+                // Телефон всегда после адреса
+                if ('phone' in roleData && !processedKeys.has('phone')) {
+                    const phoneValue = roleData.phone;
+                    // Пропускаем пустые поля
+                    if (phoneValue !== null && phoneValue !== undefined && phoneValue !== '') {
+                        processedKeys.add('phone');
+                        const ukrainianLabel = fieldLabels['phone'] || null;
+                        html += createField('phone', phoneValue, ukrainianLabel, roleData);
+                    }
+                }
+                
+                // Остальные поля компании (кроме name, bank, account_number, phone и банковских)
                 for (const [key, value] of Object.entries(roleData)) {
                     if (key === '_label' || processedKeys.has(key)) continue;
-                    if (key === 'name' || key === 'bank' || key === 'account_number') continue;
+                    if (key === 'name' || key === 'bank' || key === 'account_number' || key === 'phone') continue;
                     if (key.startsWith('bank_')) continue; // Банковские поля обработаем позже
+                    // Пропускаем пустые поля
+                    if (value === null || value === undefined || value === '') continue;
                     
                     processedKeys.add(key);
                     const ukrainianLabel = fieldLabels[key] || null;
@@ -865,18 +921,22 @@ function displayEditableData(data) {
                         html += createField(key, value, ukrainianLabel, roleData);
                     }
                 }
-                
-                // 3. Название банка
+
+                // 3. Название банка (только если не пустое)
                 if ('bank' in roleData) {
-                    processedKeys.add('bank');
-                    const value = roleData.bank;
-                    const ukrainianLabel = fieldLabels['bank'] || null;
-                    html += createField('bank', value, ukrainianLabel, roleData);
+                    const bankValue = roleData.bank;
+                    if (bankValue !== null && bankValue !== undefined && bankValue !== '') {
+                        processedKeys.add('bank');
+                        const ukrainianLabel = fieldLabels['bank'] || null;
+                        html += createField('bank', bankValue, ukrainianLabel, roleData);
+                    }
                 }
-                
-                // 4. Данные банка (поля начинающиеся с bank_)
+
+                // 4. Данные банка (поля начинающиеся с bank_, только непустые)
                 for (const [key, value] of Object.entries(roleData)) {
                     if (key.startsWith('bank_') && !processedKeys.has(key)) {
+                        // Пропускаем пустые поля
+                        if (value === null || value === undefined || value === '') continue;
                         processedKeys.add(key);
                         const ukrainianLabel = fieldLabels[key] || fieldLabels[key.replace('bank_', '')] || null;
                         if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
@@ -888,18 +948,22 @@ function displayEditableData(data) {
                         }
                     }
                 }
-                
-                // 5. Номер рахунку
+
+                // 5. Номер рахунку (только если не пустое)
                 if ('account_number' in roleData) {
-                    processedKeys.add('account_number');
-                    const value = roleData.account_number;
-                    const ukrainianLabel = fieldLabels['account_number'] || null;
-                    html += createField('account_number', value, ukrainianLabel, roleData);
+                    const accountValue = roleData.account_number;
+                    if (accountValue !== null && accountValue !== undefined && accountValue !== '') {
+                        processedKeys.add('account_number');
+                        const ukrainianLabel = fieldLabels['account_number'] || null;
+                        html += createField('account_number', accountValue, ukrainianLabel, roleData);
+                    }
                 }
-                
-                // Остальные поля (если есть какие-то необработанные)
+
+                // Остальные поля (если есть какие-то необработанные, только непустые)
                 for (const [key, value] of Object.entries(roleData)) {
                     if (key === '_label' || processedKeys.has(key)) continue;
+                    // Пропускаем пустые поля
+                    if (value === null || value === undefined || value === '') continue;
                     const ukrainianLabel = fieldLabels[key] || null;
                     if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
                         html += createField(key, JSON.stringify(value, null, 2), ukrainianLabel, roleData);
@@ -1200,7 +1264,7 @@ function displayEditableData(data) {
                 const fieldId = `item_${index}_${key}`;
                 const label = column_mapping?.[key] || getLabel(firstItem, key);
                 const columnClass = getColumnClass(key, label);
-                
+
                 // Показываем все значения, включая объекты и массивы
                 let displayValue = '';
                 if (value === null || value === undefined) {
@@ -1210,9 +1274,9 @@ function displayEditableData(data) {
                 } else {
                     displayValue = String(value);
                 }
-                
-                // Для колонки товара используем textarea для многострочного текста
-                if (columnClass === 'col-product') {
+
+                // Для колонки товара используем textarea только если текст длинный (больше 50 символов)
+                if (columnClass === 'col-product' && displayValue.length > 50) {
                     html += `<td class="${columnClass}"><textarea id="${fieldId}" class="item-input" data-index="${index}" data-key="${key}" title="${escapeHtml(displayValue)}">${escapeHtml(displayValue)}</textarea></td>`;
                 } else {
                     html += `<td class="${columnClass}"><input type="text" id="${fieldId}" class="item-input" data-index="${index}" data-key="${key}" value="${escapeHtml(displayValue)}" title="${escapeHtml(displayValue)}"></td>`;
