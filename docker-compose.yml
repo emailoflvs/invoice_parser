@@ -1,24 +1,18 @@
 services:
-  # Основное приложение (CLI/Web/API)
   app:
     build: .
     container_name: invoiceparser_app
     volumes:
-      # Данные и конфигурация
-      - ./invoices:/app/invoices
-      - ./output:/app/output
-      - ./temp:/app/temp
-      - ./logs:/app/logs
-      - ./examples:/app/examples
+      - ${INVOICES_DIR:-./invoices}:/app/invoices
+      - ${OUTPUT_DIR:-./output}:/app/output
+      - ${TEMP_DIR:-./temp}:/app/temp
+      - ${LOGS_DIR:-./logs}:/app/logs
+      - ${EXAMPLES_DIR:-./examples}:/app/examples
       - ./.env:/app/.env
-      - ./google_sheets_credentials.json:/app/google_sheets_credentials.json
-      # Код и ресурсы
-      # ВНИМАНИЕ: volume для src/ монтируется для удобства разработки
-      # Для PRODUCTION: пересоберите образ (docker compose build) перед запуском,
-      # чтобы код был "заморожен" в образе, а не брался из локальной папки
-      - ./src:/app/src
-      - ./static:/app/static
-      - ./prompts:/app/prompts
+      - ${GOOGLE_SHEETS_CREDENTIALS:-./google_sheets_credentials.json}:/app/google_sheets_credentials.json
+      - ${SRC_DIR:-./src}:/app/src
+      - ${STATIC_DIR:-./static}:/app/static
+      - ${PROMPTS_DIR:-./prompts}:/app/prompts
       - ./alembic.ini:/app/alembic.ini
       - ./alembic:/app/alembic
       - ./scripts:/app/scripts
@@ -42,15 +36,11 @@ services:
         python -m invoiceparser.app.main_web
       "
     ports:
-      # Используйте другой порт, если 8000 занят другим приложением
       - "${APP_PORT:-8000}:8000"
     restart: unless-stopped
     networks:
       - invoiceparser_network
 
-  # PostgreSQL Database
-  # ВАЖНО: Если на сервере уже есть PostgreSQL, используйте внешнюю БД
-  # Для этого закомментируйте сервис db и укажите DATABASE_URL в .env
   db:
     image: postgres:16-alpine
     container_name: invoiceparser_db
@@ -61,7 +51,6 @@ services:
     volumes:
       - invoiceparser_postgres_data:/var/lib/postgresql/data
     ports:
-      # Используйте другой порт, если 5432 занят другим PostgreSQL
       - "${DB_EXTERNAL_PORT:-5433}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-invoiceparser}"]
@@ -72,16 +61,15 @@ services:
     networks:
       - invoiceparser_network
 
-  # Telegram бот (опционально)
   telegram-bot:
     build: .
     container_name: invoiceparser_telegram
     volumes:
-      - ./invoices:/app/invoices
-      - ./output:/app/output
-      - ./logs:/app/logs
-      - ./src:/app/src
-      - ./prompts:/app/prompts
+      - ${INVOICES_DIR:-./invoices}:/app/invoices
+      - ${OUTPUT_DIR:-./output}:/app/output
+      - ${LOGS_DIR:-./logs}:/app/logs
+      - ${SRC_DIR:-./src}:/app/src
+      - ${PROMPTS_DIR:-./prompts}:/app/prompts
       - ./.env:/app/.env
     environment:
       - PYTHONPATH=/app/src
@@ -95,16 +83,15 @@ services:
     profiles:
       - telegram
 
-  # Email поллер (опционально)
   email-poller:
     build: .
     container_name: invoiceparser_email
     volumes:
-      - ./invoices:/app/invoices
-      - ./output:/app/output
-      - ./logs:/app/logs
-      - ./src:/app/src
-      - ./prompts:/app/prompts
+      - ${INVOICES_DIR:-./invoices}:/app/invoices
+      - ${OUTPUT_DIR:-./output}:/app/output
+      - ${LOGS_DIR:-./logs}:/app/logs
+      - ${SRC_DIR:-./src}:/app/src
+      - ${PROMPTS_DIR:-./prompts}:/app/prompts
       - ./.env:/app/.env
     environment:
       - PYTHONPATH=/app/src
