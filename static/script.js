@@ -1222,7 +1222,25 @@ function displayEditableData(data) {
 
         // Table header
         const firstItem = items[0];
-        const allKeys = Object.keys(firstItem).filter(key => !key.endsWith('_label') && key !== 'raw');
+        
+        // Используем порядок колонок из column_mapping (порядок из оригинального документа)
+        let allKeys;
+        if (column_mapping && Object.keys(column_mapping).length > 0) {
+            allKeys = Object.keys(column_mapping);
+            
+            // Проверяем, есть ли в данных ключи, которых нет в column_mapping
+            const itemKeys = Object.keys(firstItem).filter(key => !key.endsWith('_label') && key !== 'raw');
+            const missingKeys = itemKeys.filter(k => !allKeys.includes(k));
+            
+            // Добавляем недостающие ключи в конец
+            if (missingKeys.length > 0) {
+                console.warn('Keys in items but not in column_mapping:', missingKeys);
+                allKeys = [...allKeys, ...missingKeys];
+            }
+        } else {
+            // Fallback: используем порядок из firstItem
+            allKeys = Object.keys(firstItem).filter(key => !key.endsWith('_label') && key !== 'raw');
+        }
 
         // Функция для определения класса колонки
         const getColumnClass = (key, label) => {
