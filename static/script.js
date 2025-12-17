@@ -788,11 +788,11 @@ function displayEditableData(data) {
     if (data.document_info) {
         html += '<div class="editable-group">';
         html += '<div class="editable-group-title"><i class="fas fa-file-alt"></i> Інформація про документ</div>';
-        
+
         // Определяем порядок полей: тип документа, номер документа, дата, место, остальное
         const docInfoFieldOrder = ['document_type', 'document_number', 'document_date', 'date', 'document_date_normalized', 'location', 'place_of_compilation', 'compilation_place', 'currency'];
         const processedDocKeys = new Set();
-        
+
         // Обрабатываем поля в заданном порядке
         for (const key of docInfoFieldOrder) {
             if (key in data.document_info && !key.endsWith('_label')) {
@@ -809,7 +809,7 @@ function displayEditableData(data) {
                 }
             }
         }
-        
+
         // Остальные поля document_info (только непустые)
         for (const [key, value] of Object.entries(data.document_info)) {
             if (key.endsWith('_label') || processedDocKeys.has(key)) continue;
@@ -893,7 +893,7 @@ function displayEditableData(data) {
                         }
                     }
                 }
-                
+
                 // Телефон всегда после адреса
                 if ('phone' in roleData && !processedKeys.has('phone')) {
                     const phoneValue = roleData.phone;
@@ -904,7 +904,7 @@ function displayEditableData(data) {
                         html += createField('phone', phoneValue, ukrainianLabel, roleData);
                     }
                 }
-                
+
                 // Остальные поля компании (кроме name, bank, account_number, phone и банковских)
                 for (const [key, value] of Object.entries(roleData)) {
                     if (key === '_label' || processedKeys.has(key)) continue;
@@ -912,7 +912,7 @@ function displayEditableData(data) {
                     if (key.startsWith('bank_')) continue; // Банковские поля обработаем позже
                     // Пропускаем пустые поля
                     if (value === null || value === undefined || value === '') continue;
-                    
+
                     processedKeys.add(key);
                     const ukrainianLabel = fieldLabels[key] || null;
                     if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
@@ -1222,20 +1222,19 @@ function displayEditableData(data) {
 
         // Table header
         const firstItem = items[0];
-        
-        // Используем порядок колонок из column_mapping (порядок из оригинального документа)
+
+        // Используем порядок колонок СТРОГО из column_mapping (порядок из оригинального документа)
         let allKeys;
         if (column_mapping && Object.keys(column_mapping).length > 0) {
+            // Используем ТОЛЬКО колонки из column_mapping, в том порядке, в котором они там указаны
             allKeys = Object.keys(column_mapping);
             
-            // Проверяем, есть ли в данных ключи, которых нет в column_mapping
+            // Проверяем, есть ли в данных ключи, которых нет в column_mapping (для отладки)
             const itemKeys = Object.keys(firstItem).filter(key => !key.endsWith('_label') && key !== 'raw');
             const missingKeys = itemKeys.filter(k => !allKeys.includes(k));
             
-            // Добавляем недостающие ключи в конец
             if (missingKeys.length > 0) {
-                console.warn('Keys in items but not in column_mapping:', missingKeys);
-                allKeys = [...allKeys, ...missingKeys];
+                console.warn('Keys in items but not in column_mapping (will be ignored):', missingKeys);
             }
         } else {
             // Fallback: используем порядок из firstItem
