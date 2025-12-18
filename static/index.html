@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="uk">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <title>Аналіз документів</title>
+    <title>Document Analysis</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     <link rel="stylesheet" href="/static/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -17,9 +17,9 @@
         <header class="header">
             <div class="logo">
                 <i class="fas fa-file-invoice"></i>
-                <h1>Аналіз документів</h1>
+                <h1>Document Analysis</h1>
             </div>
-            <p class="subtitle">Система обробки та аналізу рахунків і накладних</p>
+            <p class="subtitle">Invoice and waybill processing and analysis system</p>
         </header>
 
         <!-- Upload Section -->
@@ -28,17 +28,17 @@
                 <div class="upload-icon">
                     <i class="fas fa-cloud-upload-alt"></i>
                 </div>
-                <h2>Завантажте документ</h2>
-                <p class="upload-description">Підтримувані формати: PDF, JPG, JPEG, PNG, TIFF, BMP</p>
+                <h2>Upload Document</h2>
+                <p class="upload-description">Supported formats: PDF, JPG, JPEG, PNG, TIFF, BMP</p>
                 <p class="upload-warning" id="authWarning" style="display: none; color: #ef4444; margin-top: 10px; font-size: 0.9rem;">
-                    <i class="fas fa-lock"></i> Для завантаження документів потрібна авторизація
+                    <i class="fas fa-lock"></i> Authorization required to upload documents
                 </p>
 
                 <div class="upload-area" id="uploadArea">
                     <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png,.tiff,.bmp" hidden disabled>
                     <div class="upload-content">
                         <i class="fas fa-file-upload"></i>
-                        <p>Перетягніть файл сюди або <span class="browse-link">виберіть файл</span></p>
+                        <p>Drag file here or <span class="browse-link">select file</span></p>
                     </div>
                 </div>
 
@@ -58,11 +58,11 @@
                 <div class="parse-buttons">
                     <button class="btn-primary btn-fast" id="parseFastBtn" disabled>
                         <i class="fas fa-bolt"></i>
-                        Швидкий аналіз
+                        Quick Analysis
                     </button>
                     <button class="btn-primary btn-detailed" id="parseDetailedBtn" disabled>
                         <i class="fas fa-search"></i>
-                        Детальний аналіз
+                        Detailed Analysis
                     </button>
                 </div>
             </div>
@@ -74,8 +74,8 @@
                 <div class="progress-icon">
                     <div class="spinner"></div>
                 </div>
-                <h3>Обробка документа...</h3>
-                <p class="progress-text">Будь ласка, зачекайте. Триває аналіз вашого документа</p>
+                <h3>Processing document...</h3>
+                <p class="progress-text">Please wait. Analyzing your document</p>
                 <div class="progress-bar">
                     <div class="progress-fill" id="progressFill"></div>
                 </div>
@@ -88,11 +88,11 @@
             <div class="results-header">
                 <h2>
                     <i class="fas fa-check-circle success-icon"></i>
-                    Результати аналізу
+                    Analysis Results
                 </h2>
                 <button class="btn-secondary" id="newParseBtn">
                     <i class="fas fa-plus"></i>
-                    Завантажити новий документ
+                    Upload New Document
                 </button>
             </div>
 
@@ -100,7 +100,7 @@
             <div class="result-card editable-section">
                 <div class="result-card-header">
                     <i class="fas fa-edit"></i>
-                    <h3>Редагування даних</h3>
+                    <h3>Edit Data</h3>
                 </div>
                 <div class="result-card-body">
                     <div id="editableData">
@@ -109,10 +109,10 @@
                     <div class="save-section">
                         <button class="btn-secondary btn-save-action" id="backBtn">
                             <i class="fas fa-arrow-left"></i>
-                            Назад
+                            Back
                         </button>
                         <button class="btn-secondary btn-save-action" id="saveAndContinueBtn">
-                            Зберегти та продовжити
+                            Save and Continue
                             <i class="fas fa-arrow-right"></i>
                         </button>
                     </div>
@@ -125,18 +125,18 @@
         <div class="error-section" id="errorSection" style="display: none;">
             <div class="error-card">
                 <i class="fas fa-exclamation-triangle"></i>
-                <h3>Помилка</h3>
+                <h3>Error</h3>
                 <p id="errorMessage"></p>
                 <button class="btn-primary" id="retryBtn">
                     <i class="fas fa-redo"></i>
-                    Спробувати знову
+                    Try Again
                 </button>
             </div>
         </div>
     </div>
 
     <!-- Logout Button -->
-    <button class="btn-settings" id="logoutBtn" title="Вихід з системи">
+    <button class="btn-settings" id="logoutBtn" title="Logout">
         <i class="fas fa-sign-out-alt"></i>
     </button>
 

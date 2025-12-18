@@ -11,38 +11,8 @@ const state = {
     }
 };
 
-// Элементы DOM
-const elements = {
-    uploadArea: document.getElementById('uploadArea'),
-    fileInput: document.getElementById('fileInput'),
-    fileInfo: document.getElementById('fileInfo'),
-    fileName: document.getElementById('fileName'),
-    fileSize: document.getElementById('fileSize'),
-    removeFile: document.getElementById('removeFile'),
-    parseButtons: document.getElementById('parseButtons'),
-    parseFastBtn: document.getElementById('parseFastBtn'),
-    parseDetailedBtn: document.getElementById('parseDetailedBtn'),
-
-    uploadSection: document.getElementById('uploadSection'),
-    progressSection: document.getElementById('progressSection'),
-    resultsSection: document.getElementById('resultsSection'),
-    errorSection: document.getElementById('errorSection'),
-
-    progressFill: document.getElementById('progressFill'),
-    progressPercentage: document.getElementById('progressPercentage'),
-
-    editableData: document.getElementById('editableData'),
-
-    errorMessage: document.getElementById('errorMessage'),
-
-    newParseBtn: document.getElementById('newParseBtn'),
-    retryBtn: document.getElementById('retryBtn'),
-    backBtn: document.getElementById('backBtn'),
-    saveAndContinueBtn: document.getElementById('saveAndContinueBtn'),
-
-    logoutBtn: document.getElementById('logoutBtn'),
-    authWarning: document.getElementById('authWarning')
-};
+// Элементы DOM - инициализируются при загрузке DOM
+const elements = {};
 
 // Загрузка правил интерфейса
 async function loadInterfaceRules() {
@@ -77,8 +47,38 @@ async function loadConfig() {
     }
 }
 
+// Инициализация элементов DOM
+function initElements() {
+    elements.uploadArea = document.getElementById('uploadArea');
+    elements.fileInput = document.getElementById('fileInput');
+    elements.fileInfo = document.getElementById('fileInfo');
+    elements.fileName = document.getElementById('fileName');
+    elements.fileSize = document.getElementById('fileSize');
+    elements.removeFile = document.getElementById('removeFile');
+    elements.parseButtons = document.getElementById('parseButtons');
+    elements.parseFastBtn = document.getElementById('parseFastBtn');
+    elements.parseDetailedBtn = document.getElementById('parseDetailedBtn');
+    elements.uploadSection = document.getElementById('uploadSection');
+    elements.progressSection = document.getElementById('progressSection');
+    elements.resultsSection = document.getElementById('resultsSection');
+    elements.errorSection = document.getElementById('errorSection');
+    elements.progressFill = document.getElementById('progressFill');
+    elements.progressPercentage = document.getElementById('progressPercentage');
+    elements.editableData = document.getElementById('editableData');
+    elements.errorMessage = document.getElementById('errorMessage');
+    elements.newParseBtn = document.getElementById('newParseBtn');
+    elements.retryBtn = document.getElementById('retryBtn');
+    elements.backBtn = document.getElementById('backBtn');
+    elements.saveAndContinueBtn = document.getElementById('saveAndContinueBtn');
+    elements.logoutBtn = document.getElementById('logoutBtn');
+    elements.authWarning = document.getElementById('authWarning');
+}
+
 // Инициализация
 async function init() {
+    // Инициализируем элементы DOM
+    initElements();
+
     // Обновляем токен из localStorage (на случай, если он был сохранен на странице входа)
     state.authToken = localStorage.getItem('authToken') || '';
 
@@ -130,7 +130,7 @@ async function loadDocumentForEditing(documentId) {
         }
 
         showProgress();
-        setProgress(10, 'Загрузка документа...');
+        setProgress(10, 'Loading document...');
 
         console.log(`Fetching /api/documents/${documentId}...`);
         const response = await fetch(`/api/documents/${documentId}`, {
@@ -144,7 +144,7 @@ async function loadDocumentForEditing(documentId) {
 
         if (!response.ok) {
             if (response.status === 401) {
-                // Токен истек, перенаправляем на страницу входа
+                // Token expired, redirect to login
                 localStorage.removeItem('authToken');
                 window.location.href = '/login.html';
                 return;
@@ -152,61 +152,73 @@ async function loadDocumentForEditing(documentId) {
             throw new Error(`HTTP ${response.status}: ${await response.text()}`);
         }
 
-        setProgress(50, 'Обработка данных...');
+        setProgress(50, 'Processing data...');
         const result = await response.json();
 
         if (result.success && result.data) {
-            setProgress(90, 'Отображение формы...');
+            setProgress(90, 'Displaying form...');
 
-            // Устанавливаем данные для редактирования
+            // Set data for editing
             state.parsedData = {
                 success: true,
                 data: result.data,
                 processed_at: new Date().toISOString()
             };
 
-            // Устанавливаем original_filename из данных или используем дефолтное значение
+            // Set original_filename from data or use default value
             state.originalFilename = result.data.original_filename || `document_${documentId}`;
 
-            // Показываем форму редактирования
+            // Show editing form
             hideProgress();
 
-            // Показываем секцию результатов
+            // Show results section
             showSection('results');
 
-            // Отображаем данные
+            // Display data
             displayEditableData(result.data);
 
-            setProgress(100, 'Готово');
+            setProgress(100, 'Done');
             setTimeout(() => hideProgress(), 500);
         } else {
-            throw new Error('Документ не найден или данные недоступны');
+            throw new Error('Document not found or data unavailable');
         }
     } catch (error) {
         console.error('Error loading document:', error);
         hideProgress();
-        showError(`Не удалось загрузить документ: ${error.message}`);
+        showError(`Failed to load document: ${error.message}`);
     }
 }
 
 // Настройка обработчиков событий
 function setupEventListeners() {
+    // Проверяем, что элементы существуют
+    if (!elements.uploadArea || !elements.fileInput) {
+        console.error('Upload elements not found');
+        return;
+    }
+
     // Upload area
-    elements.uploadArea.addEventListener('click', () => {
+    elements.uploadArea.addEventListener('click', (e) => {
         // Проверяем авторизацию перед открытием диалога выбора файла
         if (!state.authToken) {
             showAuthRequiredMessage();
             return;
         }
-        elements.fileInput.click();
+        if (elements.fileInput) {
+            elements.fileInput.click();
+        }
     });
     elements.uploadArea.addEventListener('dragover', handleDragOver);
     elements.uploadArea.addEventListener('dragleave', handleDragLeave);
     elements.uploadArea.addEventListener('drop', handleDrop);
 
     // File input
-    elements.fileInput.addEventListener('change', handleFileSelect);
-    elements.removeFile.addEventListener('click', removeFile);
+    if (elements.fileInput) {
+        elements.fileInput.addEventListener('change', handleFileSelect);
+    }
+    if (elements.removeFile) {
+        elements.removeFile.addEventListener('click', removeFile);
+    }
 
     // Parse buttons
     if (elements.parseFastBtn) {
@@ -217,10 +229,18 @@ function setupEventListeners() {
     }
 
     // Action buttons
-    elements.newParseBtn.addEventListener('click', resetApp);
-    elements.retryBtn.addEventListener('click', resetApp);
-    elements.backBtn.addEventListener('click', resetApp);
-    elements.saveAndContinueBtn.addEventListener('click', saveAndContinue);
+    if (elements.newParseBtn) {
+        elements.newParseBtn.addEventListener('click', resetApp);
+    }
+    if (elements.retryBtn) {
+        elements.retryBtn.addEventListener('click', resetApp);
+    }
+    if (elements.backBtn) {
+        elements.backBtn.addEventListener('click', resetApp);
+    }
+    if (elements.saveAndContinueBtn) {
+        elements.saveAndContinueBtn.addEventListener('click', saveAndContinue);
+    }
 
     // Logout
     if (elements.logoutBtn) {
@@ -232,22 +252,32 @@ function setupEventListeners() {
 // File handling
 function handleDragOver(e) {
     e.preventDefault();
+    e.stopPropagation();
     // Проверяем авторизацию перед drag over
     if (!state.authToken) {
         showAuthRequiredMessage();
         return;
     }
-    elements.uploadArea.classList.add('drag-over');
+    if (elements.uploadArea) {
+        elements.uploadArea.classList.add('drag-over');
+    }
 }
 
 function handleDragLeave(e) {
     e.preventDefault();
-    elements.uploadArea.classList.remove('drag-over');
+    e.stopPropagation();
+    if (elements.uploadArea) {
+        elements.uploadArea.classList.remove('drag-over');
+    }
 }
 
 function handleDrop(e) {
     e.preventDefault();
-    elements.uploadArea.classList.remove('drag-over');
+    e.stopPropagation();
+
+    if (elements.uploadArea) {
+        elements.uploadArea.classList.remove('drag-over');
+    }
 
     // Проверяем авторизацию перед drop
     if (!state.authToken) {
@@ -256,7 +286,7 @@ function handleDrop(e) {
     }
 
     const files = e.dataTransfer.files;
-    if (files.length > 0) {
+    if (files && files.length > 0) {
         handleFile(files[0]);
     }
 }
@@ -288,7 +318,7 @@ function handleFile(file) {
     const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
 
     if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(fileExtension)) {
-        showError('📄 Непідтримуваний формат файлу. Завантажте PDF, JPG, PNG, TIFF або BMP.');
+        showError('📄 Unsupported file format. Please upload PDF, JPG, PNG, TIFF or BMP.');
         return;
     }
 
@@ -296,7 +326,7 @@ function handleFile(file) {
     const maxSize = state.config.maxFileSizeMB * 1024 * 1024;
     if (file.size > maxSize) {
         const sizeMB = (file.size / 1024 / 1024).toFixed(1);
-        showError(`📄 Файл занадто великий (${sizeMB}МБ). Максимальний розмір: ${state.config.maxFileSizeMB}МБ.`);
+        showError(`📄 File is too large (${sizeMB}MB). Maximum size: ${state.config.maxFileSizeMB}MB.`);
         return;
     }
 
@@ -307,7 +337,7 @@ function handleFile(file) {
 
 // Показать сообщение о необходимости авторизации
 function showAuthRequiredMessage() {
-    showToast('Будь ласка, спочатку увійдіть в систему', true);
+    showToast('Please log in first', true);
     // Автоматически открываем модальное окно авторизации
     setTimeout(() => {
                 window.location.href = '/login.html';
@@ -315,10 +345,10 @@ function showAuthRequiredMessage() {
 }
 
 function displayFileInfo(file) {
-    elements.fileName.textContent = file.name;
-    elements.fileSize.textContent = formatFileSize(file.size);
-    elements.fileInfo.style.display = 'flex';
-    elements.uploadArea.style.display = 'none';
+    if (elements.fileName) elements.fileName.textContent = file.name;
+    if (elements.fileSize) elements.fileSize.textContent = formatFileSize(file.size);
+    if (elements.fileInfo) elements.fileInfo.style.display = 'flex';
+    if (elements.uploadArea) elements.uploadArea.style.display = 'none';
     // Активируем кнопки анализа
     if (elements.parseFastBtn) {
         elements.parseFastBtn.disabled = false;
@@ -330,8 +360,8 @@ function displayFileInfo(file) {
 
 function removeFile() {
     state.selectedFile = null;
-    elements.fileInfo.style.display = 'none';
-    elements.uploadArea.style.display = 'block';
+    if (elements.fileInfo) elements.fileInfo.style.display = 'none';
+    if (elements.uploadArea) elements.uploadArea.style.display = 'block';
     // Деактивируем кнопки анализа
     if (elements.parseFastBtn) {
         elements.parseFastBtn.disabled = true;
@@ -344,6 +374,11 @@ function removeFile() {
 
 // Включить/выключить загрузку файлов в зависимости от авторизации
 function enableFileUpload() {
+    if (!elements.uploadArea || !elements.fileInput) {
+        console.error('Upload elements not found in enableFileUpload');
+        return;
+    }
+
     if (state.authToken) {
         // Разрешаем загрузку
         elements.uploadArea.style.pointerEvents = 'auto';
@@ -389,7 +424,7 @@ function formatFileSize(bytes) {
 // Parsing
 async function parseDocument(mode = 'detailed') {
     if (!state.selectedFile) {
-        showError('📄 Будь ласка, виберіть файл');
+        showError('📄 Please select a file');
         return;
     }
 
@@ -426,7 +461,7 @@ async function parseDocument(mode = 'detailed') {
             let userMessage = '';
 
             if (response.status === 401) {
-                userMessage = '🔐 Невірна авторизація. Будь ласка, увійдіть знову.';
+                userMessage = '🔐 Invalid authorization. Please log in again.';
                 // Перенаправляем на страницу входа
                 setTimeout(() => {
                     window.location.href = '/login.html';
@@ -434,7 +469,7 @@ async function parseDocument(mode = 'detailed') {
             } else if (errorInfo.error_code) {
                 // Новый формат с кодами ошибок
                 const code = errorInfo.error_code;
-                const message = errorInfo.message || 'Невідома помилка';
+                const message = errorInfo.message || 'Unknown error';
 
                 // Добавляем эмодзи в зависимости от типа ошибки
                 let emoji = '❌';
@@ -451,12 +486,12 @@ async function parseDocument(mode = 'detailed') {
                 }
             } else if (response.status === 400) {
                 // Ошибки валидации - показываем как есть
-                userMessage = `📄 ${errorInfo.message || 'Невірний формат файлу або занадто великий розмір'}`;
+                userMessage = `📄 ${errorInfo.message || 'Invalid file format or file too large'}`;
             } else if (response.status === 413) {
-                userMessage = '📄 Файл занадто великий. Максимальний розмір: 50МБ.';
+                userMessage = '📄 File is too large. Maximum size: 50MB.';
             } else {
                 // Другие HTTP ошибки
-                userMessage = errorInfo.message || `Не вдалося обробити запит. Спробуйте знову або зв'яжіться з підтримкою.`;
+                userMessage = errorInfo.message || `Failed to process request. Please try again or contact support.`;
             }
 
             throw new Error(userMessage);
@@ -468,12 +503,12 @@ async function parseDocument(mode = 'detailed') {
             state.parsedData = data;
             displayResults(data);
         } else {
-            throw new Error(data.error || '❌ Не вдалося обробити документ. Спробуйте знову.');
+            throw new Error(data.error || '❌ Failed to process document. Please try again.');
         }
 
     } catch (error) {
         console.error('Parse error:', error);
-        showError(error.message || '❌ Сталася помилка при обробці документа. Спробуйте знову або зв\'яжіться з підтримкою.');
+        showError(error.message || '❌ An error occurred while processing the document. Please try again or contact support.');
     }
 }
 
@@ -494,8 +529,12 @@ function simulateProgress() {
 
 function updateProgress(percentage) {
     percentage = Math.min(100, Math.max(0, percentage));
-    elements.progressFill.style.width = percentage + '%';
-    elements.progressPercentage.textContent = Math.round(percentage) + '%';
+    if (elements.progressFill) {
+        elements.progressFill.style.width = percentage + '%';
+    }
+    if (elements.progressPercentage) {
+        elements.progressPercentage.textContent = Math.round(percentage) + '%';
+    }
 }
 
 function showProgress() {
@@ -566,33 +605,51 @@ function showToast(message, isError = false) {
 
 // Section management
 function showSection(section) {
-    elements.uploadSection.style.display = 'none';
-    elements.progressSection.style.display = 'none';
-    elements.resultsSection.style.display = 'none';
-    elements.errorSection.style.display = 'none';
+    if (elements.uploadSection) elements.uploadSection.style.display = 'none';
+    if (elements.progressSection) elements.progressSection.style.display = 'none';
+    if (elements.resultsSection) elements.resultsSection.style.display = 'none';
+    if (elements.errorSection) elements.errorSection.style.display = 'none';
 
     switch(section) {
         case 'upload':
-            elements.uploadSection.style.display = 'block';
+            if (elements.uploadSection) elements.uploadSection.style.display = 'block';
             break;
         case 'progress':
-            elements.progressSection.style.display = 'block';
+            if (elements.progressSection) elements.progressSection.style.display = 'block';
             break;
         case 'results':
-            elements.resultsSection.style.display = 'block';
+            if (elements.resultsSection) elements.resultsSection.style.display = 'block';
             break;
         case 'error':
-            elements.errorSection.style.display = 'block';
+            if (elements.errorSection) elements.errorSection.style.display = 'block';
             break;
     }
 }
 
 function showError(message) {
-    // Конвертируем URL в кликабельные ссылки
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
-    const messageWithLinks = message.replace(urlRegex, '<a href="$1" target="_blank">$1</a>');
+    // Конвертируем URL в кликабельные ссылки с экранированием для безопасности
+    const urlRegex = /(https?:\/\/[^\s<>"']+)/g;
 
-    elements.errorMessage.innerHTML = messageWithLinks;
+    if (elements.errorMessage) {
+        // Сначала находим все URL в оригинальном сообщении
+        const urls = [];
+        let match;
+        const tempMessage = message;
+        while ((match = urlRegex.exec(tempMessage)) !== null) {
+            urls.push(match[0]);
+        }
+
+        // Экранируем весь текст
+        let escapedMessage = escapeHtml(message);
+
+        // Заменяем экранированные URL на ссылки
+        urls.forEach(url => {
+            const escapedUrl = escapeHtml(url);
+            escapedMessage = escapedMessage.replace(escapedUrl, `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapedUrl}</a>`);
+        });
+
+        elements.errorMessage.innerHTML = escapedMessage;
+    }
     showSection('error');
 }
 
@@ -606,7 +663,7 @@ function resetApp() {
 
 // Выход из системы
 function handleLogout() {
-    if (confirm('Ви впевнені, що хочете вийти з системи?')) {
+    if (confirm('Are you sure you want to log out?')) {
         // Удаляем токен
         state.authToken = '';
         localStorage.removeItem('authToken');
@@ -618,76 +675,9 @@ function handleLogout() {
 }
 
 
-// Field label mappings (Russian labels for fields)
-const fieldLabels = {
-    // Document Info
-    'document_type': 'Тип документа',
-    'document_number': 'Номер документа',
-    'document_date': 'Дата документа',
-    'document_date_normalized': 'Дата (нормалізована)',
-    'location': 'Місце складання',
-    'currency': 'Валюта',
-
-    // Parties - Supplier
-    'name': 'Назва',
-    'account_number': 'Номер рахунку',
-    'bank': 'Банк',
-    'address': 'Адреса',
-    'phone': 'Телефон',
-    'tax_id': 'ЄДРПОУ',
-    'vat_id': 'ІПН',
-    'edrpou': 'ЄДРПОУ',
-    'ipn': 'ІПН',
-
-    // References
-    'contract_number': 'Номер контракту',
-    'basis_document': 'Підстава',
-
-    // Totals
-    'total': 'Всього',
-    'vat': 'ПДВ',
-    'vat_amount': 'ПДВ',
-    'subtotal': 'Сума без ПДВ',
-    'total_with_vat': 'Всього з ПДВ',
-    'total_amount': 'Всього',
-
-    // Amounts in words
-    'total_in_words': 'Сума прописом',
-    'vat_in_words': 'ПДВ прописом',
-
-    // Line items
-    'line_number': '№',
-    'no': '№',
-    'article': 'Артикул',
-    'product_name': 'Товари (роботи, послуги)',
-    'tovar': 'Товар',
-    'description': 'Найменування',
-    'application_mode': 'Режим полімерізації',
-    'polymerization_mode_application_type': 'Режим полімерізації/ Тип нанесення',
-    'ukt_zed': 'Код УКТЗЕД',
-    'ukt_zed_code': 'Код УКТЗЕД',
-    'quantity': 'Кількість',
-    'kilkist': 'Кількість',
-    'unit': 'Од. вим.',
-    'price_excluding_vat': 'Ціна без ПДВ',
-    'price_without_vat': 'Ціна без ПДВ',
-    'tsina_bez_pdv': 'Ціна без ПДВ',
-    'amount_excluding_vat': 'Сума без ПДВ',
-    'amount_without_vat': 'Сума без ПДВ',
-    'suma_bez_pdv': 'Сума без ПДВ',
-    'unit_price': 'Ціна',
-    'total_price': 'Сума',
-
-    // Invoice fields (alternative)
-    'invoice_number': 'Номер рахунку',
-    'invoice_date': 'Дата рахунку',
-    'supplier_name': 'Постачальник',
-    'customer_name': 'Покупець',
-
-    // Additional fields
-    'label_raw': 'Мітка',
-    'value_raw': 'Значення'
-};
+// Field label mappings - пустой объект, все метки берутся из данных (_label)
+// Полностью мультиязычное решение без хардкода
+const fieldLabels = {};
 
 // Display editable data form
 function displayEditableData(data) {
@@ -712,8 +702,8 @@ function displayEditableData(data) {
             return obj[labelKey];
         }
 
-        // Fallback to predefined labels
-        return fieldLabels[key] || key;
+        // Fallback to key (все метки берутся из данных, без хардкода)
+        return key;
     };
 
     // Helper function to create editable field
@@ -734,17 +724,18 @@ function displayEditableData(data) {
 
         const fieldId = `edit_${key}_${Math.random().toString(36).substr(2, 9)}`;
         // Используем _label из данных, если есть
-        // Приоритет: переданный label > getLabel (который ищет _label) > fieldLabels[key] > key
+        // Приоритет: переданный label > getLabel (который ищет _label) > key
+        // Полностью мультиязычное решение - используем только данные из документа
         let displayLabel = label;
         if (!displayLabel) {
             displayLabel = getLabel(parentObj, key);
         }
         if (!displayLabel || displayLabel === key) {
-            displayLabel = fieldLabels[key] || key;
+            displayLabel = key; // Используем ключ, если нет метки в данных
         }
 
-        // Если label все еще равен ключу и нет fieldLabels, не показываем его
-        if (displayLabel === key && !fieldLabels[key]) {
+        // Если label равен ключу и это служебное поле, не показываем его
+        if (displayLabel === key && key.startsWith('_')) {
             return '';
         }
         const fieldValue = value !== null && value !== undefined ? value : '';
@@ -755,8 +746,8 @@ function displayEditableData(data) {
                 <div class="editable-field">
                     <label class="editable-label" for="${fieldId}">${displayLabel}</label>
                     <select id="${fieldId}" class="editable-input" data-key="${key}">
-                        <option value="true" ${value ? 'selected' : ''}>Да</option>
-                        <option value="false" ${!value ? 'selected' : ''}>Нет</option>
+                        <option value="true" ${value ? 'selected' : ''}>Yes</option>
+                        <option value="false" ${!value ? 'selected' : ''}>No</option>
                     </select>
                 </div>
             `;
@@ -767,7 +758,9 @@ function displayEditableData(data) {
         const isJsonString = typeof fieldValue === 'string' && (fieldValue.trim().startsWith('{') || fieldValue.trim().startsWith('['));
         // Для поля name всегда используем textarea (чтобы было видно полностью)
         const isNameField = key === 'name';
-        if (isJsonString || isNameField || (typeof fieldValue === 'string' && fieldValue.length > 60)) {
+        // Если в ключе есть слово "address" (например, "address", "bank_address", "edit_address_xxx"), используем textarea
+        const isAddressField = key.toLowerCase().includes('address');
+        if (isJsonString || isNameField || isAddressField || (typeof fieldValue === 'string' && fieldValue.length > 60)) {
             return `
                 <div class="editable-field">
                     <label class="editable-label" for="${fieldId}">${displayLabel}</label>
@@ -787,7 +780,9 @@ function displayEditableData(data) {
     // Process document_info
     if (data.document_info) {
         html += '<div class="editable-group">';
-        html += '<div class="editable-group-title"><i class="fas fa-file-alt"></i> Інформація про документ</div>';
+        // Используем _label из данных, если есть, иначе только иконку
+        const docInfoTitle = data.document_info._label || data._label || '';
+        html += `<div class="editable-group-title"><i class="fas fa-file-alt"></i> ${docInfoTitle}</div>`;
 
         // Определяем порядок полей: тип документа, номер документа, дата, место, остальное
         const docInfoFieldOrder = ['document_type', 'document_number', 'document_date', 'date', 'document_date_normalized', 'location', 'place_of_compilation', 'compilation_place', 'currency'];
@@ -801,11 +796,11 @@ function displayEditableData(data) {
                 if (value === null || value === undefined || value === '') continue;
                 processedDocKeys.add(key);
                 if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-                    html += createField(key, JSON.stringify(value, null, 2), fieldLabels[key] || null, data.document_info);
+                    html += createField(key, JSON.stringify(value, null, 2), null, data.document_info);
                 } else if (Array.isArray(value)) {
-                    html += createField(key, JSON.stringify(value, null, 2), fieldLabels[key] || null, data.document_info);
+                    html += createField(key, JSON.stringify(value, null, 2), null, data.document_info);
                 } else {
-                    html += createField(key, value, fieldLabels[key] || null, data.document_info);
+                    html += createField(key, value, null, data.document_info);
                 }
             }
         }
@@ -816,11 +811,11 @@ function displayEditableData(data) {
             // Пропускаем пустые поля
             if (value === null || value === undefined || value === '') continue;
             if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-                html += createField(key, JSON.stringify(value, null, 2), fieldLabels[key] || null, data.document_info);
+                html += createField(key, JSON.stringify(value, null, 2), null, data.document_info);
             } else if (Array.isArray(value)) {
-                html += createField(key, JSON.stringify(value, null, 2), fieldLabels[key] || null, data.document_info);
+                html += createField(key, JSON.stringify(value, null, 2), null, data.document_info);
             } else {
-                html += createField(key, value, fieldLabels[key] || null, data.document_info);
+                html += createField(key, value, null, data.document_info);
             }
         }
         html += '</div>';
@@ -828,29 +823,25 @@ function displayEditableData(data) {
 
     // Process parties - обрабатываем все роли динамически
     if (data.parties) {
-        // Маппинг ролей на иконки и названия (украинский)
-        const roleMapping = {
-            'supplier': { icon: 'fa-building', title: 'Постачальник' },
-            'buyer': { icon: 'fa-user', title: 'Покупець' },
-            'customer': { icon: 'fa-user', title: 'Покупець' },
-            'supplier_representative': { icon: 'fa-user-tie', title: 'Представник постачальника' },
-            'recipient': { icon: 'fa-hand-holding', title: 'Отримувач' },
-            'performer': { icon: 'fa-user-cog', title: 'Виконавець' }
+        // Маппинг ролей на иконки (без фиксированных текстов)
+        const roleIconMapping = {
+            'supplier': 'fa-building',
+            'buyer': 'fa-user',
+            'customer': 'fa-user',
+            'supplier_representative': 'fa-user-tie',
+            'recipient': 'fa-hand-holding',
+            'performer': 'fa-user-cog'
         };
 
         // Обрабатываем все роли в parties
         for (const [roleKey, roleData] of Object.entries(data.parties)) {
             if (typeof roleData === 'object' && roleData !== null && !Array.isArray(roleData)) {
-                const roleInfo = roleMapping[roleKey] || { icon: 'fa-user', title: roleKey };
-                // Используем _label из данных, если есть, иначе используем маппинг
-                let roleTitle = roleData._label ? roleData._label.replace(':', '').trim() : roleInfo.title;
-                // Переводим на украинский, если нужно
-                if (roleTitle === 'Покупатель') roleTitle = 'Покупець';
-                if (roleTitle === 'Представитель поставщика') roleTitle = 'Представник постачальника';
-                if (roleTitle === 'Получатель') roleTitle = 'Отримувач';
+                const icon = roleIconMapping[roleKey] || 'fa-user';
+                // Используем _label из данных, если есть, иначе используем ключ роли
+                const roleTitle = roleData._label ? roleData._label.replace(':', '').trim() : roleKey;
 
                 html += '<div class="editable-group">';
-                html += `<div class="editable-group-title"><i class="fas ${roleInfo.icon}"></i> ${roleTitle}</div>`;
+                html += `<div class="editable-group-title"><i class="fas ${icon}"></i> ${escapeHtml(roleTitle)}</div>`;
 
                 // Определяем порядок полей:
                 // 1. Название компании (name)
@@ -869,8 +860,7 @@ function displayEditableData(data) {
                     const nameValue = roleData.name;
                     if (nameValue !== null && nameValue !== undefined && nameValue !== '') {
                         processedKeys.add('name');
-                        const ukrainianLabel = fieldLabels['name'] || null;
-                        html += createField('name', nameValue, ukrainianLabel, roleData);
+                        html += createField('name', nameValue, null, roleData);
                     }
                 }
 
@@ -883,13 +873,12 @@ function displayEditableData(data) {
                         const value = roleData[key];
                         // Пропускаем пустые поля
                         if (value === null || value === undefined || value === '') continue;
-                        const ukrainianLabel = fieldLabels[key] || null;
                         if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-                            html += createField(key, JSON.stringify(value, null, 2), ukrainianLabel, roleData);
+                            html += createField(key, JSON.stringify(value, null, 2), null, roleData);
                         } else if (Array.isArray(value)) {
-                            html += createField(key, JSON.stringify(value, null, 2), ukrainianLabel, roleData);
+                            html += createField(key, JSON.stringify(value, null, 2), null, roleData);
                         } else {
-                            html += createField(key, value, ukrainianLabel, roleData);
+                            html += createField(key, value, null, roleData);
                         }
                     }
                 }
@@ -900,8 +889,7 @@ function displayEditableData(data) {
                     // Пропускаем пустые поля
                     if (phoneValue !== null && phoneValue !== undefined && phoneValue !== '') {
                         processedKeys.add('phone');
-                        const ukrainianLabel = fieldLabels['phone'] || null;
-                        html += createField('phone', phoneValue, ukrainianLabel, roleData);
+                        html += createField('phone', phoneValue, null, roleData);
                     }
                 }
 
@@ -914,13 +902,12 @@ function displayEditableData(data) {
                     if (value === null || value === undefined || value === '') continue;
 
                     processedKeys.add(key);
-                    const ukrainianLabel = fieldLabels[key] || null;
                     if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-                        html += createField(key, JSON.stringify(value, null, 2), ukrainianLabel, roleData);
+                        html += createField(key, JSON.stringify(value, null, 2), null, roleData);
                     } else if (Array.isArray(value)) {
-                        html += createField(key, JSON.stringify(value, null, 2), ukrainianLabel, roleData);
+                        html += createField(key, JSON.stringify(value, null, 2), null, roleData);
                     } else {
-                        html += createField(key, value, ukrainianLabel, roleData);
+                        html += createField(key, value, null, roleData);
                     }
                 }
 
@@ -929,8 +916,7 @@ function displayEditableData(data) {
                     const bankValue = roleData.bank;
                     if (bankValue !== null && bankValue !== undefined && bankValue !== '') {
                         processedKeys.add('bank');
-                        const ukrainianLabel = fieldLabels['bank'] || null;
-                        html += createField('bank', bankValue, ukrainianLabel, roleData);
+                        html += createField('bank', bankValue, null, roleData);
                     }
                 }
 
@@ -940,13 +926,12 @@ function displayEditableData(data) {
                         // Пропускаем пустые поля
                         if (value === null || value === undefined || value === '') continue;
                         processedKeys.add(key);
-                        const ukrainianLabel = fieldLabels[key] || fieldLabels[key.replace('bank_', '')] || null;
                         if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-                            html += createField(key, JSON.stringify(value, null, 2), ukrainianLabel, roleData);
+                            html += createField(key, JSON.stringify(value, null, 2), null, roleData);
                         } else if (Array.isArray(value)) {
-                            html += createField(key, JSON.stringify(value, null, 2), ukrainianLabel, roleData);
+                            html += createField(key, JSON.stringify(value, null, 2), null, roleData);
                         } else {
-                            html += createField(key, value, ukrainianLabel, roleData);
+                            html += createField(key, value, null, roleData);
                         }
                     }
                 }
@@ -956,8 +941,7 @@ function displayEditableData(data) {
                     const accountValue = roleData.account_number;
                     if (accountValue !== null && accountValue !== undefined && accountValue !== '') {
                         processedKeys.add('account_number');
-                        const ukrainianLabel = fieldLabels['account_number'] || null;
-                        html += createField('account_number', accountValue, ukrainianLabel, roleData);
+                        html += createField('account_number', accountValue, null, roleData);
                     }
                 }
 
@@ -966,13 +950,12 @@ function displayEditableData(data) {
                     if (key === '_label' || processedKeys.has(key)) continue;
                     // Пропускаем пустые поля
                     if (value === null || value === undefined || value === '') continue;
-                    const ukrainianLabel = fieldLabels[key] || null;
                     if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-                        html += createField(key, JSON.stringify(value, null, 2), ukrainianLabel, roleData);
+                        html += createField(key, JSON.stringify(value, null, 2), null, roleData);
                     } else if (Array.isArray(value)) {
-                        html += createField(key, JSON.stringify(value, null, 2), ukrainianLabel, roleData);
+                        html += createField(key, JSON.stringify(value, null, 2), null, roleData);
                     } else {
-                        html += createField(key, value, ukrainianLabel, roleData);
+                        html += createField(key, value, null, roleData);
                     }
                 }
                 html += '</div>';
@@ -983,7 +966,9 @@ function displayEditableData(data) {
     // Process totals - вставляем в grid, чтобы могло быть рядом с buyer
     if (data.totals) {
         html += '<div class="editable-group">';
-        html += '<div class="editable-group-title"><i class="fas fa-calculator"></i> Підсумкові суми</div>';
+        // Используем _label из данных, если есть, иначе только иконку
+        const totalsTitle = data.totals._label || data._label || '';
+        html += `<div class="editable-group-title"><i class="fas fa-calculator"></i> ${escapeHtml(totalsTitle)}</div>`;
         for (const [key, value] of Object.entries(data.totals)) {
             let numericValue = null;
             let displayLabel = null;
@@ -992,25 +977,23 @@ function displayEditableData(data) {
             if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
                 if ('value' in value && 'label' in value) {
                     // Используем label из объекта, если есть, иначе украинское название
-                    displayLabel = value.label || value._label || fieldLabels[key] || key;
+                    displayLabel = value.label || value._label || key;
                     numericValue = value.value;
                 } else if ('value' in value) {
                     // Только value, используем _label или украинское название
-                    displayLabel = value._label || fieldLabels[key] || key;
+                    displayLabel = value._label || key;
                     numericValue = value.value;
                 } else {
                     // Обычный объект - показываем как JSON
-                    const ukrainianLabel = fieldLabels[key] || null;
-                    html += createField(key, JSON.stringify(value, null, 2), ukrainianLabel, data.totals);
+                    html += createField(key, JSON.stringify(value, null, 2), null, data.totals);
                     continue;
                 }
             } else if (Array.isArray(value)) {
-                const ukrainianLabel = fieldLabels[key] || null;
-                html += createField(key, JSON.stringify(value, null, 2), ukrainianLabel, data.totals);
+                html += createField(key, JSON.stringify(value, null, 2), null, data.totals);
                 continue;
             } else {
                 // Простое значение - показываем с украинским названием
-                displayLabel = fieldLabels[key] || null;
+                displayLabel = null;
                 numericValue = value;
             }
 
@@ -1023,70 +1006,54 @@ function displayEditableData(data) {
 
                 // Ищем соответствующее значение прописью в amounts_in_words
                 if (data.amounts_in_words) {
-                    // Маппинг ключей totals на amounts_in_words - пробуем разные варианты
-                    let possibleKeys = [];
-                    if (key === 'total' || key === 'total_with_vat' || key === 'total_amount') {
-                        possibleKeys = ['total', 'total_amount', 'total_with_vat', 'total_amount_in_words'];
-                    } else if (key === 'vat' || key === 'vat_amount' || key === 'tax_amount') {
-                        possibleKeys = ['vat', 'vat_amount', 'tax_amount', 'vat_amount_in_words'];
-                    } else if (key === 'subtotal' || key === 'total_no_vat' || key === 'total_without_vat') {
-                        possibleKeys = ['subtotal', 'total_no_vat', 'total_without_vat'];
-                    }
+                    // Универсальный поиск по ключам (без хардкода)
+                    const keyLower = key.toLowerCase();
 
-                    // Ищем значение прописью по всем возможным ключам
-                    for (const possibleKey of possibleKeys) {
-                        if (data.amounts_in_words[possibleKey]) {
-                            const amountObj = data.amounts_in_words[possibleKey];
-                            if (typeof amountObj === 'object' && amountObj !== null && 'value' in amountObj) {
-                                amountInWords = amountObj.value;
-                                break;
-                            } else if (typeof amountObj === 'string') {
-                                amountInWords = amountObj;
-                                break;
-                            }
+                    // Пробуем найти по точному совпадению ключа
+                    if (data.amounts_in_words[key]) {
+                        const amountObj = data.amounts_in_words[key];
+                        if (typeof amountObj === 'object' && amountObj !== null && 'value' in amountObj) {
+                            amountInWords = amountObj.value;
+                        } else if (typeof amountObj === 'string') {
+                            amountInWords = amountObj;
                         }
                     }
 
-                    // Если не нашли по ключам, пробуем найти по структуре объекта с _label
-                    // Или просто перебираем все ключи в amounts_in_words
+                    // Если не нашли, ищем по частичному совпадению ключей
                     if (!amountInWords) {
+                        // Перебираем все ключи в amounts_in_words
                         for (const [amountKey, amountValue] of Object.entries(data.amounts_in_words)) {
                             if (typeof amountValue === 'object' && amountValue !== null && amountValue !== undefined) {
-                                // Проверяем _label на соответствие текущему полю
-                                const label = (amountValue._label || amountValue.label || '').toLowerCase();
+                                // Универсальное сопоставление по ключам (без хардкода языков)
                                 const labelKey = amountKey.toLowerCase();
+                                const currentKey = key.toLowerCase();
 
-                                // Для total
-                                if ((key === 'total' || key === 'total_with_vat' || key === 'total_amount') &&
-                                    (label.includes('всього') || label.includes('total') || labelKey.includes('total'))) {
-                                    if ('value' in amountValue) {
-                                        amountInWords = amountValue.value;
-                                        break;
-                                    }
-                                }
-                                // Для vat
-                                else if ((key === 'vat' || key === 'vat_amount' || key === 'tax_amount') &&
-                                         (label.includes('пдв') || label.includes('vat') || labelKey.includes('vat'))) {
-                                    if ('value' in amountValue) {
-                                        amountInWords = amountValue.value;
-                                        break;
-                                    }
-                                }
-                                // Для subtotal
-                                else if ((key === 'subtotal' || key === 'total_no_vat' || key === 'total_without_vat') &&
-                                         (label.includes('сума без') || label.includes('subtotal') || labelKey.includes('subtotal'))) {
-                                    if ('value' in amountValue) {
-                                        amountInWords = amountValue.value;
-                                        break;
-                                    }
+                                // Проверяем совпадение ключей (total, vat, subtotal и их варианты)
+                                const keyMatches = (
+                                    (currentKey.includes('total') && labelKey.includes('total')) ||
+                                    (currentKey.includes('vat') && labelKey.includes('vat')) ||
+                                    (currentKey.includes('tax') && labelKey.includes('tax')) ||
+                                    (currentKey.includes('subtotal') && labelKey.includes('subtotal'))
+                                );
+
+                                if (keyMatches && 'value' in amountValue) {
+                                    amountInWords = amountValue.value;
+                                    break;
                                 }
                             } else if (typeof amountValue === 'string' && amountValue) {
                                 // Если значение - строка, проверяем ключ
                                 const labelKey = amountKey.toLowerCase();
-                                if ((key === 'total' || key === 'total_with_vat' || key === 'total_amount') && labelKey.includes('total')) {
-                                    amountInWords = amountValue;
-                                    break;
-                                } else if ((key === 'vat' || key === 'vat_amount' || key === 'tax_amount') && labelKey.includes('vat')) {
+                                const currentKey = key.toLowerCase();
+
+                                // Универсальное сопоставление по ключам
+                                const keyMatches = (
+                                    (currentKey.includes('total') && labelKey.includes('total')) ||
+                                    (currentKey.includes('vat') && labelKey.includes('vat')) ||
+                                    (currentKey.includes('tax') && labelKey.includes('tax')) ||
+                                    (currentKey.includes('subtotal') && labelKey.includes('subtotal'))
+                                );
+
+                                if (keyMatches) {
                                     amountInWords = amountValue;
                                     break;
                                 }
@@ -1107,10 +1074,11 @@ function displayEditableData(data) {
 
 
     // Process other_fields - в grid
-    // Переименовано в "Дополнительная информация" и объединяем label, value, key в одно поле
     if (data.other_fields) {
         html += '<div class="editable-group">';
-        html += '<div class="editable-group-title"><i class="fas fa-info-circle"></i> Додаткова інформація</div>';
+        // Используем _label из данных, если есть, иначе только иконку
+        const otherFieldsTitle = (typeof data.other_fields === 'object' && data.other_fields._label) ? data.other_fields._label : (data._label || '');
+        html += `<div class="editable-group-title"><i class="fas fa-info-circle"></i> ${escapeHtml(otherFieldsTitle)}</div>`;
         // other_fields может быть массивом или объектом
         if (Array.isArray(data.other_fields)) {
             data.other_fields.forEach((field, index) => {
@@ -1121,7 +1089,7 @@ function displayEditableData(data) {
 
                     // Поддержка структуры {label, value, key}
                     if ('label' in field && 'value' in field) {
-                        displayLabel = field.label || field.label_raw || `Поле ${index + 1}`;
+                        displayLabel = field.label || field.label_raw || `Field ${index + 1}`;
                         const value = field.value !== null && field.value !== undefined ? field.value : (field.value_raw || '');
                         // Объединяем все в одно значение
                         displayValue = value;
@@ -1129,7 +1097,7 @@ function displayEditableData(data) {
                     }
                     // Поддержка структуры {label_raw, value_raw, type}
                     else if ('label_raw' in field || 'value_raw' in field) {
-                        displayLabel = field.label_raw || field.type || `Поле ${index + 1}`;
+                        displayLabel = field.label_raw || field.type || `Field ${index + 1}`;
                         displayValue = field.value_raw !== null && field.value_raw !== undefined ? field.value_raw : '';
                         // Не показываем type отдельно
                     }
@@ -1143,7 +1111,7 @@ function displayEditableData(data) {
                             }
                         }
                         displayValue = parts.join('; ');
-                        displayLabel = `Поле ${index + 1}`;
+                        displayLabel = `Field ${index + 1}`;
                     }
 
                     if (displayLabel) {
@@ -1179,7 +1147,9 @@ function displayEditableData(data) {
 
     if (remainingFields.length > 0) {
         html += '<div class="editable-group">';
-        html += '<div class="editable-group-title"><i class="fas fa-info-circle"></i> Додаткова інформація</div>';
+        // Используем _label из данных, если есть, иначе только иконку
+        const additionalTitle = data._label || '';
+        html += `<div class="editable-group-title"><i class="fas fa-info-circle"></i> ${escapeHtml(additionalTitle)}</div>`;
         for (const [key, value] of remainingFields) {
             if (key.endsWith('_label')) continue;
             // Показываем все поля, включая объекты и массивы
@@ -1209,80 +1179,220 @@ function displayEditableData(data) {
 
     if (items.length > 0) {
         html += '<div class="editable-group" style="grid-column: 1 / -1;">';
-        html += '<div class="editable-group-title"><i class="fas fa-list"></i> Товари та послуги</div>';
+        // Используем _label из table_data или данных, если есть, иначе только иконку
+        const tableTitle = (data.table_data && data.table_data._label) ? data.table_data._label :
+                          (data._label || '');
+        html += `<div class="editable-group-title"><i class="fas fa-list"></i> ${escapeHtml(tableTitle)}</div>`;
         html += '<div class="table-container">';
         html += '<table class="editable-items-table">';
 
-        // Определяем, какие колонки содержат цифры (узкие) и какая колонка - товар (широкая)
-        const numericColumns = ['no', 'line_number', 'number', '№', 'кількість', 'quantity', 'kilkist', 'од. вим.', 'unit',
-                                'ціна', 'price', 'tsina', 'сума', 'amount', 'suma', 'ukt_zed', 'ukt_zed_code', 'код', 'code',
-                                'артикул', 'article', 'шк', 'barcode', 'sku', 'пдв', 'vat', 'vat_amount', 'од.вим'];
-        const productColumns = ['product_name', 'description', 'tovar', 'товар', 'найменування', 'найменування товара',
-                                'товари', 'товари (роботи, послуги)', 'goods', 'services', 'найменування товара'];
-
         // Table header
         const firstItem = items[0];
+        if (!firstItem) {
+            console.warn('No items in line_items, skipping table rendering');
+            // Не прерываем выполнение функции, просто не рендерим таблицу
+            // HTML уже собран для других секций, он будет установлен в конце функции
+        } else {
+
+        // Функция для анализа содержимого колонки (без хардкода)
+        const analyzeColumn = (key, items) => {
+            const values = items.map(item => {
+                const val = item[key];
+                if (val === null || val === undefined) return '';
+                if (typeof val === 'object') return JSON.stringify(val);
+                return String(val).trim();
+            }).filter(v => v.length > 0);
+
+            if (values.length === 0) {
+                return { isEmpty: true };
+            }
+
+            const lengths = values.map(v => v.length);
+            const avgLength = lengths.reduce((a, b) => a + b, 0) / lengths.length;
+            const maxLength = Math.max(...lengths);
+            const minLength = Math.min(...lengths);
+
+            // Проверяем, являются ли значения числовыми
+            const numericCount = values.filter(v => {
+                const cleaned = v.replace(/[\s,]/g, '');
+                const num = parseFloat(cleaned);
+                return !isNaN(num) && !/[a-zA-Zа-яА-ЯёЁіІїЇєЄґҐ]/.test(v);
+            }).length;
+            const numericRatio = numericCount / values.length;
+
+            // Подсчитываем слова
+            const wordCounts = values.map(v => {
+                const words = v.split(/\s+/).filter(w => w.length > 0);
+                return words.length;
+            });
+            const avgWords = wordCounts.reduce((a, b) => a + b, 0) / wordCounts.length;
+
+            // Проверяем повторяемость значений
+            const valueCounts = {};
+            values.forEach(v => {
+                valueCounts[v] = (valueCounts[v] || 0) + 1;
+            });
+            const maxRepetitions = Math.max(...Object.values(valueCounts));
+            const repetitionRatio = maxRepetitions / values.length;
+
+            const uniqueCount = Object.keys(valueCounts).length;
+            const uniqueRatio = uniqueCount / values.length;
+
+            return {
+                isEmpty: false,
+                totalValues: values.length,
+                avgLength: Math.round(avgLength * 10) / 10,
+                maxLength,
+                minLength,
+                numericRatio: Math.round(numericRatio * 100) / 100,
+                avgWords: Math.round(avgWords * 10) / 10,
+                repetitionRatio: Math.round(repetitionRatio * 100) / 100,
+                uniqueRatio: Math.round(uniqueRatio * 100) / 100,
+                uniqueCount
+            };
+        };
+
+        // Функция для определения типа и стилей колонки на основе анализа (без хардкода)
+        const determineColumnType = (analysis, label) => {
+            if (analysis.isEmpty) {
+                return {
+                    type: 'empty',
+                    minWidth: 80,
+                    maxWidth: 120,
+                    textAlign: 'left',
+                    whiteSpace: 'nowrap',
+                    useTextarea: false
+                };
+            }
+
+            // Колонка номера строки - очень короткие значения (1-3 символа), обычно последовательные числа
+            if (analysis.maxLength <= 3 && analysis.avgLength <= 2 && analysis.numericRatio > 0.9) {
+                return {
+                    type: 'line-number',
+                    minWidth: 40,
+                    maxWidth: 50,
+                    textAlign: 'center',
+                    whiteSpace: 'nowrap',
+                    useTextarea: false
+                };
+            }
+
+            // Числовые колонки - высокий процент числовых значений, средняя длина
+            if (analysis.numericRatio > 0.8 && analysis.avgLength < 20) {
+                return {
+                    type: 'numeric',
+                    minWidth: Math.max(100, Math.min(analysis.maxLength * 8, 150)),
+                    maxWidth: Math.max(120, Math.min(analysis.maxLength * 10, 200)),
+                    textAlign: 'right',
+                    whiteSpace: 'nowrap',
+                    useTextarea: false
+                };
+            }
+
+            // Очень короткие повторяющиеся значения (единицы измерения, статусы)
+            if (analysis.avgLength < 8 && analysis.repetitionRatio > 0.3 && analysis.avgWords <= 1.5) {
+                return {
+                    type: 'short-repetitive',
+                    minWidth: Math.max(60, Math.min(analysis.maxLength * 10, 100)),
+                    maxWidth: Math.max(80, Math.min(analysis.maxLength * 12, 120)),
+                    textAlign: 'center',
+                    whiteSpace: 'nowrap',
+                    useTextarea: false
+                };
+            }
+
+            // Длинные описательные колонки (товары, описания)
+            if (analysis.avgLength > 35 || analysis.maxLength > 80 || analysis.avgWords > 3) {
+                return {
+                    type: 'long-descriptive',
+                    minWidth: 200,
+                    maxWidth: 400,
+                    textAlign: 'left',
+                    whiteSpace: 'normal',
+                    useTextarea: true,
+                    wordWrap: 'break-word'
+                };
+            }
+
+            // Средние колонки (коды, артикулы, средние тексты)
+            const calculatedMinWidth = Math.max(100, Math.min(analysis.avgLength * 8, 180));
+            const calculatedMaxWidth = Math.max(120, Math.min(analysis.maxLength * 7, 250));
+
+            return {
+                type: 'medium',
+                minWidth: calculatedMinWidth,
+                maxWidth: calculatedMaxWidth,
+                textAlign: 'left',
+                whiteSpace: 'nowrap',
+                useTextarea: false
+            };
+        };
 
         // Используем порядок колонок СТРОГО из column_mapping (порядок из оригинального документа)
         let allKeys;
         if (column_mapping && Object.keys(column_mapping).length > 0) {
             // Используем ТОЛЬКО колонки из column_mapping, в том порядке, в котором они там указаны
             allKeys = Object.keys(column_mapping);
-            
+
             // Проверяем, есть ли в данных ключи, которых нет в column_mapping (для отладки)
-            const itemKeys = Object.keys(firstItem).filter(key => !key.endsWith('_label') && key !== 'raw');
-            const missingKeys = itemKeys.filter(k => !allKeys.includes(k));
-            
-            if (missingKeys.length > 0) {
-                console.warn('Keys in items but not in column_mapping (will be ignored):', missingKeys);
+            if (firstItem && typeof firstItem === 'object') {
+                const itemKeys = Object.keys(firstItem).filter(key => !key.endsWith('_label') && key !== 'raw');
+                const missingKeys = itemKeys.filter(k => !allKeys.includes(k));
+
+                if (missingKeys.length > 0) {
+                    console.warn('Keys in items but not in column_mapping (will be ignored):', missingKeys);
+                }
             }
         } else {
             // Fallback: используем порядок из firstItem
-            allKeys = Object.keys(firstItem).filter(key => !key.endsWith('_label') && key !== 'raw');
+            if (firstItem && typeof firstItem === 'object') {
+                allKeys = Object.keys(firstItem).filter(key => !key.endsWith('_label') && key !== 'raw');
+            } else {
+                allKeys = [];
+            }
         }
 
-        // Функция для определения класса колонки
-        const getColumnClass = (key, label) => {
-            const keyLower = key.toLowerCase().trim();
-            const labelLower = (label || '').toLowerCase().trim();
+        // Убираем служебные поля, которые не должны отображаться (например, raw)
+        allKeys = allKeys.filter(k => k !== 'raw');
 
-            // Проверяем, является ли колонка товаром
-            if (productColumns.includes(keyLower) ||
-                productColumns.some(pc => labelLower.includes(pc)) ||
-                labelLower.includes('товар') || labelLower.includes('найменування')) {
-                return 'col-product';
-            }
+        // Debug: log column mapping and keys for troubleshooting (temporary)
+        console.log('table_data.column_mapping:', column_mapping);
+        console.log('line_items sample keys:', firstItem ? Object.keys(firstItem) : []);
 
-            // Проверяем, является ли колонка числовой
-            if (numericColumns.includes(keyLower) ||
-                numericColumns.some(nc => labelLower.includes(nc)) ||
-                labelLower.includes('№') || labelLower.includes('кількість') ||
-                labelLower.includes('ціна') || labelLower.includes('сума') ||
-                labelLower.includes('пдв') || labelLower.includes('кт') ||
-                labelLower.includes('артикул') || labelLower.includes('код')) {
-                return 'col-numeric';
-            }
-
-            return 'col-default';
-        };
+        // Анализируем все колонки и определяем их типы динамически
+        const columnAnalyses = {};
+        const columnTypes = {};
+        for (const key of allKeys) {
+            const analysis = analyzeColumn(key, items);
+            columnAnalyses[key] = analysis;
+            const label = (column_mapping && column_mapping[key]) || (firstItem ? getLabel(firstItem, key) : null) || key;
+            columnTypes[key] = determineColumnType(analysis, label);
+        }
 
         html += '<thead><tr>';
         for (const key of allKeys) {
-            const label = column_mapping?.[key] || getLabel(firstItem, key);
-            const columnClass = getColumnClass(key, label);
-            html += `<th class="${columnClass}">${label}</th>`;
+            if (!key) continue; // Пропускаем пустые ключи
+            const label = (column_mapping && column_mapping[key]) || (firstItem ? getLabel(firstItem, key) : null) || key;
+            const safeLabel = label || key; // Защита от null/undefined
+            const colType = columnTypes[key];
+
+            // Определяем стили для заголовка на основе типа колонки
+            // Заголовки переносим только если они не помещаются (определяется через CSS)
+            const headerStyle = `min-width: ${colType.minWidth}px; max-width: ${colType.maxWidth}px; text-align: ${colType.textAlign}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;`;
+            html += `<th class="col-${colType.type}" style="${headerStyle}">${escapeHtml(safeLabel)}</th>`;
         }
         html += '</tr></thead>';
 
         // Table body
         html += '<tbody>';
         items.forEach((item, index) => {
+            if (!item || typeof item !== 'object') return; // Пропускаем некорректные элементы
             html += '<tr>';
             for (const key of allKeys) {
+                if (!key) continue; // Пропускаем пустые ключи
                 const value = item[key];
                 const fieldId = `item_${index}_${key}`;
-                const label = column_mapping?.[key] || getLabel(firstItem, key);
-                const columnClass = getColumnClass(key, label);
+                const colType = columnTypes[key];
 
                 // Показываем все значения, включая объекты и массивы
                 let displayValue = '';
@@ -1294,11 +1404,14 @@ function displayEditableData(data) {
                     displayValue = String(value);
                 }
 
-                // Для колонки товара используем textarea только если текст длинный (больше 50 символов)
-                if (columnClass === 'col-product' && displayValue.length > 50) {
-                    html += `<td class="${columnClass}"><textarea id="${fieldId}" class="item-input" data-index="${index}" data-key="${key}" title="${escapeHtml(displayValue)}">${escapeHtml(displayValue)}</textarea></td>`;
+                // Определяем стили для ячейки на основе типа колонки
+                const cellStyle = `min-width: ${colType.minWidth}px; max-width: ${colType.maxWidth}px; text-align: ${colType.textAlign}; white-space: ${colType.whiteSpace};`;
+
+                // Используем textarea для длинных описательных колонок или если значение длинное
+                if (colType.useTextarea || (displayValue.length > 50 && colType.type === 'long-descriptive')) {
+                    html += `<td class="col-${colType.type}" style="${cellStyle}"><textarea id="${fieldId}" class="item-input" data-index="${index}" data-key="${key}" title="${escapeHtml(displayValue)}">${escapeHtml(displayValue)}</textarea></td>`;
                 } else {
-                    html += `<td class="${columnClass}"><input type="text" id="${fieldId}" class="item-input" data-index="${index}" data-key="${key}" value="${escapeHtml(displayValue)}" title="${escapeHtml(displayValue)}"></td>`;
+                    html += `<td class="col-${colType.type}" style="${cellStyle}"><input type="text" id="${fieldId}" class="item-input" data-index="${index}" data-key="${key}" value="${escapeHtml(displayValue)}" title="${escapeHtml(displayValue)}"></td>`;
                 }
             }
             html += '</tr>';
@@ -1307,6 +1420,7 @@ function displayEditableData(data) {
         html += '</table>';
         html += '</div>';
         html += '</div>';
+        }
     }
 
     elements.editableData.innerHTML = html;
@@ -1487,6 +1601,10 @@ function collectEditedData() {
     const itemInputs = document.querySelectorAll('.item-input');
     itemInputs.forEach(input => {
         const index = parseInt(input.dataset.index);
+        if (isNaN(index)) {
+            console.warn('Invalid index in item input:', input.dataset.index);
+            return;
+        }
         const key = input.dataset.key;
         let value = input.value;
 
@@ -1560,7 +1678,7 @@ function updateNestedValue(obj, key, value) {
 // Save and continue function
 async function saveAndContinue() {
     if (!state.parsedData || !state.originalFilename) {
-        showToast('Немає даних для збереження', true);
+        showToast('No data to save', true);
         return;
     }
 
@@ -1575,8 +1693,10 @@ async function saveAndContinue() {
         state.editedData = editedData;
 
         // Show loading state
-        elements.saveAndContinueBtn.disabled = true;
-        elements.saveAndContinueBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Збереження...';
+        if (elements.saveAndContinueBtn) {
+            elements.saveAndContinueBtn.disabled = true;
+            elements.saveAndContinueBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+        }
 
         // Send to server
         const response = await fetch('/save', {
@@ -1593,21 +1713,23 @@ async function saveAndContinue() {
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.message || 'Не вдалося зберегти дані');
+            throw new Error(errorData.message || 'Failed to save data');
         }
 
         const result = await response.json();
 
         // Show success message
-        showToast(`✅ ${result.message || 'Дані успішно збережено!'}`);
+        showToast(`✅ ${result.message || 'Data saved successfully!'}`);
 
         // Reset button
-        elements.saveAndContinueBtn.disabled = false;
-        elements.saveAndContinueBtn.innerHTML = '<i class="fas fa-save"></i> Зберегти та продовжити';
+        if (elements.saveAndContinueBtn) {
+            elements.saveAndContinueBtn.disabled = false;
+            elements.saveAndContinueBtn.innerHTML = '<i class="fas fa-save"></i> Save and Continue';
+        }
 
         // Optional: reset to upload new document
         setTimeout(() => {
-            if (confirm('Хочете завантажити новий документ?')) {
+            if (confirm('Do you want to upload a new document?')) {
                 resetApp();
             }
         }, 1500);
@@ -1617,13 +1739,18 @@ async function saveAndContinue() {
         showToast('❌ ' + error.message, true);
 
         // Reset button
-        elements.saveAndContinueBtn.disabled = false;
-        elements.saveAndContinueBtn.innerHTML = '<i class="fas fa-save"></i> Зберегти та продовжити';
+        if (elements.saveAndContinueBtn) {
+            elements.saveAndContinueBtn.disabled = false;
+            elements.saveAndContinueBtn.innerHTML = '<i class="fas fa-save"></i> Save and Continue';
+        }
     }
 }
 
 // Escape HTML to prevent XSS
 function escapeHtml(text) {
+    if (text === null || text === undefined) {
+        return '';
+    }
     const map = {
         '&': '&amp;',
         '<': '&lt;',
