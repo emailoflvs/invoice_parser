@@ -916,6 +916,9 @@ body {
     text-align: left;
     font-weight: 600;
     font-size: 0.9rem;
+    white-space: nowrap; /* По умолчанию не переносим */
+    overflow: hidden;
+    text-overflow: ellipsis; /* Если не помещается, показываем многоточие */
 }
 
 .editable-items-table td {
@@ -923,36 +926,28 @@ body {
     border-bottom: 1px solid var(--border-color);
 }
 
-/* Колонки с цифрами - минимальная ширина, только для цифр */
-.editable-items-table th.col-numeric,
-.editable-items-table td.col-numeric {
-    width: 1%; /* Минимальная ширина */
-    min-width: 70px;
-    max-width: 120px;
-    white-space: nowrap;
-    text-align: right; /* Выравнивание цифр по правому краю */
+/* Динамические типы колонок - стили применяются через inline styles из JavaScript */
+/* Базовые стили для всех колонок */
+.editable-items-table th[class^="col-"],
+.editable-items-table td[class^="col-"] {
+    /* Ширина и выравнивание задаются динамически через inline styles */
 }
 
-.editable-items-table th.col-numeric {
-    text-align: center; /* Заголовки по центру */
+/* Специфичные стили для заголовков - перенос только если не помещается */
+.editable-items-table th[class^="col-"] {
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-/* Колонка с товаром - занимает все оставшееся место, многострочный текст */
-.editable-items-table th.col-product,
-.editable-items-table td.col-product {
-    width: auto; /* Автоматическая ширина, занимает оставшееся место */
-    min-width: 250px;
-    white-space: normal; /* Разрешаем перенос строк */
-    word-wrap: break-word; /* Перенос длинных слов */
-    word-break: break-word; /* Перенос слов при необходимости */
+/* Для заголовков с длинным текстом разрешаем перенос (определяется динамически) */
+.editable-items-table th[class^="col-"]:hover {
+    /* При наведении можно показать полный текст через title */
 }
 
-/* Остальные колонки - средняя ширина */
-.editable-items-table th.col-default,
-.editable-items-table td.col-default {
-    width: auto;
-    min-width: 90px;
-    max-width: 180px;
+/* Стили для ячеек с многострочным текстом */
+.editable-items-table td.col-long-descriptive {
+    word-wrap: break-word;
+    word-break: break-word;
 }
 
 .editable-items-table input {
