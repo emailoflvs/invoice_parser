@@ -1138,26 +1138,26 @@ body {
 /* All columns - automatic width, browser calculates based on content */
 /* No static sizes - responsive for all devices */
 
-/* Line number column - fit content exactly, always visible */
+/* Line number column - narrow, centered */
 .editable-items-table th.col-line-number,
 .editable-items-table td.col-line-number {
-    width: max-content !important; /* Expand to fit content exactly */
+    width: 1%; /* Hint to browser: compress this column */
     text-align: center !important;
     white-space: nowrap !important;
 }
 
-/* Quantity column - fit content exactly, always visible */
+/* Quantity column - narrow, centered */
 .editable-items-table th.col-quantity,
 .editable-items-table td.col-quantity {
-    width: max-content !important; /* Expand to fit content exactly */
+    width: 1%; /* Hint to browser: compress this column */
     text-align: center !important;
     white-space: nowrap !important;
 }
 
-/* Numeric columns (prices) - fit content exactly, never wrap, always visible */
+/* Numeric columns (prices) - narrow, right-aligned, never wrap */
 .editable-items-table th.col-numeric,
 .editable-items-table td.col-numeric {
-    width: max-content !important; /* Expand to fit content exactly */
+    width: 1%; /* Hint to browser: compress this column */
     text-align: right !important;
 }
 
@@ -1165,17 +1165,17 @@ body {
     white-space: nowrap !important; /* Never wrap prices */
 }
 
-/* Code column - fit content, may wrap if very long */
+/* Code column - medium width, left-aligned */
 .editable-items-table th.col-code,
 .editable-items-table td.col-code {
-    width: max-content !important; /* Expand to fit content */
+    width: 1%; /* Hint to browser: compress but allow more space than line-number */
     text-align: left !important;
 }
 
-/* Short repetitive column - fit content exactly, always visible */
+/* Short repetitive column - narrow, centered */
 .editable-items-table th.col-short-repetitive,
 .editable-items-table td.col-short-repetitive {
-    width: max-content !important; /* Expand to fit content exactly */
+    width: 1%; /* Hint to browser: compress this column */
     text-align: center !important;
     white-space: nowrap !important;
 }
@@ -1184,9 +1184,9 @@ body {
 /* Take remaining space, content wraps to multiple lines if needed */
 .editable-items-table th.col-text,
 .editable-items-table td.col-text {
-    width: auto !important; /* Take remaining space after max-content columns */
+    /* No width property - let browser allocate remaining space */
     max-width: none !important;
-    /* No fixed min-width - browser determines based on content and available space */
+    /* min-width set dynamically via JavaScript based on content analysis */
 }
 
 

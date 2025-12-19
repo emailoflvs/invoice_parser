@@ -1687,6 +1687,45 @@ function displayEditableData(data) {
             };
         };
 
+        // Calculate column weight for proportional width distribution
+        // Higher weight = wider column
+        // Based on content analysis - NO HARDCODED VALUES
+        const calculateColumnWeight = (analysis, colType) => {
+            // Line numbers: minimal weight
+            if (colType.type === 'line-number') {
+                return 1;
+            }
+
+            // Short repetitive (quantity, units): minimal weight
+            if (colType.type === 'short-repetitive') {
+                return 2;
+            }
+
+            // Numeric (prices, amounts): proportional to max length
+            if (colType.type === 'numeric') {
+                // Weight based on max length of numbers
+                return Math.max(2, Math.min(5, analysis.maxLength / 3));
+            }
+
+            // Codes (product codes, IDs): proportional to max length
+            if (colType.type === 'code') {
+                // Codes can be medium width
+                return Math.max(3, Math.min(6, analysis.maxLength / 2.5));
+            }
+
+            // Text (descriptions, names): largest weight based on avg length
+            if (colType.type === 'text') {
+                // Text columns get the most space
+                // Weight proportional to average text length
+                const baseWeight = 10; // Minimum weight for text
+                const lengthBonus = analysis.avgLength / 10; // Bonus based on content
+                return Math.max(baseWeight, Math.min(30, baseWeight + lengthBonus));
+            }
+
+            // Default: medium weight
+            return 5;
+        };
+
         // UNIVERSAL column type determination - works with ANY columns, ANY data
         // No specific column types - just simple rules based on content analysis
         // All widths automatic - browser calculates based on content
@@ -1819,10 +1858,10 @@ function displayEditableData(data) {
 
         // Use column order STRICTLY from column_order or column_mapping (order from original document)
         let allKeys;
-        if (table_data.column_order && Array.isArray(table_data.column_order) && table_data.column_order.length > 0) {
+        if (data.table_data && data.table_data.column_order && Array.isArray(data.table_data.column_order) && data.table_data.column_order.length > 0) {
             // CRITICAL: Use column_order array to preserve exact column order from parsing
             // JSON objects may lose key order during serialization, so we use explicit array
-            allKeys = table_data.column_order;
+            allKeys = data.table_data.column_order;
             console.log('Using column_order from table_data:', allKeys);
         } else if (column_mapping && Object.keys(column_mapping).length > 0) {
             // Fallback: Use ONLY columns from column_mapping, in the order they are specified
@@ -1863,6 +1902,9 @@ function displayEditableData(data) {
         });
         const columnAnalyses = {};
         const columnTypes = {};
+        const columnWeights = {};
+
+        // Step 1: Analyze and determine types for all columns
         for (const key of allKeys) {
             const analysis = analyzeColumn(key, items);
             columnAnalyses[key] = analysis;
@@ -1877,6 +1919,19 @@ function displayEditableData(data) {
                 useTextarea: colType.useTextarea
             });
         }
+
+        // Step 2: Calculate weights for proportional width distribution
+        let totalWeight = 0;
+        for (const key of allKeys) {
+            const analysis = columnAnalyses[key];
+            const colType = columnTypes[key];
+            const weight = calculateColumnWeight(analysis, colType);
+            columnWeights[key] = weight;
+            totalWeight += weight;
+            console.log(`Column "${key}" weight: ${weight.toFixed(2)}`);
+        }
+
+        console.log(`Total weight: ${totalWeight.toFixed(2)}`);
 
         // DEBUG: Show column types before rendering
         console.log('=== COLUMN TYPES FOR RENDERING ===');
@@ -1893,8 +1948,30 @@ function displayEditableData(data) {
             const label = (column_mapping && column_mapping[key]) || (firstItem ? getLabel(firstItem, key) : null) || key;
             const safeLabel = label || key; // Protection from null/undefined
             const colType = columnTypes[key];
+            const weight = columnWeights[key];
+            const analysis = columnAnalyses[key];
 
-            html += `<th class="col-${colType.type}">${escapeHtml(safeLabel)}</th>`;
+            // Calculate min-width based on weight and content
+            // Use 'ch' units for dynamic sizing (1ch = width of '0' character)
+            let minWidthCh = 0;
+            if (colType.type === 'line-number') {
+                minWidthCh = Math.max(2, analysis.maxLength + 1);
+            } else if (colType.type === 'short-repetitive') {
+                minWidthCh = Math.max(4, analysis.maxLength + 2);
+            } else if (colType.type === 'numeric') {
+                minWidthCh = Math.max(6, analysis.maxLength + 2);
+            } else if (colType.type === 'code') {
+                minWidthCh = Math.max(8, analysis.maxLength * 1.1);
+            } else if (colType.type === 'text') {
+                // Text columns: larger min-width based on average content
+                minWidthCh = Math.max(15, Math.min(50, analysis.avgLength * 0.8));
+            } else {
+                minWidthCh = Math.max(10, analysis.maxLength);
+            }
+
+            const style = `min-width: ${minWidthCh}ch;`;
+
+            html += `<th class="col-${colType.type}" style="${style}">${escapeHtml(safeLabel)}</th>`;
         }
         html += '</tr></thead>';
 
