@@ -137,8 +137,8 @@ class WebAPI:
             self.export_service = None
 
         self.app = FastAPI(
-            title="Анализ документов API",
-            description="API для обработки и анализа счетов и накладных",
+            title="Document Analysis API",
+            description="API for processing and analyzing invoices and waybills",
             version="1.0.0"
         )
 
@@ -344,16 +344,16 @@ class WebAPI:
                 user.last_login = datetime.utcnow()
                 await session.commit()
 
-                # Сохраняем токен в cookie для автоматической авторизации при загрузке страницы
-                # HttpOnly для безопасности (защита от XSS)
-                # SameSite='lax' для защиты от CSRF, но позволяет отправку cookie при переходе с других сайтов
+                # Save token in cookie for automatic authorization on page load
+                # HttpOnly for security (XSS protection)
+                # SameSite='lax' for CSRF protection, but allows cookie on cross-site navigation
                 response.set_cookie(
                     key="authToken",
                     value=access_token,
                     httponly=True,
                     samesite="lax",
-                    secure=False,  # В production установить True для HTTPS
-                    max_age=60 * 60 * 24 * 7  # 7 дней (можно настроить через config)
+                    secure=self.config.jwt_cookie_secure,
+                    max_age=60 * 60 * 24 * self.config.jwt_cookie_max_age_days
                 )
 
                 return LoginResponse(
@@ -487,7 +487,12 @@ class WebAPI:
                 Configuration values needed by frontend
             """
             return {
-                "max_file_size_mb": self.config.max_file_size_mb
+                "max_file_size_mb": self.config.max_file_size_mb,
+                "column_type_line_number_keys": self.config.column_type_line_number_keys.split(','),
+                "column_type_product_keys": self.config.column_type_product_keys.split(','),
+                "column_type_price_keys": self.config.column_type_price_keys.split(','),
+                "column_type_quantity_keys": self.config.column_type_quantity_keys.split(','),
+                "column_type_code_keys": self.config.column_type_code_keys.split(',')
             }
 
         @self.app.get("/health", response_model=HealthResponse)
@@ -663,7 +668,7 @@ class WebAPI:
                 Parsing result
             """
 
-            # Проверка типа файла
+            # Check file type
             allowed_extensions = ['.pdf', '.jpg', '.jpeg', '.png', '.tiff', '.bmp']
             file_ext = Path(file.filename).suffix.lower()
 
@@ -673,7 +678,7 @@ class WebAPI:
                     status_code=400,
                     detail={
                         "error_code": "INVALID_FORMAT",
-                        "message": f"Неподдерживаемый формат файла. Загрузите PDF, JPG, PNG, TIFF или BMP."
+                        "message": f"Unsupported file format. Please upload PDF, JPG, PNG, TIFF or BMP."
                     }
                 )
 
@@ -682,7 +687,7 @@ class WebAPI:
                 # Читаем содержимое файла
                 content = await file.read()
 
-                # Проверка размера файла
+                # Check file size
                 max_size = self.config.max_file_size_mb * 1024 * 1024
                 if len(content) > max_size:
                     size_mb = len(content) / 1024 / 1024
@@ -691,7 +696,7 @@ class WebAPI:
                         status_code=413,
                         detail={
                             "error_code": "FILE_TOO_LARGE",
-                            "message": f"Файл слишком большой ({size_mb:.1f}МБ). Максимальный размер: {self.config.max_file_size_mb}МБ."
+                            "message": f"File is too large ({size_mb:.1f}MB). Maximum size: {self.config.max_file_size_mb}MB."
                         }
                     )
 
@@ -705,9 +710,9 @@ class WebAPI:
 
                 logger.info(f"Received file: {file.filename}, saved to: {tmp_path}, mode: {mode}")
 
-                # Валидация режима
+                # Validate mode
                 if mode not in ["fast", "detailed"]:
-                    mode = "detailed"  # По умолчанию детальный режим
+                    mode = "detailed"  # Default to detailed mode
 
                 # Обработка документа (передаем оригинальное имя файла, режим и источник)
                 result = await self.orchestrator.process_document(tmp_path, original_filename=file.filename, mode=mode, source="web")
@@ -733,7 +738,7 @@ class WebAPI:
                 error_message = str(e)
                 logger.error(f"Failed to process upload: {e}", exc_info=True)
 
-                # Парсим код ошибки и сообщение (формат: ERROR_CODE|User Message)
+                # Parse error code and message (format: ERROR_CODE|User Message)
                 error_code = "E099"
                 user_message = "Unable to process document. Please try again or contact support."
 
@@ -748,7 +753,7 @@ class WebAPI:
                     logger.error(f"Unformatted error: {error_message}")
                     user_message = str(e)
 
-                # Определяем HTTP статус код на основе кода ошибки
+                # Determine HTTP status code based on error code
                 status_code = 500
                 if error_code == "E001":  # Quota
                     status_code = 503  # Service Unavailable
@@ -985,7 +990,7 @@ class WebAPI:
                     status_code=500,
                     detail={
                         "error_code": "SAVE_ERROR",
-                        "message": f"Не удалось сохранить данные: {str(e)}"
+                        "message": f"Failed to save data: {str(e)}"
                     }
                 )
 
@@ -1028,7 +1033,7 @@ class WebAPI:
 
                 return RejectResponse(
                     success=True,
-                    message="Подтверждение документа отменено",
+                    message="Document approval rejected",
                     document_id=reject_request.document_id,
                     new_status=document.status
                 )
@@ -1039,7 +1044,7 @@ class WebAPI:
                     status_code=404,
                     detail={
                         "error_code": "DOCUMENT_NOT_FOUND",
-                        "message": f"Документ не найден: {str(e)}"
+                        "message": f"Document not found: {str(e)}"
                     }
                 )
             except Exception as e:
@@ -1048,13 +1053,13 @@ class WebAPI:
                     status_code=500,
                     detail={
                         "error_code": "REJECT_ERROR",
-                        "message": f"Не удалось отменить подтверждение: {str(e)}"
+                        "message": f"Failed to reject document: {str(e)}"
                     }
                 )
 
         @self.app.get("/login.html")
         async def login_page():
-            """Страница входа"""
+            """Login page"""
             static_dir = Path(__file__).parent.parent.parent.parent / "static"
             login_file = static_dir / "login.html"
 
@@ -1079,11 +1084,11 @@ class WebAPI:
             """Root endpoint - returns web interface (requires authentication)"""
             static_dir = Path(__file__).parent.parent.parent.parent / "static"
 
-            # Проверяем авторизацию пользователя
+            # Check user authentication
             is_authenticated = await self._check_authentication(request)
 
             if not is_authenticated:
-                # Если не авторизован, показываем страницу логина
+                # If not authenticated, show login page
                 login_file = static_dir / "login.html"
                 if login_file.exists():
                     with open(login_file, 'r', encoding='utf-8') as f:
@@ -1098,19 +1103,19 @@ class WebAPI:
                         }
                     )
                 else:
-                    # Если login.html не найден, возвращаем JSON с ошибкой
+                    # If login.html not found, return JSON error
                     raise HTTPException(
                         status_code=401,
                         detail="Authentication required. Please log in at /login.html"
                     )
 
-            # Если авторизован, показываем главную страницу
+            # If authenticated, show main page
             index_file = static_dir / "index.html"
             if index_file.exists():
                 return FileResponse(index_file)
             else:
                 return {
-                    "name": "InvoiceParser API",
+                    "name": "Document Analysis API",
                     "version": "1.0.0",
                     "endpoints": {
                         "health": "/health",
@@ -1121,12 +1126,12 @@ class WebAPI:
 
     async def _save_approved_to_database(self, document_id: int, approved_data: dict, user_id: int) -> None:
         """
-        Сохранение APPROVED данных в базу данных
+        Save APPROVED data to database
 
         Args:
-            document_id: ID документа в БД
-            approved_data: Утвержденные данные
-            user_id: ID пользователя, который утвердил данные
+            document_id: Document ID in database
+            approved_data: Approved data
+            user_id: User ID who approved the data
         """
         try:
             from ..database import get_session
@@ -1154,18 +1159,18 @@ class WebAPI:
 
     def _verify_token(self, token: Optional[str]) -> bool:
         """
-        Проверка токена авторизации
+        Verify authorization token
 
         Args:
-            token: Токен из заголовка Authorization
+            token: Token from Authorization header
 
         Returns:
-            True если токен валидный
+            True if token is valid
         """
         if not token:
             return False
 
-        # Удаление префикса Bearer
+        # Remove Bearer prefix
         if token.startswith(BEARER_PREFIX):
             token = token[len(BEARER_PREFIX):]
 
@@ -1173,40 +1178,40 @@ class WebAPI:
 
     async def _check_authentication(self, request: Request) -> bool:
         """
-        Проверка авторизации пользователя из заголовка Authorization или cookie
+        Check user authentication from Authorization header or cookie
 
         Args:
             request: HTTP request
 
         Returns:
-            True если пользователь авторизован
+            True if user is authenticated
         """
         try:
             token = None
 
-            # Сначала пытаемся получить токен из заголовка Authorization
+            # First try to get token from Authorization header
             authorization = request.headers.get("Authorization")
             if authorization:
-                # Удаляем префикс Bearer
+                # Remove Bearer prefix
                 if authorization.startswith(BEARER_PREFIX):
                     token = authorization[len(BEARER_PREFIX):].strip()
                 else:
                     token = authorization.strip()
 
-            # Если токена нет в заголовке, пытаемся получить из cookie
+            # If no token in header, try to get from cookie
             if not token:
                 token = request.cookies.get("authToken")
 
             if not token:
                 return False
 
-            # Проверяем токен через JWT
+            # Verify token via JWT
             from ..auth import verify_token
             payload = verify_token(token)
             if payload is None:
                 return False
 
-            # Проверяем, что пользователь существует и активен
+            # Check that user exists and is active
             username = payload.get("sub")
             if not username:
                 return False

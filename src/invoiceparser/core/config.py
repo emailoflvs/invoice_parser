@@ -107,6 +107,8 @@ class Config(BaseSettings):
     jwt_secret_key: str = Field(alias="JWT_SECRET_KEY", default="your-secret-key-change-in-production")
     jwt_algorithm: str = Field(alias="JWT_ALGORITHM", default="HS256")
     jwt_access_token_expire_minutes: int = Field(alias="JWT_ACCESS_TOKEN_EXPIRE_MINUTES", default=43200)  # 30 дней
+    jwt_cookie_max_age_days: int = Field(alias="JWT_COOKIE_MAX_AGE_DAYS", default=7)  # Cookie expiration in days
+    jwt_cookie_secure: bool = Field(alias="JWT_COOKIE_SECURE", default=False)  # Set to True for HTTPS in production
 
     # Настройки Telegram Bot
     telegram_bot_token: str = Field(alias="TELEGRAM_BOT_TOKEN", default="")
@@ -203,6 +205,28 @@ class Config(BaseSettings):
         alias="SHEETS_ITEMS_SHEET",
         default="Позиции"
     )  # Название листа для сохранения позиций (items) в Google Sheets
+
+    # Column type detection settings (for table columns)
+    column_type_line_number_keys: str = Field(
+        alias="COLUMN_TYPE_LINE_NUMBER_KEYS",
+        default="no,line_number,number"
+    )  # Keys that identify line number column (comma-separated)
+    column_type_product_keys: str = Field(
+        alias="COLUMN_TYPE_PRODUCT_KEYS",
+        default="description,item_name,product_name,name"
+    )  # Keys that identify product description column (comma-separated)
+    column_type_price_keys: str = Field(
+        alias="COLUMN_TYPE_PRICE_KEYS",
+        default="price,amount,sum,total,unit_price,price_no_vat,price_without_vat"
+    )  # Keys that identify price/amount column (comma-separated)
+    column_type_quantity_keys: str = Field(
+        alias="COLUMN_TYPE_QUANTITY_KEYS",
+        default="quantity"
+    )  # Keys that identify quantity column (comma-separated)
+    column_type_code_keys: str = Field(
+        alias="COLUMN_TYPE_CODE_KEYS",
+        default="code,sku,article,ukt_zed"
+    )  # Keys that identify code column (comma-separated)
 
     @classmethod
     def load(cls) -> "Config":

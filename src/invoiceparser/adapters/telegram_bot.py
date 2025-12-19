@@ -80,18 +80,18 @@ class TelegramBot:
 
         if not self._is_authorized(user_id):
             await update.message.reply_text(
-                "❌ У вас нет доступа к этому боту."
+                "❌ You do not have access to this bot."
             )
             return
 
         await update.message.reply_text(
-            "👋 Привет! Я бот для парсинга документов.\n\n"
-            "📄 Отправьте мне документ (PDF или изображение), "
-            "и я извлеку из него данные.\n\n"
-            "Доступные команды:\n"
-            "/start - Показать это сообщение\n"
-            "/help - Справка\n"
-            "/info - Информация о конфигурации"
+            "👋 Hello! I am a document parsing bot.\n\n"
+            "📄 Send me a document (PDF or image), "
+            "and I will extract data from it.\n\n"
+            "Available commands:\n"
+            "/start - Show this message\n"
+            "/help - Help\n"
+            "/info - Configuration information"
         )
 
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -99,21 +99,21 @@ class TelegramBot:
         user_id = update.effective_user.id
 
         if not self._is_authorized(user_id):
-            await update.message.reply_text("❌ У вас нет доступа к этому боту.")
+            await update.message.reply_text("❌ You do not have access to this bot.")
             return
 
         await update.message.reply_text(
-            "📖 Справка по использованию:\n\n"
-            "1️⃣ Отправьте документ (PDF или изображение)\n"
-            "2️⃣ Дождитесь обработки\n"
-            "3️⃣ Получите результат в формате JSON\n\n"
-            "Поддерживаемые форматы:\n"
+            "📖 Usage guide:\n\n"
+            "1️⃣ Send a document (PDF or image)\n"
+            "2️⃣ Wait for processing\n"
+            "3️⃣ Receive result in JSON format\n\n"
+            "Supported formats:\n"
             "• PDF\n"
             "• JPG/JPEG\n"
             "• PNG\n"
             "• TIFF\n"
             "• BMP\n\n"
-            "⚠️ Обработка может занять до 30 секунд."
+            "⚠️ Processing may take up to 30 seconds."
         )
 
     async def info_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -121,15 +121,15 @@ class TelegramBot:
         user_id = update.effective_user.id
 
         if not self._is_authorized(user_id):
-            await update.message.reply_text("❌ У вас нет доступа к этому боту.")
+            await update.message.reply_text("❌ You do not have access to this bot.")
             return
 
         info_text = (
-            f"ℹ️ Информация о конфигурации:\n\n"
-            f"Режим: {self.config.mode}\n"
-            f"Улучшение изображений: {'✓' if self.config.enable_image_enhancement else '✗'}\n"
-            f"Режим PDF: {self.config.pdf_processing_mode}\n"
-            f"Экспорт в Excel (локальный): {'✓' if self.config.export_local_excel_enabled else '✗'}"
+            f"ℹ️ Configuration information:\n\n"
+            f"Mode: {self.config.mode}\n"
+            f"Image enhancement: {'✓' if self.config.enable_image_enhancement else '✗'}\n"
+            f"PDF mode: {self.config.pdf_processing_mode}\n"
+            f"Excel export (local): {'✓' if self.config.export_local_excel_enabled else '✗'}"
         )
 
         await update.message.reply_text(info_text)
@@ -139,11 +139,11 @@ class TelegramBot:
         user_id = update.effective_user.id
 
         if not self._is_authorized(user_id):
-            await update.message.reply_text("❌ У вас нет доступа к этому боту.")
+            await update.message.reply_text("❌ You do not have access to this bot.")
             return
 
         try:
-            # Получение документа
+            # Get document
             if update.message.document:
                 file = await update.message.document.get_file()
                 file_name = update.message.document.file_name
@@ -152,26 +152,26 @@ class TelegramBot:
                 file_name = f"photo_{update.message.photo[-1].file_id}.jpg"
             else:
                 await update.message.reply_text(
-                    "❌ Неподдерживаемый тип файла. "
-                    "Отправьте документ или изображение."
+                    "❌ Unsupported file type. "
+                    "Please send a document or image."
                 )
                 return
 
-            # Проверка расширения
+            # Check file extension
             file_ext = Path(file_name).suffix.lower()
             allowed_extensions = ['.pdf', '.jpg', '.jpeg', '.png', '.tiff', '.bmp']
 
             if file_ext not in allowed_extensions:
                 await update.message.reply_text(
-                    f"❌ Неподдерживаемый формат файла: {file_ext}\n\n"
-                    f"Поддерживаемые форматы: {', '.join(allowed_extensions)}"
+                    f"❌ Unsupported file format: {file_ext}\n\n"
+                    f"Supported formats: {', '.join(allowed_extensions)}"
                 )
                 return
 
-            # Уведомление о начале обработки
+            # Processing notification
             status_message = await update.message.reply_text(
-                "⏳ Обработка документа...\n"
-                "Это может занять до 30 секунд."
+                "⏳ Processing document...\n"
+                "This may take up to 30 seconds."
             )
 
             # Сохранение файла
@@ -185,8 +185,8 @@ class TelegramBot:
 
             logger.info(f"Received document from user {user_id}: {file_name}")
 
-            # Обработка документа (передаем original_filename, mode и source)
-            # Используем режим "detailed" по умолчанию для Telegram (как в веб-форме)
+            # Process document (pass original_filename, mode and source)
+            # Use "detailed" mode by default for Telegram (same as web form)
             result = await self.orchestrator.process_document(
                 tmp_path,
                 original_filename=file_name,
@@ -250,7 +250,7 @@ class TelegramBot:
                     f"📦 Items: {items_count}"
                 )
 
-                # Отправка ссылки на форму редактирования через кнопку
+                # Send link to edit form via button
                 document_id = result.get('document_id')
                 keyboard = None
 
@@ -258,69 +258,64 @@ class TelegramBot:
 
                 if document_id:
                     try:
-                        # Формируем URL для редактирования документа
-                        # Используем настройки из конфига
-                        web_port = int(self.config.web_port) if self.config.web_port else 8000
-
-                        # Проверяем, есть ли публичный URL в конфиге
+                        # Build URL for document editing
+                        # Use settings from config
                         public_url = self.config.web_public_url
 
                         if public_url:
-                            # Используем публичный URL из конфига
+                            # Use public URL from config
                             web_url = str(public_url).rstrip('/')
                             logger.info(f"Using public URL from config: {web_url}")
+                            edit_url = f"{web_url}/?document_id={document_id}"
+                            logger.info(f"Creating edit button with URL: {edit_url}")
+
+                            # Create button with link
+                            keyboard = InlineKeyboardMarkup([
+                                [InlineKeyboardButton("✏️ Open edit form", url=edit_url)]
+                            ])
                         else:
-                            # По умолчанию используем localhost (порт проброшен из контейнера)
-                            # Telegram не принимает localhost, поэтому используем 127.0.0.1
-                            web_url = f"http://127.0.0.1:{web_port}"
-                            logger.info(f"Using default localhost URL: {web_url}")
-
-                        edit_url = f"{web_url}/?document_id={document_id}"
-
-                        logger.info(f"Creating edit button with URL: {edit_url}")
-
-                        # Создаем кнопку со ссылкой
-                        keyboard = InlineKeyboardMarkup([
-                            [InlineKeyboardButton("✏️ Открыть форму редактирования", url=edit_url)]
-                        ])
+                            # If no public URL configured, cannot create edit link
+                            logger.warning("WEB_PUBLIC_URL not configured, cannot create edit link")
+                            response_text += f"\n\n✏️ Document ID for editing: {document_id}"
+                            keyboard = None
                     except Exception as e:
                         logger.error(f"Failed to create edit button: {e}", exc_info=True)
-                        # Добавляем document_id в сообщение как fallback
-                        response_text += f"\n\n✏️ ID документа для редактирования: {document_id}"
+                        # Add document_id to message as fallback
+                        response_text += f"\n\n✏️ Document ID for editing: {document_id}"
 
-                # Обновляем сообщение с кнопкой (если есть)
+                # Update message with button (if available)
                 await status_message.edit_text(
                     response_text,
                     reply_markup=keyboard
                 )
 
             else:
-                # Получаем сообщение об ошибке
-                error_message = result.get('error', 'Неизвестная ошибка')
+                # Get error message
+                error_message = result.get('error', 'Unknown error')
 
-                # Парсим код ошибки и показываем только понятное сообщение
-                user_message = "❌ Не удалось обработать документ."
+                # Parse error code and show only user-friendly message
+                user_message = "❌ Failed to process document."
 
                 if "|" in error_message:
-                    # Формат: ERROR_CODE|User Message
+                    # Format: ERROR_CODE|User Message
                     parts = error_message.split("|", 1)
                     if len(parts) == 2:
                         user_message = f"⚠️ {parts[1]}"
                 elif "ERROR_E" in error_message:
-                    # Если есть код ошибки, показываем общее сообщение
+                    # If error code exists, show general message
                     if "E001" in error_message:
-                        user_message = "⚠️ Сервис временно недоступен из-за высокой нагрузки. Попробуйте позже."
+                        user_message = "⚠️ Service temporarily unavailable due to high load. Please try again later."
                     elif "E002" in error_message or "E003" in error_message:
-                        user_message = "⚙️ Ошибка конфигурации сервиса. Обратитесь в поддержку."
+                        user_message = "⚙️ Service configuration error. Please contact support."
                     elif "E004" in error_message:
-                        user_message = "⏱️ Превышено время ожидания. Попробуйте документ меньшего размера."
+                        user_message = "⏱️ Timeout exceeded. Please try a smaller document."
                     elif "E005" in error_message:
-                        user_message = "🌐 Ошибка сетевого подключения. Проверьте соединение и попробуйте снова."
+                        user_message = "🌐 Network connection error. Please check your connection and try again."
                     else:
-                        user_message = "❌ Не удалось обработать документ. Попробуйте снова или обратитесь в поддержку."
+                        user_message = "❌ Failed to process document. Please try again or contact support."
                 else:
-                    # Для других ошибок показываем общее сообщение
-                    user_message = "❌ Не удалось обработать документ. Попробуйте снова или обратитесь в поддержку."
+                    # For other errors show general message
+                    user_message = "❌ Failed to process document. Please try again or contact support."
 
                 await status_message.edit_text(user_message)
 
@@ -328,8 +323,8 @@ class TelegramBot:
             logger.error(f"Failed to process document: {e}", exc_info=True)
             error_str = str(e)
 
-            # Парсим сообщение об ошибке
-            user_message = "❌ Произошла ошибка при обработке документа. Попробуйте снова или обратитесь в поддержку."
+            # Parse error message
+            user_message = "❌ An error occurred while processing the document. Please try again or contact support."
 
             if "|" in error_str:
                 parts = error_str.split("|", 1)
@@ -337,18 +332,18 @@ class TelegramBot:
                     user_message = f"⚠️ {parts[1]}"
             elif "ERROR_E" in error_str:
                 if "E001" in error_str:
-                    user_message = "⚠️ Сервис временно недоступен из-за высокой нагрузки. Попробуйте позже."
+                    user_message = "⚠️ Service temporarily unavailable due to high load. Please try again later."
                 elif "E002" in error_str or "E003" in error_str:
-                    user_message = "⚙️ Ошибка конфигурации сервиса. Обратитесь в поддержку."
+                    user_message = "⚙️ Service configuration error. Please contact support."
                 elif "E004" in error_str:
-                    user_message = "⏱️ Превышено время ожидания. Попробуйте документ меньшего размера."
+                    user_message = "⏱️ Timeout exceeded. Please try a smaller document."
                 elif "E005" in error_str:
-                    user_message = "🌐 Ошибка сетевого подключения. Проверьте соединение и попробуйте снова."
+                    user_message = "🌐 Network connection error. Please check your connection and try again."
 
             await update.message.reply_text(user_message)
 
     def run(self):
-        """Запуск бота"""
+        """Start bot"""
         logger.info("Starting Telegram bot")
 
         # Создание приложения
