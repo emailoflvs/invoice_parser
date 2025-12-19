@@ -99,3 +99,11 @@ localStorage.setItem('authToken', access_token);
 - Токен имеет срок действия
 - Для повышения безопасности используйте HTTPS
 
+
+
+
+
+
+
+
+

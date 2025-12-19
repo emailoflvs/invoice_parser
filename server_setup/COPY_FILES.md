@@ -137,3 +137,11 @@ ls -la .env google_sheets_credentials.json
 - Храните секреты в `.env` файлах (которые в `.gitignore`)
 - Используйте менеджеры секретов для production
 
+
+
+
+
+
+
+
+

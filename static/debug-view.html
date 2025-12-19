@@ -173,7 +173,7 @@
                     column_mapping = parsedData.table_data.column_mapping || column_mapping;
                 }
 
-                addLog('🛒 Товары', `Количество: ${items.length}${items.length > 0 ? '\nПоля: ' + Object.keys(items[0]).join(', ') : ''}`, items.length > 0 ? 'success' : 'warning');
+                addLog('🛒 Items', `Count: ${items.length}${items.length > 0 ? '\nFields: ' + Object.keys(items[0]).join(', ') : ''}`, items.length > 0 ? 'success' : 'warning');
 
                 if (Object.keys(column_mapping).length > 0) {
                     addLog('📊 column_mapping', JSON.stringify(column_mapping, null, 2), 'success');
@@ -200,7 +200,7 @@
 
                 // parties.supplier
                 if (parsedData.parties?.supplier) {
-                    html += '<h3>🏢 Поставщик</h3>';
+                    html += '<h3>🏢 Supplier</h3>';
                     for (const [key, value] of Object.entries(parsedData.parties.supplier)) {
                         if (!key.endsWith('_label') && typeof value !== 'object') {
                             html += `<div style="margin: 10px 0;">`;
@@ -213,7 +213,7 @@
 
                 // Товары
                 if (items.length > 0) {
-                    html += '<h3>🛒 Товары</h3>';
+                    html += '<h3>🛒 Items</h3>';
                     html += '<table style="width: 100%; border-collapse: collapse;">';
                     html += '<thead><tr>';
                     for (const key of Object.keys(items[0])) {

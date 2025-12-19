@@ -72,3 +72,11 @@ fi
 
 echo "✅ Database initialization complete!"
 
+
+
+
+
+
+
+
+

@@ -285,7 +285,7 @@ class TestEngine:
         # 1. Сравниваем HEADER (шапку документа)
         header_differences = self._compare_header(expected_normalized, actual_normalized)
 
-        # 2. Сравниваем ITEMS (товары)
+        # 2. Compare ITEMS
         # Убеждаемся что items это список
         expected_items = expected_normalized.get('items', [])
         actual_items = actual_normalized.get('items', [])
@@ -345,25 +345,25 @@ class TestEngine:
             Словарь {основной_ключ: [варианты_ключей]}
         """
         return {
-            # Название товара
+            # Product name
             'item_name': ['item_name', 'item_description', 'product_name', 'name', 'description'],
             'item_description': ['item_name', 'item_description', 'product_name', 'name', 'description'],
-            # Номер строки
+            # Line number
             'row_number': ['row_number', 'no', 'index', 'number', 'index_field', 'item_number'],
             'no': ['row_number', 'no', 'index', 'number', 'index_field', 'item_number'],
             'item_number': ['row_number', 'no', 'index', 'number', 'index_field', 'item_number'],
             # Код УКТ ЗЕД
             'ukt_zed_code': ['ukt_zed_code', 'ukt_zed', 'ukt_zed_code_field', 'code'],
             'ukt_zed': ['ukt_zed_code', 'ukt_zed', 'ukt_zed_code_field', 'code'],
-            # Количество
+            # Quantity
             'quantity': ['quantity', 'qty', 'quantity_field'],
-            # Единица измерения
+            # Unit of measure
             'unit': ['unit', 'unit_field'],
-            # Цена без НДС
+            # Price without VAT
             'price_without_vat': ['price_without_vat', 'unit_price', 'price', 'unit_price_field', 'price_no_vat', 'unit_price_without_vat'],
             'price_no_vat': ['price_without_vat', 'unit_price', 'price', 'unit_price_field', 'price_no_vat', 'unit_price_without_vat'],
             'unit_price_without_vat': ['price_without_vat', 'unit_price', 'price', 'unit_price_field', 'price_no_vat', 'unit_price_without_vat'],
-            # Сумма без НДС
+            # Amount without VAT
             'sum_without_vat': ['sum_without_vat', 'amount_without_vat', 'total', 'sum_without_vat_field', 'amount_without_vat_field', 'sum_no_vat', 'total_price_without_vat'],
             'amount_without_vat': ['sum_without_vat', 'amount_without_vat', 'total', 'sum_without_vat_field', 'amount_without_vat_field', 'sum_no_vat', 'total_price_without_vat'],
             'sum_no_vat': ['sum_without_vat', 'amount_without_vat', 'total', 'sum_without_vat_field', 'amount_without_vat_field', 'sum_no_vat', 'total_price_without_vat'],
@@ -375,7 +375,7 @@ class TestEngine:
         Ищет значение по семантическим ключам (проверяет все варианты)
 
         Args:
-            item: Объект товара
+            item: Item object
             semantic_keys: Список семантически эквивалентных ключей
 
         Returns:
@@ -409,11 +409,11 @@ class TestEngine:
 
     def _compare_items(self, expected_items: List[Dict], actual_items: List[Dict]) -> List[Dict]:
         """
-        Построчное сравнение товаров с семантическим маппингом ключей
+        Line-by-line comparison of items with semantic key mapping
 
         Args:
-            expected_items: Ожидаемые товары
-            actual_items: Фактические товары
+            expected_items: Expected items
+            actual_items: Actual items
 
         Returns:
             Список различий
@@ -652,7 +652,7 @@ class TestEngine:
         elif 'header_data' in actual_norm and isinstance(actual_norm['header_data'], dict):
             act_signatures = actual_norm['header_data'].get('signatures', {})
 
-        # 1. Номер документа
+        # 1. Document number
         exp_number = str(exp_doc_info.get('number', '')).strip()
         act_number = str(act_doc_info.get('number', '')).strip()
         if exp_number and act_number and exp_number != act_number:
@@ -661,10 +661,10 @@ class TestEngine:
                 "type": "mismatch",
                 "expected": exp_number,
                 "actual": act_number,
-                "description": "Номер документа"
+                "description": "Document number"
             })
 
-        # 2. Дата документа
+        # 2. Document date
         exp_date = str(exp_doc_info.get('date_iso', exp_doc_info.get('date', ''))).strip()
         act_date = str(act_doc_info.get('date_iso', act_doc_info.get('date', ''))).strip()
         if exp_date and act_date and exp_date != act_date:
@@ -673,10 +673,10 @@ class TestEngine:
                 "type": "mismatch",
                 "expected": exp_date,
                 "actual": act_date,
-                "description": "Дата документа"
+                "description": "Document date"
             })
 
-        # 3. Исполнитель/Поставщик (performer/supplier)
+        # 3. Performer/Supplier (performer/supplier)
         # Может быть как performer, так и supplier
         exp_performer = exp_parties.get('performer', exp_parties.get('supplier', {}))
         act_performer = act_parties.get('performer', act_parties.get('supplier', {}))
@@ -728,7 +728,7 @@ class TestEngine:
                 "description": "Банк исполнителя"
             })
 
-        # 4. Заказчик/Покупатель (customer/buyer)
+        # 4. Customer/Buyer (customer/buyer)
         # Может быть как customer, так и buyer
         exp_customer = exp_parties.get('customer', exp_parties.get('buyer', {}))
         act_customer = act_parties.get('customer', act_parties.get('buyer', {}))
@@ -794,9 +794,9 @@ class TestEngine:
                 differences.append({
                     "path": "header.raw_block.document_number",
                     "type": "mismatch",
-                    "expected": f"Номер {exp_number} в тексте",
-                    "actual": f"Номер не найден или неверный в тексте",
-                    "description": "Номер документа в текстовом блоке"
+                    "expected": f"Document number {exp_number} in text",
+                    "actual": f"Document number not found or incorrect in text",
+                    "description": "Document number in text block"
                 })
 
         # 6. Сравнение signatures (подписи) - ОТКЛЮЧЕНО

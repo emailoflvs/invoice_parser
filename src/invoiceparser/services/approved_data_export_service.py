@@ -228,7 +228,7 @@ class ApprovedDataExportService:
                 logger.warning(f"Failed to create DocumentItem from {mapped_item}: {e}")
                 # Создаем с обязательным полем name
                 if 'name' not in mapped_item:
-                    mapped_item['name'] = 'Unknown'
+                    mapped_item['name'] = ''
                 document_items.append(DocumentItem(**mapped_item))
 
         # Создаем InvoiceData

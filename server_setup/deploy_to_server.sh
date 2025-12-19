@@ -53,3 +53,11 @@ echo "3. Создайте .env файл (если его нет): cp .env.exampl
 echo "4. Запустите проект: docker compose up -d --build"
 echo "5. Проверьте логи: docker compose logs -f"
 
+
+
+
+
+
+
+
+

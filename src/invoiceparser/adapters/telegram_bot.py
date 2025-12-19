@@ -202,35 +202,52 @@ class TelegramBot:
                 data = result["data"]
 
                 # Извлекаем данные из dict структуры
-                # Структура: document_info, parties, table_data, totals
+                # Structure: document_info, parties, table_data, totals
                 doc_info = data.get("document_info", {}) if isinstance(data, dict) else {}
                 parties = data.get("parties", {}) if isinstance(data, dict) else {}
                 table_data = data.get("table_data", {}) if isinstance(data, dict) else {}
                 totals = data.get("totals", {}) if isinstance(data, dict) else {}
 
-                # Извлекаем информацию о документе
+                # Extract document information
                 invoice_number = doc_info.get("document_number") or doc_info.get("invoice_number") or "N/A"
                 date = doc_info.get("document_date") or doc_info.get("date") or "N/A"
 
-                # Извлекаем информацию о поставщике
-                supplier = parties.get("supplier", {}) if isinstance(parties, dict) else {}
-                supplier_name = supplier.get("name") if isinstance(supplier, dict) else "N/A"
+                # Extract supplier information (use first party from parties if available)
+                supplier_name = "N/A"
+                if isinstance(parties, dict):
+                    # Try to find supplier or first party
+                    supplier = parties.get("supplier") or parties.get("buyer") or parties.get("customer")
+                    if supplier:
+                        if isinstance(supplier, dict):
+                            # Extract value from {_label, value} structure
+                            name_field = supplier.get("name")
+                            if isinstance(name_field, dict) and 'value' in name_field:
+                                supplier_name = name_field.get('value', 'N/A')
+                            else:
+                                supplier_name = name_field or "N/A"
 
-                # Извлекаем сумму
-                total_amount = totals.get("total_amount") or totals.get("total") or totals.get("total_with_vat") or "N/A"
+                # Extract total amount
+                total_amount = "N/A"
+                if isinstance(totals, dict):
+                    total_value = totals.get("total") or totals.get("total_amount") or totals.get("total_with_vat")
+                    if total_value:
+                        if isinstance(total_value, dict) and 'value' in total_value:
+                            total_amount = total_value.get('value', 'N/A')
+                        else:
+                            total_amount = total_value
 
-                # Извлекаем позиции
+                # Extract items count
                 line_items = table_data.get("line_items", []) if isinstance(table_data, dict) else []
                 items_count = len(line_items) if isinstance(line_items, list) else 0
 
-                # Формирование ответа
+                # Form response
                 response_text = (
-                    "✅ Документ обработан успешно!\n\n"
-                    f"📋 Номер счета: {invoice_number}\n"
-                    f"📅 Дата: {date}\n"
-                    f"🏢 Поставщик: {supplier_name}\n"
-                    f"💰 Сумма: {total_amount}\n"
-                    f"📦 Позиций: {items_count}"
+                    "✅ Document processed successfully!\n\n"
+                    f"📋 Document #: {invoice_number}\n"
+                    f"📅 Date: {date}\n"
+                    f"🏢 Party: {supplier_name}\n"
+                    f"💰 Total: {total_amount}\n"
+                    f"📦 Items: {items_count}"
                 )
 
                 # Отправка ссылки на форму редактирования через кнопку

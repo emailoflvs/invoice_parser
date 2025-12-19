@@ -48,3 +48,11 @@ Analyze the image. Reconstruct the table. Ensure every piece of data inside the 
 
 
 
+
+
+
+
+
+
+
+

@@ -28,7 +28,7 @@ approved_data = {
     'header': {
         'invoice_number': 'INV-001',
         'date': '2024-01-15',
-        'supplier_name': 'ООО "Поставщик"',
+        'supplier_name': 'Company ABC Ltd',
         'total_amount': 1000.00,
         # ... другие поля
     },
@@ -54,7 +54,7 @@ if results['excel']['success']:
     print(f"Excel экспортирован: {results['excel']['path']}")
 
 if results['sheets']['success']:
-    print("Данные сохранены в Google Sheets")
+    print("Data saved to Google Sheets")
 ```
 
 ### Экспорт в конкретные форматы

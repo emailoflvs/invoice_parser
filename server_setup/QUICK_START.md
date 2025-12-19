@@ -107,3 +107,11 @@ docker compose up -d --build
 
 См. подробную инструкцию в `README.md`
 
+
+
+
+
+
+
+
+

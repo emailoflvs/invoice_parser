@@ -52,12 +52,12 @@ def validate_parse_response(data: Dict[str, Any]) -> Dict[str, Any]:
 
     # Проверяем товары (может быть line_items или items)
     if "line_items" not in data_obj and "items" not in data_obj:
-        warnings.append("Отсутствуют товары (line_items или items)")
+        warnings.append("Missing items (line_items or items)")
 
     # Проверяем column_mapping для таблицы
     if "line_items" in data_obj and isinstance(data_obj["line_items"], list):
         if "column_mapping" not in data_obj:
-            warnings.append("Отсутствует column_mapping для таблицы товаров")
+            warnings.append("Missing column_mapping for items table")
         elif data_obj["line_items"]:
             # Проверяем соответствие ключей
             first_item = data_obj["line_items"][0]
@@ -99,7 +99,7 @@ def validate_api_structure() -> Dict[str, Any]:
     all_errors = []
     all_warnings = []
 
-    # Проверка 1: Структура ответа /parse
+    # Check 1: Structure of /parse response
     parse_example = {
         "success": True,
         "data": {
@@ -131,9 +131,9 @@ def validate_api_structure() -> Dict[str, Any]:
                 }
             ],
             "column_mapping": {
-                "line_number": "№",
-                "product_name": "Товар",
-                "quantity": "Количество"
+                "line_number": "No",
+                "product_name": "Product",
+                "quantity": "Quantity"
             }
         },
         "processed_at": "2025-12-07T00:00:00"
@@ -141,7 +141,7 @@ def validate_api_structure() -> Dict[str, Any]:
 
     result = validate_parse_response(parse_example)
     checks.append({
-        "name": "Структура ответа /parse",
+        "name": "Structure of /parse response",
         "passed": len(result["errors"]) == 0,
         "errors": result["errors"],
         "warnings": result["warnings"]
@@ -149,16 +149,16 @@ def validate_api_structure() -> Dict[str, Any]:
     all_errors.extend(result["errors"])
     all_warnings.extend(result["warnings"])
 
-    # Проверка 2: Структура ответа /save
+    # Check 2: Structure of /save response
     save_example = {
         "success": True,
         "filename": "invoice_saved_07120130.json",
-        "message": "Данные успешно сохранены"
+        "message": "Data saved successfully"
     }
 
     result = validate_save_response(save_example)
     checks.append({
-        "name": "Структура ответа /save",
+        "name": "Structure of /save response",
         "passed": len(result["errors"]) == 0,
         "errors": result["errors"],
         "warnings": result["warnings"]

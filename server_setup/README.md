@@ -321,3 +321,11 @@ sudo ss -tuln | grep LISTEN
 4. ✅ Настройте домен и SSL-сертификаты (Let's Encrypt)
 5. ✅ Настройте reverse proxy (Nginx/Traefik) для нескольких проектов
 
+
+
+
+
+
+
+
+

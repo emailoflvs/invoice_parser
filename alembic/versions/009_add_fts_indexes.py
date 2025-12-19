@@ -76,3 +76,11 @@ def downgrade() -> None:
 
     print("❌ FTS индексы удалены")
 
+
+
+
+
+
+
+
+

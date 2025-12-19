@@ -3,24 +3,9 @@
 Содержит единую логику форматирования header и items данных
 """
 import logging
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Optional
 
 logger = logging.getLogger(__name__)
-
-# Маппинг типов документов на украинские названия
-DOCUMENT_TYPE_MAPPING = {
-    'delivery_note': 'Видаткова накладна',
-    'invoice': 'Рахунок-фактура',
-    'waybill': 'Товарна накладна',
-    'receipt': 'Квитанція',
-    'act': 'Акт',
-    'contract': 'Договір',
-    'order': 'Замовлення',
-    'bill': 'Рахунок',
-    'proforma_invoice': 'Проформа-рахунок',
-    'credit_note': 'Кредитна нота',
-    'debit_note': 'Дебетна нота',
-}
 
 
 class ExcelFormatter:
@@ -28,6 +13,22 @@ class ExcelFormatter:
     Класс для форматирования данных для экспорта в Excel/Google Sheets
     Единая логика для локального и онлайн экспорта
     """
+
+    @staticmethod
+    def _extract_value(field_value: Any) -> Any:
+        """Extract value from {_label, value} structure or return as is"""
+        if isinstance(field_value, dict) and 'value' in field_value:
+            return field_value['value']
+        return field_value
+
+    @staticmethod
+    def _extract_label(field_value: Any, default_key: str = None) -> Optional[str]:
+        """Extract label from {_label, value} structure or return default"""
+        if isinstance(field_value, dict) and '_label' in field_value:
+            label = field_value.get('_label')
+            if label:
+                return label
+        return default_key
 
     @staticmethod
     def format_header_data(data: Dict[str, Any]) -> List[Tuple[str, str]]:
@@ -45,110 +46,70 @@ class ExcelFormatter:
         """
         rows = []
 
-        # 1. Інформація про документ
-        rows.append(('SECTION', 'Інформація про документ'))
-        rows.append(('HEADER', 'Поле'))  # Заголовок колонок
-        rows.append(('HEADER', 'Значение'))
-
+        # 1. Document info section
         doc_info = data.get('document_info', {})
         if doc_info:
-            # Преобразуем document_type в читаемый формат
-            document_type = doc_info.get('document_type')
-            if document_type and document_type in DOCUMENT_TYPE_MAPPING:
-                document_type = DOCUMENT_TYPE_MAPPING[document_type]
+            # Use _label from document_info if available, otherwise use key as fallback
+            section_label = doc_info.get('_label') or 'Document Information'
+            rows.append(('SECTION', section_label))
+            rows.append(('HEADER', 'Field'))
+            rows.append(('HEADER', 'Value'))
 
-            doc_fields = {
-                'Тип документа': document_type,
-                'Номер документа': doc_info.get('document_number'),
-                'Дата документа': doc_info.get('document_date'),
-                'Дата (нормалізована)': doc_info.get('document_date_normalized'),
-                'Місце складання': doc_info.get('location'),
-                'Валюта': doc_info.get('currency'),
-            }
-            for field_name, value in doc_fields.items():
+            # Process all fields in document_info
+            for key, field_value in doc_info.items():
+                if key == '_label':
+                    continue
+                value = ExcelFormatter._extract_value(field_value)
+                label = ExcelFormatter._extract_label(field_value, key.replace('_', ' ').title())
                 if value is not None:
-                    rows.append(('FIELD', field_name, str(value)))
+                    rows.append(('FIELD', label, str(value)))
 
-        rows.append(('EMPTY', ''))  # Пустая строка
+        rows.append(('EMPTY', ''))
 
-        # 2. Постачальник
+        # 2. Parties section - iterate over all parties
         parties = data.get('parties', {})
-        supplier = parties.get('supplier', {})
-        if supplier:
-            rows.append(('SECTION', 'Постачальник'))
+        for party_key, party_data in parties.items():
+            if not isinstance(party_data, dict):
+                continue
 
-            supplier_fields = {
-                'Назва': supplier.get('name'),
-                'Адреса': supplier.get('address'),
-                'Телефон': supplier.get('phone'),
-                'ЄДРПОУ': supplier.get('tax_id'),
-                'ІПН': supplier.get('vat_id'),
-                'Номер рахунку': supplier.get('account_number'),
-                'Банк': supplier.get('bank'),
-            }
-            for field_name, value in supplier_fields.items():
+            # Use _label from party data if available
+            section_label = party_data.get('_label') or party_key.replace('_', ' ').title()
+            rows.append(('SECTION', section_label))
+
+            # Process all fields in party data
+            for field_key, field_value in party_data.items():
+                if field_key == '_label':
+                    continue
+                value = ExcelFormatter._extract_value(field_value)
+                label = ExcelFormatter._extract_label(field_value, field_key.replace('_', ' ').title())
                 if value is not None:
-                    rows.append(('FIELD', field_name, str(value)))
+                    rows.append(('FIELD', label, str(value)))
 
-            rows.append(('EMPTY', ''))  # Пустая строка
+            rows.append(('EMPTY', ''))
 
-        # 3. Покупець
-        customer = parties.get('customer', {})
-        if customer:
-            rows.append(('SECTION', 'Покупець'))
-
-            customer_fields = {
-                'Назва': customer.get('name'),
-                'Адреса': customer.get('address'),
-                'ЄДРПОУ': customer.get('tax_id'),
-                'ІПН': customer.get('vat_id'),
-            }
-            for field_name, value in customer_fields.items():
-                if value is not None:
-                    rows.append(('FIELD', field_name, str(value)))
-
-            rows.append(('EMPTY', ''))  # Пустая строка
-
-        # 4. Договір та замовлення
+        # 3. References section
         references = data.get('references', {})
         if references:
-            rows.append(('SECTION', 'Договір та замовлення'))
+            rows.append(('SECTION', 'References'))
 
-            # Проверяем contract - может быть dict или str
-            if 'contract' in references:
-                contract_value = None
-                if isinstance(references['contract'], dict):
-                    contract_value = references['contract'].get('value')
-                elif isinstance(references['contract'], str):
-                    contract_value = references['contract']
-                if contract_value:
-                    rows.append(('FIELD', 'Договір', str(contract_value)))
+            for ref_key, ref_value in references.items():
+                value = ExcelFormatter._extract_value(ref_value)
+                label = ExcelFormatter._extract_label(ref_value, ref_key.replace('_', ' ').title())
+                if value is not None:
+                    rows.append(('FIELD', label, str(value)))
 
-            # Проверяем order - может быть dict или str
-            if 'order' in references:
-                order_value = None
-                if isinstance(references['order'], dict):
-                    order_value = references['order'].get('value')
-                elif isinstance(references['order'], str):
-                    order_value = references['order']
-                if order_value:
-                    rows.append(('FIELD', 'Замовлення', str(order_value)))
+            rows.append(('EMPTY', ''))
 
-            rows.append(('EMPTY', ''))  # Пустая строка
-
-        # 5. Підсумки
+        # 4. Totals section
         totals = data.get('totals', {})
         if totals:
-            rows.append(('SECTION', 'Підсумки'))
+            rows.append(('SECTION', 'Totals'))
 
-            totals_fields = {
-                'Сума без ПДВ': totals.get('subtotal'),
-                'ПДВ': totals.get('vat'),
-                'Всього': totals.get('total'),
-            }
-            for field_name, value in totals_fields.items():
+            for total_key, total_value in totals.items():
+                value = ExcelFormatter._extract_value(total_value)
+                label = ExcelFormatter._extract_label(total_value, total_key.replace('_', ' ').title())
                 if value is not None:
-                    rows.append(('FIELD', field_name, str(value)))
+                    rows.append(('FIELD', label, str(value)))
 
         return rows
 
@@ -176,22 +137,23 @@ class ExcelFormatter:
         for item in line_items:
             all_keys.update(item.keys())
 
-        # Сортируем ключи: сначала стандартные, потом остальные
-        standard_order = ['no', 'line_number', 'name', 'tovar', 'product', 'sku', 'unit',
-                        'quantity', 'kilkist', 'price', 'tsina', 'amount', 'suma',
+        # Sort keys: standard order first, then others
+        # Note: column_mapping keys are dynamically generated by LLM per document
+        standard_order = ['no', 'line_number', 'name', 'product', 'sku', 'unit',
+                        'quantity', 'price', 'amount',
                         'vat_rate', 'vat_amount', 'ukt_zed']
         ordered_keys = []
         for key in standard_order:
             if key in all_keys:
                 ordered_keys.append(key)
         for key in sorted(all_keys):
-            if key not in ordered_keys and key not in ['raw', '_meta']:
+            if key not in ordered_keys and key not in ['raw', '_meta', '_label']:
                 ordered_keys.append(key)
 
-        # Формируем заголовки
+        # Form headers using column_mapping (contains original labels from document)
         headers = []
         for key in ordered_keys:
-            # Используем column_mapping для украинских названий
+            # Use column_mapping which contains original labels from document
             header_text = column_mapping.get(key, key.replace('_', ' ').title())
             headers.append(header_text)
 

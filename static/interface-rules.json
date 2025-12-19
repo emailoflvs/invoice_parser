@@ -34,7 +34,7 @@
     "document_info": {
       "enabled": true,
       "title_source": "static",
-      "title": "Інформація про документ",
+      "title": "Document Information",
       "icon": "fa-file-alt",
       "field_order": "as_in_data",
       "process_nested_objects": "as_json",
@@ -53,14 +53,6 @@
         "recipient": "fa-hand-holding",
         "performer": "fa-user-cog"
       },
-      "title_mapping": {
-        "supplier": "Постачальник",
-        "buyer": "Покупець",
-        "customer": "Покупець",
-        "supplier_representative": "Представник постачальника",
-        "recipient": "Отримувач",
-        "performer": "Виконавець"
-      },
       "use_label_from_data": true,
       "label_cleanup": {
         "remove_suffix": ":",
@@ -72,7 +64,7 @@
     "totals": {
       "enabled": true,
       "title_source": "static",
-      "title": "Підсумкові суми",
+      "title": "Totals",
       "icon": "fa-calculator",
       "field_order": "as_in_data",
       "numeric_fields": {
@@ -91,16 +83,16 @@
           "subtotal": ["subtotal", "total_no_vat", "total_without_vat"]
         },
         "match_by_label_keywords": {
-          "total": ["всього", "total"],
-          "vat": ["пдв", "vat"],
-          "subtotal": ["сума без", "subtotal"]
+          "total": ["total"],
+          "vat": ["vat"],
+          "subtotal": ["subtotal"]
         }
       }
     },
     "other_fields": {
       "enabled": true,
       "title_source": "static",
-      "title": "Додаткова інформація",
+      "title": "Additional Information",
       "icon": "fa-info-circle",
       "can_be_array": true,
       "can_be_object": true,
@@ -115,7 +107,7 @@
     "line_items": {
       "enabled": true,
       "title_source": "static",
-      "title": "Товари та послуги",
+      "title": "Line Items",
       "icon": "fa-list",
       "display_as": "table",
       "data_sources": ["line_items", "items", "table_data.line_items", "table_data.items"],
@@ -124,31 +116,31 @@
         "enabled": true,
         "merge_groups": [
           {
-            "target": "№",
+            "target": "No",
             "sources": ["no", "line_number"]
           },
           {
-            "target": "Наименование",
-            "sources": ["description", "item_name", "product_name", "tovar"]
+            "target": "Name",
+            "sources": ["description", "item_name", "product_name"]
           },
           {
-            "target": "Количество",
-            "sources": ["quantity", "kilkist"]
+            "target": "Quantity",
+            "sources": ["quantity"]
           },
           {
-            "target": "Цена",
-            "sources": ["unit_price", "price_no_vat", "tsina_bez_pdv", "price_without_vat"]
+            "target": "Price",
+            "sources": ["unit_price", "price_no_vat", "price_without_vat"]
           },
           {
-            "target": "Сумма",
-            "sources": ["total_price", "sum_no_vat", "suma_bez_pdv", "total_without_vat", "amount_excluding_vat"]
+            "target": "Amount",
+            "sources": ["total_price", "sum_no_vat", "total_without_vat", "amount_excluding_vat"]
           }
         ],
         "use_label_from_data": true,
         "label_priority": ["_label", "label", "field_mapping", "key"]
       },
       "column_order": {
-        "priority": ["no", "line_number", "article", "ukt_zed", "description", "item_name", "product_name", "tovar", "quantity", "kilkist", "unit", "unit_price", "price_no_vat", "tsina_bez_pdv", "price_without_vat", "total_price", "sum_no_vat", "suma_bez_pdv", "total_without_vat", "amount_excluding_vat"],
+        "priority": ["no", "line_number", "article", "ukt_zed", "description", "item_name", "product_name", "quantity", "unit", "unit_price", "price_no_vat", "price_without_vat", "total_price", "sum_no_vat", "total_without_vat", "amount_excluding_vat"],
         "then_others": true
       },
       "hide_columns": {
@@ -167,8 +159,8 @@
     "boolean": {
       "display_as": "select",
       "options": {
-        "true": "Да",
-        "false": "Нет"
+        "true": "Yes",
+        "false": "No"
       }
     },
     "object": {
@@ -220,7 +212,7 @@
     "description": "Правила для полей, не попавших в основные секции",
     "enabled": true,
     "title_source": "static",
-    "title": "Додаткова інформація",
+    "title": "Additional Information",
     "icon": "fa-info-circle",
     "hide_fields": {
       "suffixes": ["_label"]

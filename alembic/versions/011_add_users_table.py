@@ -72,3 +72,11 @@ def downgrade() -> None:
 
     print("❌ Users table dropped")
 
+
+
+
+
+
+
+
+

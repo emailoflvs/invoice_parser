@@ -463,7 +463,7 @@ class DocumentField(Base):
     section_label: Mapped[Optional[str]] = mapped_column(
         Text,
         nullable=True,
-        comment='Original section label from document (_label from JSON, e.g., "Постачальник:", "Покупець:")'
+        comment='Original section label from document (_label from JSON, contains original text from document)'
     )
     language: Mapped[Optional[str]] = mapped_column(
         String(10),
@@ -644,15 +644,15 @@ class DocumentTableSection(Base):
 
     Example:
     column_mapping = {
-        "no": "№",
-        "ukt_zed": "УКТ ЗЕД",
-        "tovar": "Товар",
-        "kilkist": "Кількість"
+        "no": "No",
+        "sku": "SKU",
+        "name": "Product Name",
+        "quantity": "Quantity"
     }
 
     rows = [
-        {"no": 1, "ukt_zed": "8501510090", "tovar": "Motor...", "kilkist": "2 шт"},
-        {"no": 2, "ukt_zed": "8501510090", "tovar": "Motor...", "kilkist": "2 шт"}
+        {"no": 1, "sku": "ABC123", "name": "Product 1", "quantity": "10"},
+        {"no": 2, "sku": "DEF456", "name": "Product 2", "quantity": "5"}
     ]
     """
     __tablename__ = 'document_table_sections'

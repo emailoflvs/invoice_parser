@@ -104,3 +104,11 @@ def downgrade() -> None:
     op.execute("DROP FUNCTION IF EXISTS create_snapshots_partition_if_needed();")
 
 
+
+
+
+
+
+
+
+

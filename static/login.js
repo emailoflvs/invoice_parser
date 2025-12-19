@@ -44,16 +44,10 @@ const elements = {
 };
 
 // Check if already logged in
-if (state.authToken) {
-    // Check for redirect parameter
-    const urlParams = new URLSearchParams(window.location.search);
-    const redirect = urlParams.get('redirect');
-    if (redirect) {
-        window.location.href = redirect;
-    } else {
-        window.location.href = '/';
-    }
-}
+// ВАЖНО: Не проверяем токен при загрузке страницы, так как сервер сам решает,
+// что показывать на основе cookie. Это предотвращает бесконечные редиректы.
+// Если пользователь уже авторизован, сервер вернет index.html вместо login.html.
+// Проверка токена выполняется только после успешного логина.
 
 // Initialize
 function init() {

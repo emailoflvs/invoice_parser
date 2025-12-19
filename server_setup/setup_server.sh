@@ -152,3 +152,11 @@ echo "   - docker ps                    # Список контейнеров"
 echo "   - docker network ls            # Список сетей"
 echo "   - docker volume ls             # Список volumes"
 
+
+
+
+
+
+
+
+

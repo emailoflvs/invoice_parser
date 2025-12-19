@@ -172,3 +172,11 @@ else:
 
 Сгенерировать ключ: `python3 scripts/generate_jwt_secret.py`
 
+
+
+
+
+
+
+
+

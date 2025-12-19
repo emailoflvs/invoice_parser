@@ -572,7 +572,7 @@ class DatabaseService:
 
         parties = json_data.get('parties', {})
 
-        # Handle ARRAY format: [{"role": "Постачальник", "name": "...", "details": {...}}, ...]
+        # Handle ARRAY format: [{"role": "supplier", "name": "...", "details": {...}}, ...]
         if isinstance(parties, list):
             for party in parties:
                 if not isinstance(party, dict):
@@ -583,10 +583,26 @@ class DatabaseService:
                 party_data = party.get('details', party) if isinstance(party.get('details'), dict) else party
 
                 # Determine party type by role (multilingual support)
-                supplier_keywords = ['постачальник', 'supplier', 'vendor', 'seller', 'поставщик', 'продавец']
-                buyer_keywords = ['покупець', 'buyer', 'customer', 'client', 'покупатель', 'клиент']
+                # Rely on LLM normalization first (it should return 'supplier' or 'buyer')
+                # If not, try to detect based on role string content being present in standard English terms
+                role_normalized = role.lower()
 
-                if any(keyword in role for keyword in supplier_keywords):
+                # Check for standard normalized roles
+                if 'supplier' in role_normalized or 'vendor' in role_normalized or 'seller' in role_normalized:
+                    is_supplier = True
+                    is_buyer = False
+                elif 'buyer' in role_normalized or 'customer' in role_normalized or 'client' in role_normalized:
+                    is_supplier = False
+                    is_buyer = True
+                else:
+                    # Fallback: if role matches standard international patterns or just assign based on order/context if possible
+                    # Ideally LLM does this. For now, if we can't determine, we might skip specialized linking
+                    # or treat as generic party.
+                    # However, to be "100% multilingual" without hardcode, we MUST trust the LLM's normalization.
+                    is_supplier = False
+                    is_buyer = False
+
+                if is_supplier:
                     # Extract tax_id from various fields
                     tax_id = (
                         party_data.get('edrpou') or
@@ -606,7 +622,7 @@ class DatabaseService:
 
                     supplier = await self.create_or_update_company(
                         session,
-                        name=party.get('name', 'Unknown Supplier'),
+                        name=party.get('name') or '',
                         tax_id=tax_id,
                         vat_id=party_data.get('vat_id'),
                         address=party_data.get('address'),
@@ -616,7 +632,7 @@ class DatabaseService:
                     )
                     supplier_id = supplier.id
 
-                elif any(keyword in role for keyword in buyer_keywords):
+                elif is_buyer:
                     # Extract tax_id from various fields
                     tax_id = (
                         party_data.get('edrpou') or
@@ -627,7 +643,7 @@ class DatabaseService:
 
                     buyer = await self.create_or_update_company(
                         session,
-                        name=party.get('name', 'Unknown Buyer'),
+                        name=party.get('name') or '',
                         tax_id=tax_id,
                         address=party_data.get('address')
                     )
@@ -641,13 +657,13 @@ class DatabaseService:
                 if isinstance(supplier_data, dict):
                     supplier = await self.create_or_update_company(
                         session,
-                        name=supplier_data.get('name', 'Unknown Supplier'),
-                        tax_id=supplier_data.get('tax_id'),
-                        vat_id=supplier_data.get('vat_id'),
-                        address=supplier_data.get('address'),
-                        iban=supplier_data.get('account_number'),
-                        bank_name=supplier_data.get('bank'),
-                        phone=supplier_data.get('phone')
+                        name=self._extract_value(supplier_data.get('name')) or '',
+                        tax_id=self._extract_value(supplier_data.get('tax_id')),
+                        vat_id=self._extract_value(supplier_data.get('vat_id')),
+                        address=self._extract_value(supplier_data.get('address')),
+                        iban=self._extract_value(supplier_data.get('account_number')),
+                        bank_name=self._extract_value(supplier_data.get('bank')),
+                        phone=self._extract_value(supplier_data.get('phone'))
                     )
                     supplier_id = supplier.id
 
@@ -656,9 +672,9 @@ class DatabaseService:
             if buyer_data and isinstance(buyer_data, dict):
                 buyer = await self.create_or_update_company(
                     session,
-                    name=buyer_data.get('name', 'Unknown Buyer'),
-                    tax_id=buyer_data.get('tax_id'),
-                    address=buyer_data.get('address')
+                    name=self._extract_value(buyer_data.get('name')) or '',
+                    tax_id=self._extract_value(buyer_data.get('tax_id')),
+                    address=self._extract_value(buyer_data.get('address'))
                 )
                 buyer_id = buyer.id
 
@@ -725,7 +741,7 @@ class DatabaseService:
                 section=field_data['section'],
                 group_key=field_data.get('group_key'),
                 raw_label=field_data.get('label', ''),  # Field label (key name or original label)
-                section_label=field_data.get('section_label'),  # Section _label from JSON (e.g., "Постачальник:")
+                section_label=field_data.get('section_label'),  # Section _label from JSON (original label from document)
                 raw_value_text=self._to_text(field_data['value']),
                 language=self._detect_language(json_data)
             )
@@ -955,29 +971,38 @@ class DatabaseService:
 
         for key, value in doc_info.items():
             if key not in ['_label', 'location_label'] and value:
-                fields.append({
-                    'section': 'header',
-                    'code': key,
-                    'label': key,
-                    'value': value,
-                    'group_key': 'document_info',
-                    'section_label': doc_info_label  # Store _label for section
-                })
+                # Extract value and label from new structure { "_label": ..., "value": ... }
+                if isinstance(value, dict):
+                    field_label = value.get('_label') or key
+                    field_value = value.get('value')
+                else:
+                    field_label = key
+                    field_value = value
+
+                if field_value:  # Only add if value exists
+                    fields.append({
+                        'section': 'header',
+                        'code': key,
+                        'label': field_label,
+                        'value': field_value,
+                        'group_key': 'document_info',
+                        'section_label': doc_info_label  # Store _label for section
+                    })
 
         # parties - handle both array and dict formats
         parties = json_data.get('parties', {})
 
         if isinstance(parties, list):
-            # Array format: [{"role": "Постачальник", "name": "...", "details": {...}}, ...]
+            # Array format: [{"role": "supplier", "name": "...", "details": {...}}, ...]
             for party in parties:
                 if not isinstance(party, dict):
                     continue
 
                 role = party.get('role', 'unknown').lower()
-                # Determine section name from role
-                if any(kw in role for kw in ['постачальник', 'supplier', 'vendor', 'seller', 'поставщик', 'продавец']):
+                # Determine section name from role - rely on normalized keys from LLM
+                if 'supplier' in role or 'vendor' in role or 'seller' in role:
                     section = 'supplier'
-                elif any(kw in role for kw in ['покупець', 'buyer', 'customer', 'client', 'покупатель', 'клиент']):
+                elif 'buyer' in role or 'customer' in role or 'client' in role:
                     section = 'buyer'
                 else:
                     section = 'party'
@@ -1019,23 +1044,28 @@ class DatabaseService:
             # Dict format: {"supplier": {...}, "customer": {...}}
             for party_type, party_data in parties.items():
                 if isinstance(party_data, dict):
-                    # Extract _label for the section (e.g., "Постачальник:", "Покупець:")
+                    # Extract _label for the section (original label from document)
                     section_label = party_data.get('_label', party_type)
 
                     for key, value in party_data.items():
                         if key not in ['_label'] and value:
-                            # Use _label as the label for fields in this section
-                            # For the first field, use section_label, for others use key
-                            field_label = section_label if key == 'name' else key
+                            # Extract value and label from new structure { "_label": ..., "value": ... }
+                            if isinstance(value, dict):
+                                field_label = value.get('_label') or key
+                                field_value = value.get('value')
+                            else:
+                                field_label = section_label if key == 'name' else key
+                                field_value = value
 
-                            fields.append({
-                                'section': party_type,
-                                'code': key,
-                                'label': field_label,  # Use _label for section header
-                                'value': value,
-                                'group_key': party_type,
-                                'section_label': section_label  # Store section label separately
-                            })
+                            if field_value:  # Only add if value exists
+                                fields.append({
+                                    'section': party_type,
+                                    'code': key,
+                                    'label': field_label,
+                                    'value': field_value,
+                                    'group_key': party_type,
+                                    'section_label': section_label  # Store section label separately
+                                })
 
         # totals
         totals = json_data.get('totals', {})
@@ -1043,14 +1073,47 @@ class DatabaseService:
 
         for key, value in totals.items():
             if key not in ['_label'] and value:
-                fields.append({
-                    'section': 'totals',
-                    'code': key,
-                    'label': key,
-                    'value': value,
-                    'group_key': 'totals',
-                    'section_label': totals_label  # Store _label for section
-                })
+                # Handle new object structure
+                if isinstance(value, dict):
+                    field_label = value.get('_label') or key
+                    field_value = value.get('value')
+                else:
+                    field_label = key
+                    field_value = value
+
+                if field_value is not None:
+                    fields.append({
+                        'section': 'totals',
+                        'code': key,
+                        'label': field_label,
+                        'value': field_value,
+                        'group_key': 'totals',
+                        'section_label': totals_label  # Store _label for section
+                    })
+
+        # amounts_in_words
+        amounts = json_data.get('amounts_in_words', {})
+        amounts_label = amounts.get('_label')
+
+        for key, value in amounts.items():
+            if key not in ['_label'] and value:
+                # Handle new object structure
+                if isinstance(value, dict):
+                    field_label = value.get('_label') or key
+                    field_value = value.get('value')
+                else:
+                    field_label = key
+                    field_value = value
+
+                if field_value is not None:
+                    fields.append({
+                        'section': 'amounts_in_words',
+                        'code': key,
+                        'label': field_label,
+                        'value': field_value,
+                        'group_key': 'amounts_in_words',
+                        'section_label': amounts_label
+                    })
 
         # other_fields
         other_fields = json_data.get('other_fields', [])
@@ -1068,20 +1131,21 @@ class DatabaseService:
     def _detect_language(self, json_data: Dict[str, Any]) -> Optional[str]:
         """Detect document language"""
         doc_info = json_data.get('document_info', {})
-        doc_type = doc_info.get('document_type', '')
+        doc_type_raw = doc_info.get('document_type', '')
+        doc_type = self._extract_value(doc_type_raw) or str(doc_type_raw)
 
-        if 'Видаткова' in doc_type or 'накладна' in doc_type:
-            return 'uk'
-        elif 'Накладная' in doc_type:
-            return 'ru'
-        elif 'Invoice' in doc_type:
+        # Language detection: rely on LLM normalization and document content analysis
+        # No hardcoded language-specific keywords - use normalized English keys only
+        doc_type_upper = doc_type.upper()
+        if 'INVOICE' in doc_type_upper:
             return 'en'
 
         return None
 
     def _detect_country(self, json_data: Dict[str, Any]) -> Optional[str]:
         """Detect document country"""
-        currency = json_data.get('document_info', {}).get('currency')
+        currency_raw = json_data.get('document_info', {}).get('currency')
+        currency = self._extract_value(currency_raw) or str(currency_raw) if currency_raw else ''
         if currency == 'UAH':
             return 'UA'
         elif currency == 'RUB':
@@ -1112,11 +1176,17 @@ class DatabaseService:
         doc_info = json_data.get('document_info', {})
 
         # Try to get document type from various fields
-        doc_type_str = (
-            doc_info.get('document_type') or
-            doc_info.get('type') or
-            ''
-        ).strip()
+        # Support both old format (string) and new format ({ "_label": ..., "value": ... })
+        doc_type_raw = doc_info.get('document_type') or doc_info.get('type') or ''
+
+        if isinstance(doc_type_raw, dict):
+            # New format: extract value from object
+            doc_type_str = doc_type_raw.get('value', '') or ''
+        else:
+            # Old format: direct string
+            doc_type_str = str(doc_type_raw) if doc_type_raw else ''
+
+        doc_type_str = doc_type_str.strip()
 
         if not doc_type_str:
             # No type detected, use general
@@ -1125,24 +1195,30 @@ class DatabaseService:
         # Normalize document type string
         doc_type_lower = doc_type_str.lower()
 
-        # Try to detect known patterns
-        if 'видаткова накладна' in doc_type_lower or 'выдаточная накладная' in doc_type_lower:
-            return ('UA_INVOICE', 'Ukrainian Invoice')
-        elif 'товарно-транспортна накладна' in doc_type_lower or 'ttn' in doc_type_lower:
+        # Try to detect known patterns (using English normalized keys only)
+        if 'ttn' in doc_type_lower:
             return ('UA_TTN', 'Ukrainian Waybill')
-        elif 'торг-12' in doc_type_lower or 'торг12' in doc_type_lower or 'torg-12' in doc_type_lower:
+        elif 'torg-12' in doc_type_lower or 'torg12' in doc_type_lower:
             return ('RU_TORG12', 'Russian TORG-12')
-        elif 'facture' in doc_type_lower or 'фактура' in doc_type_lower:
+        elif 'facture' in doc_type_lower or 'invoice' in doc_type_lower:
             # Detect country from currency or other hints
-            currency = doc_info.get('currency', '').upper()
+            currency_raw = doc_info.get('currency', '')
+            if isinstance(currency_raw, dict):
+                currency = currency_raw.get('value', '').upper()
+            else:
+                currency = str(currency_raw).upper()
             if currency == 'EUR' or 'fr' in doc_type_lower:
                 return ('FR_FACTURE', 'French Invoice')
             elif currency == 'USD':
                 return ('US_INVOICE', 'US Invoice')
             else:
                 return ('GENERAL_INVOICE', 'Invoice (Facture)')
-        elif 'invoice' in doc_type_lower or 'накладная' in doc_type_lower:
-            currency = doc_info.get('currency', '').upper()
+        elif 'invoice' in doc_type_lower or 'waybill' in doc_type_lower:
+            currency_raw = doc_info.get('currency', '')
+            if isinstance(currency_raw, dict):
+                currency = currency_raw.get('value', '').upper()
+            else:
+                currency = str(currency_raw).upper()
             if currency == 'UAH':
                 return ('UA_INVOICE', 'Ukrainian Invoice')
             elif currency == 'RUB':
@@ -1167,6 +1243,18 @@ class DatabaseService:
 
             # Use detected type name as is
             return (code, doc_type_str)
+
+    def _extract_value(self, field: Any) -> Optional[str]:
+        """
+        Extract value from field that can be either:
+        - Old format: direct string/number
+        - New format: { "_label": ..., "value": ... }
+        """
+        if field is None:
+            return None
+        if isinstance(field, dict):
+            return field.get('value')
+        return str(field) if field else None
 
     def _to_text(self, value: Any) -> Optional[str]:
         """Convert any value to text"""

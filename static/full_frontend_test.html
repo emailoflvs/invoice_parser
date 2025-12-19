@@ -16,10 +16,10 @@
 <body>
     <h1>🧪 Полный тест фронтенда</h1>
     <div id="logs"></div>
-    
+
     <script>
         const logs = document.getElementById('logs');
-        
+
         function log(message, type = 'info') {
             const div = document.createElement('div');
             div.className = `log ${type}`;
@@ -27,44 +27,44 @@
             logs.appendChild(div);
             console.log(message);
         }
-        
+
         function logObject(label, obj) {
             log(`${label}:`, 'info');
             const pre = document.createElement('pre');
             pre.textContent = JSON.stringify(obj, null, 2);
             logs.appendChild(pre);
         }
-        
+
         async function testFullFlow() {
             log('🚀 Начинаю полный тест фронтенда...', 'info');
             log('', 'info');
-            
+
             try {
                 // 1. Проверка валидации API
                 log('1️⃣ Проверка валидации API...', 'info');
                 const validationResp = await fetch('/api/validate-frontend');
                 const validation = await validationResp.json();
                 logObject('Результат валидации', validation);
-                
+
                 if (!validation.success) {
                     log('❌ Валидация не прошла!', 'error');
                     return;
                 }
                 log('✅ Валидация пройдена', 'success');
                 log('', 'info');
-                
+
                 // 2. Загружаем тестовый файл
                 log('2️⃣ Загружаем lakover.jpg...', 'info');
                 const fileResp = await fetch('/static/../invoices/lakover.jpg');
                 const blob = await fileResp.blob();
                 log(`✅ Файл загружен: ${blob.size} bytes`, 'success');
                 log('', 'info');
-                
+
                 // 3. Отправляем на парсинг
                 log('3️⃣ Отправляем на парсинг...', 'info');
                 const formData = new FormData();
                 formData.append('file', blob, 'lakover.jpg');
-                
+
                 const token = 'mytoken'; // Из .env
                 const parseResp = await fetch('/parse', {
                     method: 'POST',
@@ -73,48 +73,48 @@
                     },
                     body: formData
                 });
-                
+
                 log(`Статус ответа: ${parseResp.status}`, parseResp.ok ? 'success' : 'error');
-                
+
                 if (!parseResp.ok) {
                     const error = await parseResp.json();
                     logObject('Ошибка парсинга', error);
                     return;
                 }
-                
+
                 const parseData = await parseResp.json();
                 log('✅ Парсинг успешен!', 'success');
                 log('', 'info');
-                
+
                 // 4. Проверяем структуру ответа
                 log('4️⃣ Проверка структуры ответа...', 'info');
                 logObject('Полный ответ', parseData);
-                
+
                 if (!parseData.success) {
                     log('❌ success = false', 'error');
                     return;
                 }
-                
+
                 if (!parseData.data) {
                     log('❌ data отсутствует', 'error');
                     return;
                 }
-                
+
                 log('✅ success = true', 'success');
                 log('✅ data присутствует', 'success');
                 log('', 'info');
-                
+
                 // 5. Проверяем ключи в data
                 log('5️⃣ Ключи в data:', 'info');
                 const dataKeys = Object.keys(parseData.data);
                 log(`Найдено ${dataKeys.length} ключей: ${dataKeys.join(', ')}`, 'info');
                 log('', 'info');
-                
+
                 // 6. Проверяем каждую секцию
                 const data = parseData.data;
-                
+
                 log('6️⃣ Проверка секций для редактирования:', 'info');
-                
+
                 // document_info
                 if (data.document_info) {
                     const fields = Object.keys(data.document_info).filter(k => !k.endsWith('_label'));
@@ -123,7 +123,7 @@
                 } else {
                     log('❌ document_info отсутствует', 'error');
                 }
-                
+
                 // parties
                 if (data.parties) {
                     if (data.parties.supplier) {
@@ -138,7 +138,7 @@
                 } else {
                     log('❌ parties отсутствует', 'error');
                 }
-                
+
                 // totals
                 if (data.totals) {
                     const fields = Object.keys(data.totals);
@@ -146,19 +146,19 @@
                 } else {
                     log('⚠️ totals отсутствует', 'warning');
                 }
-                
+
                 // items
                 let items = data.line_items || data.items || [];
                 let column_mapping = data.column_mapping || {};
-                
+
                 if (data.table_data) {
                     items = data.table_data.line_items || data.table_data.items || items;
                     column_mapping = data.table_data.column_mapping || column_mapping;
-                    log(`✅ Товары найдены в table_data`, 'success');
+                    log(`✅ Items found in table_data`, 'success');
                 }
-                
+
                 if (items && items.length > 0) {
-                    log(`✅ Товары: ${items.length} шт`, 'success');
+                    log(`✅ Items: ${items.length}`, 'success');
                     log(`   Поля в товаре: ${Object.keys(items[0]).join(', ')}`, 'info');
                     if (column_mapping && Object.keys(column_mapping).length > 0) {
                         log(`✅ column_mapping: ${Object.keys(column_mapping).length} колонок`, 'success');
@@ -166,15 +166,15 @@
                         log(`⚠️ column_mapping отсутствует`, 'warning');
                     }
                 } else {
-                    log('⚠️ Товары не найдены', 'warning');
+                    log('⚠️ Items not found', 'warning');
                 }
-                
+
                 log('', 'info');
                 log('7️⃣ Эмуляция displayEditableData()...', 'info');
-                
+
                 // Эмулируем функцию displayEditableData
                 let fieldCount = 0;
-                
+
                 // document_info
                 if (data.document_info) {
                     for (const [key, value] of Object.entries(data.document_info)) {
@@ -183,7 +183,7 @@
                         }
                     }
                 }
-                
+
                 // parties
                 if (data.parties) {
                     if (data.parties.supplier) {
@@ -202,7 +202,7 @@
                         }
                     }
                 }
-                
+
                 // references
                 if (data.references) {
                     for (const [key, value] of Object.entries(data.references)) {
@@ -211,7 +211,7 @@
                         }
                     }
                 }
-                
+
                 // totals
                 if (data.totals) {
                     for (const [key, value] of Object.entries(data.totals)) {
@@ -220,14 +220,14 @@
                         }
                     }
                 }
-                
+
                 log(`✅ Должно создаться ${fieldCount} редактируемых полей`, 'success');
-                log(`✅ Плюс таблица с ${items.length} товарами`, 'success');
+                log(`✅ Plus table with ${items.length} items`, 'success');
                 log('', 'info');
-                
+
                 log('8️⃣ ИТОГОВАЯ ПРОВЕРКА:', 'info');
                 log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
-                
+
                 if (fieldCount > 0) {
                     log('✅ Данные есть и готовы к отображению!', 'success');
                     log(`✅ Всего полей: ${fieldCount}`, 'success');
@@ -241,13 +241,13 @@
                 } else {
                     log('❌ Нет данных для отображения!', 'error');
                 }
-                
+
             } catch (error) {
                 log(`❌ ОШИБКА: ${error.message}`, 'error');
                 log(error.stack, 'error');
             }
         }
-        
+
         // Запускаем тест
         testFullFlow();
     </script>

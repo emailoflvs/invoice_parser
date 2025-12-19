@@ -38,3 +38,11 @@ def downgrade() -> None:
     op.drop_column('document_fields', 'section_label')
 
 
+
+
+
+
+
+
+
+

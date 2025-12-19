@@ -322,7 +322,7 @@ class WebAPI:
 
         # Authentication endpoints
         @self.app.post("/api/auth/login", response_model=LoginResponse, tags=["Auth"])
-        async def login(login_request: LoginRequest):
+        async def login(login_request: LoginRequest, response: Response):
             """
             Login with username and password
 
@@ -343,6 +343,18 @@ class WebAPI:
                 # Update last login
                 user.last_login = datetime.utcnow()
                 await session.commit()
+
+                # Сохраняем токен в cookie для автоматической авторизации при загрузке страницы
+                # HttpOnly для безопасности (защита от XSS)
+                # SameSite='lax' для защиты от CSRF, но позволяет отправку cookie при переходе с других сайтов
+                response.set_cookie(
+                    key="authToken",
+                    value=access_token,
+                    httponly=True,
+                    samesite="lax",
+                    secure=False,  # В production установить True для HTTPS
+                    max_age=60 * 60 * 24 * 7  # 7 дней (можно настроить через config)
+                )
 
                 return LoginResponse(
                     access_token=access_token,
@@ -450,6 +462,33 @@ class WebAPI:
                 is_active=current_user.is_active,
                 created_at=current_user.created_at.isoformat() if current_user.created_at else ""
             )
+
+        @self.app.post("/api/auth/logout", tags=["Auth"])
+        async def logout(response: Response):
+            """
+            Logout user - removes authentication cookie
+
+            Returns:
+                Success message
+            """
+            # Удаляем cookie с токеном
+            response.delete_cookie(
+                key="authToken",
+                samesite="lax"
+            )
+            return {"success": True, "message": "Logged out successfully"}
+
+        @self.app.get("/api/config", tags=["Config"])
+        async def get_config():
+            """
+            Get frontend configuration
+
+            Returns:
+                Configuration values needed by frontend
+            """
+            return {
+                "max_file_size_mb": self.config.max_file_size_mb
+            }
 
         @self.app.get("/health", response_model=HealthResponse)
         async def health():
@@ -937,7 +976,7 @@ class WebAPI:
                 return SaveResponse(
                     success=True,
                     filename=new_filename,
-                    message=f"Данные успешно сохранены в файл {new_filename}"
+                    message=f"Data successfully saved to file {new_filename}"
                 )
 
             except Exception as e:
@@ -1036,11 +1075,37 @@ class WebAPI:
             )
 
         @self.app.get("/")
-        async def root():
-            """Root endpoint - returns web interface"""
+        async def root(request: Request):
+            """Root endpoint - returns web interface (requires authentication)"""
             static_dir = Path(__file__).parent.parent.parent.parent / "static"
-            index_file = static_dir / "index.html"
 
+            # Проверяем авторизацию пользователя
+            is_authenticated = await self._check_authentication(request)
+
+            if not is_authenticated:
+                # Если не авторизован, показываем страницу логина
+                login_file = static_dir / "login.html"
+                if login_file.exists():
+                    with open(login_file, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                    return Response(
+                        content=content,
+                        media_type="text/html",
+                        headers={
+                            "Cache-Control": "no-cache, no-store, must-revalidate",
+                            "Pragma": "no-cache",
+                            "Expires": "0"
+                        }
+                    )
+                else:
+                    # Если login.html не найден, возвращаем JSON с ошибкой
+                    raise HTTPException(
+                        status_code=401,
+                        detail="Authentication required. Please log in at /login.html"
+                    )
+
+            # Если авторизован, показываем главную страницу
+            index_file = static_dir / "index.html"
             if index_file.exists():
                 return FileResponse(index_file)
             else:
@@ -1105,6 +1170,60 @@ class WebAPI:
             token = token[len(BEARER_PREFIX):]
 
         return token == self.config.web_auth_token
+
+    async def _check_authentication(self, request: Request) -> bool:
+        """
+        Проверка авторизации пользователя из заголовка Authorization или cookie
+
+        Args:
+            request: HTTP request
+
+        Returns:
+            True если пользователь авторизован
+        """
+        try:
+            token = None
+
+            # Сначала пытаемся получить токен из заголовка Authorization
+            authorization = request.headers.get("Authorization")
+            if authorization:
+                # Удаляем префикс Bearer
+                if authorization.startswith(BEARER_PREFIX):
+                    token = authorization[len(BEARER_PREFIX):].strip()
+                else:
+                    token = authorization.strip()
+
+            # Если токена нет в заголовке, пытаемся получить из cookie
+            if not token:
+                token = request.cookies.get("authToken")
+
+            if not token:
+                return False
+
+            # Проверяем токен через JWT
+            from ..auth import verify_token
+            payload = verify_token(token)
+            if payload is None:
+                return False
+
+            # Проверяем, что пользователь существует и активен
+            username = payload.get("sub")
+            if not username:
+                return False
+
+            from ..database import get_session
+            from ..auth import get_user_by_username
+
+            async for session in get_session():
+                user = await get_user_by_username(session, username)
+                if user and user.is_active:
+                    return True
+                break
+
+            return False
+        except Exception as e:
+            logger.debug(f"Authentication check failed: {e}")
+            return False
 
     def run(self, host: Optional[str] = None, port: Optional[int] = None):
         """

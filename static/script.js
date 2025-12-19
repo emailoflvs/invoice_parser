@@ -8,7 +8,9 @@ const state = {
     interfaceRules: null,  // Правила интерфейса из interface-rules.json
     config: {
         maxFileSizeMB: 50  // Значение по умолчанию, загружается из API
-    }
+    },
+    loginModalShown: false,  // Флаг, чтобы избежать повторного показа модального окна
+    initialized: false  // Флаг, чтобы избежать повторной инициализации
 };
 
 // Элементы DOM - инициализируются при загрузке DOM
@@ -72,27 +74,45 @@ function initElements() {
     elements.saveAndContinueBtn = document.getElementById('saveAndContinueBtn');
     elements.logoutBtn = document.getElementById('logoutBtn');
     elements.authWarning = document.getElementById('authWarning');
+
+    // Login modal elements
+    elements.loginModal = document.getElementById('loginModal');
+    elements.inlineLoginForm = document.getElementById('inlineLoginForm');
+    elements.inlineUsername = document.getElementById('inlineUsername');
+    elements.inlinePassword = document.getElementById('inlinePassword');
+    elements.toggleInlinePassword = document.getElementById('toggleInlinePassword');
+    elements.inlineLoginButton = document.getElementById('inlineLoginButton');
+    elements.inlineLoginMessage = document.getElementById('inlineLoginMessage');
+    elements.inlineLoginMessageIcon = document.getElementById('inlineLoginMessageIcon');
+    elements.inlineLoginMessageText = document.getElementById('inlineLoginMessageText');
 }
 
 // Инициализация
 async function init() {
+    // Защита от повторного вызова
+    if (state.initialized) {
+        return;
+    }
+    state.initialized = true;
+
     // Инициализируем элементы DOM
     initElements();
 
     // Обновляем токен из localStorage (на случай, если он был сохранен на странице входа)
     state.authToken = localStorage.getItem('authToken') || '';
 
-    // Проверяем авторизацию - если нет токена, перенаправляем на страницу входа
-    // Сохраняем document_id в URL при редиректе, чтобы не потерять его
+    // Проверяем авторизацию - если нет токена, показываем модальное окно
+    // ВАЖНО: Не делаем редирект на /login.html, так как сервер сам решает, что показывать
+    // Если пользователь не авторизован, сервер вернет login.html вместо index.html
+    // Если мы видим index.html, значит пользователь авторизован или сервер разрешил доступ
     if (!state.authToken) {
-        const urlParams = new URLSearchParams(window.location.search);
-        const documentId = urlParams.get('document_id');
-        if (documentId) {
-            window.location.href = `/login.html?redirect=/?document_id=${documentId}`;
-        } else {
-            window.location.href = '/login.html';
+        // Проверяем, есть ли модальное окно на странице (только на index.html)
+        if (elements.loginModal) {
+            // Если модальное окно есть, показываем его (для обратной совместимости)
+            showLoginModal();
         }
-        return;
+        // Если модального окна нет, значит это не index.html - ничего не делаем,
+        // сервер сам вернул нужную страницу
     }
 
     // Загружаем конфигурацию и правила интерфейса
@@ -118,14 +138,8 @@ async function loadDocumentForEditing(documentId) {
         console.log(`loadDocumentForEditing called with documentId: ${documentId}, authToken: ${state.authToken ? 'present' : 'missing'}`);
 
         if (!state.authToken) {
-            console.error('No auth token, redirecting to login...');
-            const urlParams = new URLSearchParams(window.location.search);
-            const documentId = urlParams.get('document_id');
-            if (documentId) {
-                window.location.href = `/login.html?redirect=/?document_id=${documentId}`;
-            } else {
-                window.location.href = '/login.html';
-            }
+            console.error('No auth token, showing login form...');
+            showLoginModal();
             return;
         }
 
@@ -144,9 +158,10 @@ async function loadDocumentForEditing(documentId) {
 
         if (!response.ok) {
             if (response.status === 401) {
-                // Token expired, redirect to login
+                // Token expired, show login form
                 localStorage.removeItem('authToken');
-                window.location.href = '/login.html';
+                state.authToken = '';
+                showLoginModal();
                 return;
             }
             throw new Error(`HTTP ${response.status}: ${await response.text()}`);
@@ -186,6 +201,84 @@ async function loadDocumentForEditing(documentId) {
         console.error('Error loading document:', error);
         hideProgress();
         showError(`Failed to load document: ${error.message}`);
+    }
+}
+
+// Handle inline login (определяем перед setupEventListeners)
+async function handleInlineLogin(e) {
+    e.preventDefault();
+
+    const username = elements.inlineUsername.value.trim();
+    const password = elements.inlinePassword.value.trim();
+
+    if (!username || !password) {
+        showInlineLoginMessage('Please enter username and password', true);
+        return;
+    }
+
+    // Disable button
+    elements.inlineLoginButton.disabled = true;
+    elements.inlineLoginButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Logging in...';
+    clearInlineLoginMessage();
+
+    try {
+        const response = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ username, password })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.detail || 'Login failed');
+        }
+
+        // Save token
+        const token = data.access_token;
+        state.authToken = token;
+        localStorage.setItem('authToken', token);
+
+        // Show success message
+        showInlineLoginMessage('Login successful!', false);
+
+        // Hide modal and reload page state
+        setTimeout(() => {
+            hideLoginModal();
+            enableFileUpload();
+
+            // Check if we need to load a document
+            const urlParams = new URLSearchParams(window.location.search);
+            const documentId = urlParams.get('document_id');
+            if (documentId) {
+                loadDocumentForEditing(parseInt(documentId));
+            }
+        }, 500);
+
+    } catch (error) {
+        showInlineLoginMessage(error.message || 'Login failed. Please check your credentials', true);
+        elements.inlineLoginButton.disabled = false;
+        elements.inlineLoginButton.innerHTML = '<i class="fas fa-sign-in-alt"></i> Log In';
+    }
+}
+
+// Show inline login message
+function showInlineLoginMessage(text, isError = false) {
+    if (elements.inlineLoginMessage) {
+        elements.inlineLoginMessage.style.display = 'flex';
+        elements.inlineLoginMessageIcon.className = `fas ${isError ? 'fa-exclamation-circle' : 'fa-check-circle'}`;
+        elements.inlineLoginMessageText.textContent = text;
+        elements.inlineLoginMessage.className = `login-form-message ${isError ? 'error' : 'success'}`;
+    }
+}
+
+// Clear inline login message
+function clearInlineLoginMessage() {
+    if (elements.inlineLoginMessage) {
+        elements.inlineLoginMessage.style.display = 'none';
+        elements.inlineLoginMessageText.textContent = '';
     }
 }
 
@@ -245,6 +338,19 @@ function setupEventListeners() {
     // Logout
     if (elements.logoutBtn) {
         elements.logoutBtn.addEventListener('click', handleLogout);
+    }
+
+    // Inline login form
+    if (elements.inlineLoginForm) {
+        elements.inlineLoginForm.addEventListener('submit', handleInlineLogin);
+    }
+    if (elements.toggleInlinePassword) {
+        elements.toggleInlinePassword.addEventListener('click', () => {
+            const type = elements.inlinePassword.getAttribute('type') === 'password' ? 'text' : 'password';
+            elements.inlinePassword.setAttribute('type', type);
+            elements.toggleInlinePassword.querySelector('i').classList.toggle('fa-eye');
+            elements.toggleInlinePassword.querySelector('i').classList.toggle('fa-eye-slash');
+        });
     }
 }
 
@@ -339,9 +445,7 @@ function handleFile(file) {
 function showAuthRequiredMessage() {
     showToast('Please log in first', true);
     // Автоматически открываем модальное окно авторизации
-    setTimeout(() => {
-                window.location.href = '/login.html';
-    }, 500);
+    showLoginModal();
 }
 
 function displayFileInfo(file) {
@@ -429,7 +533,7 @@ async function parseDocument(mode = 'detailed') {
     }
 
     if (!state.authToken) {
-                window.location.href = '/login.html';
+        showLoginModal();
         return;
     }
 
@@ -460,12 +564,15 @@ async function parseDocument(mode = 'detailed') {
             // Обработка различных типов ошибок
             let userMessage = '';
 
-            if (response.status === 401) {
-                userMessage = '🔐 Invalid authorization. Please log in again.';
-                // Перенаправляем на страницу входа
-                setTimeout(() => {
-                    window.location.href = '/login.html';
-                }, 2000);
+            // Проверяем ошибки авторизации (401, 403)
+            if (response.status === 401 || response.status === 403) {
+                userMessage = '🔐 Требуется авторизация. Пожалуйста, войдите в систему.';
+                // Показываем форму логина
+                localStorage.removeItem('authToken');
+                state.authToken = '';
+                showLoginModal();
+                // Не показываем ошибку, так как уже показали форму логина
+                return;
             } else if (errorInfo.error_code) {
                 // Новый формат с кодами ошибок
                 const code = errorInfo.error_code;
@@ -627,6 +734,48 @@ function showSection(section) {
 }
 
 function showError(message) {
+    // Проверяем, является ли ошибка ошибкой авторизации
+    const authErrorPatterns = [
+        /401/i,
+        /403/i,
+        /unauthorized/i,
+        /authentication required/i,
+        /authentication failed/i,
+        /invalid.*token/i,
+        /token.*expired/i,
+        /token.*invalid/i,
+        /авторизац/i,
+        /не авторизован/i,
+        /требуется.*авторизац/i
+    ];
+
+    const isAuthError = authErrorPatterns.some(pattern => pattern.test(message));
+
+    if (isAuthError) {
+        // Если это ошибка авторизации, показываем форму логина вместо ошибки
+        console.log('Authorization error detected, showing login form');
+
+        // Очищаем токен
+        localStorage.removeItem('authToken');
+        state.authToken = '';
+
+        // Показываем модальное окно логина
+        if (elements.loginModal) {
+            showLoginModal();
+        } else {
+            // Если модального окна нет, перенаправляем на страницу логина
+            window.location.href = '/login.html';
+        }
+
+        // Скрываем секцию ошибки
+        if (elements.errorSection) {
+            elements.errorSection.style.display = 'none';
+        }
+
+        return;
+    }
+
+    // Для обычных ошибок показываем их как обычно
     // Конвертируем URL в кликабельные ссылки с экранированием для безопасности
     const urlRegex = /(https?:\/\/[^\s<>"']+)/g;
 
@@ -669,10 +818,43 @@ function handleLogout() {
         localStorage.removeItem('authToken');
         localStorage.removeItem('rememberMe');
 
-        // Перенаправляем на страницу входа
-        window.location.href = '/login.html';
+        // Показываем форму логина
+        showLoginModal();
     }
 }
+
+// Show login modal
+function showLoginModal() {
+    if (elements.loginModal) {
+        // Проверяем, не показано ли уже модальное окно, чтобы избежать мигания
+        const isVisible = elements.loginModal.style.display === 'flex' ||
+                         window.getComputedStyle(elements.loginModal).display === 'flex';
+        if (isVisible || state.loginModalShown) {
+            return; // Уже показано, не делаем ничего
+        }
+
+        state.loginModalShown = true;
+        elements.loginModal.style.display = 'flex';
+        // Focus on username field
+        if (elements.inlineUsername) {
+            setTimeout(() => elements.inlineUsername.focus(), 100);
+        }
+    }
+}
+
+// Hide login modal
+function hideLoginModal() {
+    if (elements.loginModal) {
+        elements.loginModal.style.display = 'none';
+        state.loginModalShown = false; // Сбрасываем флаг при скрытии
+        // Clear form
+        if (elements.inlineLoginForm) {
+            elements.inlineLoginForm.reset();
+        }
+        clearInlineLoginMessage();
+    }
+}
+
 
 
 // Field label mappings - пустой объект, все метки берутся из данных (_label)
@@ -702,8 +884,33 @@ function displayEditableData(data) {
             return obj[labelKey];
         }
 
-        // Fallback to key (все метки берутся из данных, без хардкода)
-        return key;
+        // НЕ используем ключ как fallback - возвращаем null
+        // Это позволит createField использовать более умный fallback или оставить пустым
+        return null;
+    };
+
+    // Helper function to extract value from object with _label/value structure
+    const extractValue = (val) => {
+        if (val === null || val === undefined) return null;
+        if (typeof val === 'object' && !Array.isArray(val) && val !== null) {
+            // New structure: { "_label": ..., "value": ... }
+            if ('value' in val) {
+                return val.value;
+            }
+        }
+        return val;
+    };
+
+    // Helper function to extract label from object with _label/value structure
+    const extractLabel = (val, fallbackKey) => {
+        if (val === null || val === undefined) return null;
+        if (typeof val === 'object' && !Array.isArray(val) && val !== null) {
+            // New structure: { "_label": ..., "value": ... }
+            if ('_label' in val) {
+                return val._label;
+            }
+        }
+        return null;
     };
 
     // Helper function to create editable field
@@ -711,12 +918,26 @@ function displayEditableData(data) {
         // Skip _label fields themselves
         if (key.endsWith('_label')) return '';
 
+        // Extract value from object structure if needed (recursively)
+        let fieldValue = extractValue(value);
+
+        // Рекурсивно извлекаем значение, если оно все еще объект
+        while (typeof fieldValue === 'object' && fieldValue !== null && !Array.isArray(fieldValue)) {
+            if ('value' in fieldValue) {
+                fieldValue = fieldValue.value;
+            } else {
+                break; // Если нет 'value', это не наша структура
+            }
+        }
+
+        let fieldLabel = label || extractLabel(value, key);
+
         // Skip empty values ONLY for handwritten/stamp fields
         // Fields that should be hidden if empty: handwritten_date, stamp_content
         const hiddenIfEmptyFields = ['handwritten_date', 'stamp_content'];
         const isHiddenField = hiddenIfEmptyFields.some(field => key.includes(field));
 
-        if (isHiddenField && (value === null || value === undefined || value === '')) {
+        if (isHiddenField && (fieldValue === null || fieldValue === undefined || fieldValue === '')) {
             return '';
         }
 
@@ -724,33 +945,62 @@ function displayEditableData(data) {
 
         const fieldId = `edit_${key}_${Math.random().toString(36).substr(2, 9)}`;
         // Используем _label из данных, если есть
-        // Приоритет: переданный label > getLabel (который ищет _label) > key
+        // Приоритет: переданный label > extractLabel из value > getLabel (который ищет _label) > пустая строка
         // Полностью мультиязычное решение - используем только данные из документа
-        let displayLabel = label;
+        let displayLabel = fieldLabel;
         if (!displayLabel) {
             displayLabel = getLabel(parentObj, key);
         }
-        if (!displayLabel || displayLabel === key) {
-            displayLabel = key; // Используем ключ, если нет метки в данных
+        // Если все еще нет метки, проверяем тип поля
+        if (!displayLabel) {
+            // Для полей signatures (flat структура без _label/value) форматируем ключ
+            if (key.startsWith('signature_')) {
+                // Извлекаем последнюю часть ключа: signature_0_role -> role
+                const parts = key.split('_');
+                const fieldName = parts.slice(2).join('_'); // Убираем "signature_N_"
+                // Форматируем: is_signed -> is signed, stamp_content -> stamp content
+                displayLabel = fieldName.replace(/_/g, ' ');
+            } else {
+                // Для остальных полей: если нет оригинальной метки из документа, оставляем пустым
+                displayLabel = null;
+            }
         }
 
         // Если label равен ключу и это служебное поле, не показываем его
         if (displayLabel === key && key.startsWith('_')) {
             return '';
         }
-        const fieldValue = value !== null && value !== undefined ? value : '';
 
-        // For boolean values
-        if (typeof value === 'boolean') {
+        // For boolean values (проверяем ДО конвертации в строку)
+        if (typeof fieldValue === 'boolean') {
+            // Используем значения из данных, если они есть в структуре
+            let trueLabel = 'true';
+            let falseLabel = 'false';
+            if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+                if ('true_label' in value) trueLabel = value.true_label;
+                if ('false_label' in value) falseLabel = value.false_label;
+            }
             return `
                 <div class="editable-field">
-                    <label class="editable-label" for="${fieldId}">${displayLabel}</label>
+                    <label class="editable-label" for="${fieldId}">${escapeHtml(displayLabel || '')}</label>
                     <select id="${fieldId}" class="editable-input" data-key="${key}">
-                        <option value="true" ${value ? 'selected' : ''}>Yes</option>
-                        <option value="false" ${!value ? 'selected' : ''}>No</option>
+                        <option value="true" ${fieldValue ? 'selected' : ''}>${escapeHtml(trueLabel)}</option>
+                        <option value="false" ${!fieldValue ? 'selected' : ''}>${escapeHtml(falseLabel)}</option>
                     </select>
                 </div>
             `;
+        }
+
+        // Use extracted value (после рекурсивного извлечения и обработки boolean)
+        // For arrays and objects, serialize to JSON
+        if (Array.isArray(fieldValue)) {
+            fieldValue = JSON.stringify(fieldValue, null, 2);
+        } else if (typeof fieldValue === 'object' && fieldValue !== null) {
+            // Если после рекурсивного извлечения все еще объект (не наша структура), сериализуем
+            fieldValue = JSON.stringify(fieldValue, null, 2);
+        } else {
+            // Примитивные значения (string, number) - конвертируем в строку
+            fieldValue = fieldValue !== null && fieldValue !== undefined ? String(fieldValue) : '';
         }
 
         // For string/number values
@@ -763,14 +1013,14 @@ function displayEditableData(data) {
         if (isJsonString || isNameField || isAddressField || (typeof fieldValue === 'string' && fieldValue.length > 60)) {
             return `
                 <div class="editable-field">
-                    <label class="editable-label" for="${fieldId}">${displayLabel}</label>
+                    <label class="editable-label" for="${fieldId}">${escapeHtml(displayLabel || '')}</label>
                     <textarea id="${fieldId}" class="editable-textarea" data-key="${key}" ${isJsonString ? 'style="min-height: 120px; font-family: monospace; font-size: 0.9rem;"' : ''}>${escapeHtml(fieldValue)}</textarea>
                 </div>
             `;
         } else {
             return `
                 <div class="editable-field">
-                    <label class="editable-label" for="${fieldId}">${displayLabel}</label>
+                    <label class="editable-label" for="${fieldId}">${escapeHtml(displayLabel || '')}</label>
                     <input type="text" id="${fieldId}" class="editable-input" data-key="${key}" value="${escapeHtml(fieldValue)}">
                 </div>
             `;
@@ -792,31 +1042,23 @@ function displayEditableData(data) {
         for (const key of docInfoFieldOrder) {
             if (key in data.document_info && !key.endsWith('_label')) {
                 const value = data.document_info[key];
-                // Пропускаем пустые поля
-                if (value === null || value === undefined || value === '') continue;
+                // Пропускаем пустые поля (но проверяем value внутри объекта)
+                const extractedValue = extractValue(value);
+                if (extractedValue === null || extractedValue === undefined || extractedValue === '') continue;
                 processedDocKeys.add(key);
-                if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-                    html += createField(key, JSON.stringify(value, null, 2), null, data.document_info);
-                } else if (Array.isArray(value)) {
-                    html += createField(key, JSON.stringify(value, null, 2), null, data.document_info);
-                } else {
-                    html += createField(key, value, null, data.document_info);
-                }
+                // Передаем объект как есть - createField сам извлечет value и _label
+                html += createField(key, value, null, data.document_info);
             }
         }
 
         // Остальные поля document_info (только непустые)
         for (const [key, value] of Object.entries(data.document_info)) {
             if (key.endsWith('_label') || processedDocKeys.has(key)) continue;
-            // Пропускаем пустые поля
-            if (value === null || value === undefined || value === '') continue;
-            if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-                html += createField(key, JSON.stringify(value, null, 2), null, data.document_info);
-            } else if (Array.isArray(value)) {
-                html += createField(key, JSON.stringify(value, null, 2), null, data.document_info);
-            } else {
-                html += createField(key, value, null, data.document_info);
-            }
+            // Пропускаем пустые поля (но проверяем value внутри объекта)
+            const extractedValue = extractValue(value);
+            if (extractedValue === null || extractedValue === undefined || extractedValue === '') continue;
+            // Передаем объект как есть - createField сам извлечет value и _label
+            html += createField(key, value, null, data.document_info);
         }
         html += '</div>';
     }
@@ -838,7 +1080,8 @@ function displayEditableData(data) {
             if (typeof roleData === 'object' && roleData !== null && !Array.isArray(roleData)) {
                 const icon = roleIconMapping[roleKey] || 'fa-user';
                 // Используем _label из данных, если есть, иначе используем ключ роли
-                const roleTitle = roleData._label ? roleData._label.replace(':', '').trim() : roleKey;
+                // Use _label from data if available, otherwise use role key (displays original label from document)
+                const roleTitle = (roleData._label && roleData._label !== 'null') ? roleData._label.replace(':', '').trim() : roleKey;
 
                 html += '<div class="editable-group">';
                 html += `<div class="editable-group-title"><i class="fas ${icon}"></i> ${escapeHtml(roleTitle)}</div>`;
@@ -858,7 +1101,8 @@ function displayEditableData(data) {
                 // 1. Название компании (только если не пустое)
                 if ('name' in roleData && roleData.name !== '_label') {
                     const nameValue = roleData.name;
-                    if (nameValue !== null && nameValue !== undefined && nameValue !== '') {
+                    const extractedName = extractValue(nameValue);
+                    if (extractedName !== null && extractedName !== undefined && extractedName !== '') {
                         processedKeys.add('name');
                         html += createField('name', nameValue, null, roleData);
                     }
@@ -871,23 +1115,20 @@ function displayEditableData(data) {
                     if (key in roleData && key !== '_label' && !processedKeys.has(key)) {
                         processedKeys.add(key);
                         const value = roleData[key];
-                        // Пропускаем пустые поля
-                        if (value === null || value === undefined || value === '') continue;
-                        if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-                            html += createField(key, JSON.stringify(value, null, 2), null, roleData);
-                        } else if (Array.isArray(value)) {
-                            html += createField(key, JSON.stringify(value, null, 2), null, roleData);
-                        } else {
-                            html += createField(key, value, null, roleData);
-                        }
+                        // Пропускаем пустые поля (но проверяем value внутри объекта)
+                        const extractedValue = extractValue(value);
+                        if (extractedValue === null || extractedValue === undefined || extractedValue === '') continue;
+                        // Передаем объект как есть - createField сам извлечет value и _label
+                        html += createField(key, value, null, roleData);
                     }
                 }
 
                 // Телефон всегда после адреса
                 if ('phone' in roleData && !processedKeys.has('phone')) {
                     const phoneValue = roleData.phone;
-                    // Пропускаем пустые поля
-                    if (phoneValue !== null && phoneValue !== undefined && phoneValue !== '') {
+                    // Пропускаем пустые поля (но проверяем value внутри объекта)
+                    const extractedPhone = extractValue(phoneValue);
+                    if (extractedPhone !== null && extractedPhone !== undefined && extractedPhone !== '') {
                         processedKeys.add('phone');
                         html += createField('phone', phoneValue, null, roleData);
                     }
@@ -898,23 +1139,20 @@ function displayEditableData(data) {
                     if (key === '_label' || processedKeys.has(key)) continue;
                     if (key === 'name' || key === 'bank' || key === 'account_number' || key === 'phone') continue;
                     if (key.startsWith('bank_')) continue; // Банковские поля обработаем позже
-                    // Пропускаем пустые поля
-                    if (value === null || value === undefined || value === '') continue;
+                    // Пропускаем пустые поля (но проверяем value внутри объекта)
+                    const extractedValue = extractValue(value);
+                    if (extractedValue === null || extractedValue === undefined || extractedValue === '') continue;
 
                     processedKeys.add(key);
-                    if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-                        html += createField(key, JSON.stringify(value, null, 2), null, roleData);
-                    } else if (Array.isArray(value)) {
-                        html += createField(key, JSON.stringify(value, null, 2), null, roleData);
-                    } else {
-                        html += createField(key, value, null, roleData);
-                    }
+                    // Передаем объект как есть - createField сам извлечет value и _label
+                    html += createField(key, value, null, roleData);
                 }
 
                 // 3. Название банка (только если не пустое)
                 if ('bank' in roleData) {
                     const bankValue = roleData.bank;
-                    if (bankValue !== null && bankValue !== undefined && bankValue !== '') {
+                    const extractedBank = extractValue(bankValue);
+                    if (extractedBank !== null && extractedBank !== undefined && extractedBank !== '') {
                         processedKeys.add('bank');
                         html += createField('bank', bankValue, null, roleData);
                     }
@@ -923,23 +1161,20 @@ function displayEditableData(data) {
                 // 4. Данные банка (поля начинающиеся с bank_, только непустые)
                 for (const [key, value] of Object.entries(roleData)) {
                     if (key.startsWith('bank_') && !processedKeys.has(key)) {
-                        // Пропускаем пустые поля
-                        if (value === null || value === undefined || value === '') continue;
+                        // Пропускаем пустые поля (но проверяем value внутри объекта)
+                        const extractedValue = extractValue(value);
+                        if (extractedValue === null || extractedValue === undefined || extractedValue === '') continue;
                         processedKeys.add(key);
-                        if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-                            html += createField(key, JSON.stringify(value, null, 2), null, roleData);
-                        } else if (Array.isArray(value)) {
-                            html += createField(key, JSON.stringify(value, null, 2), null, roleData);
-                        } else {
-                            html += createField(key, value, null, roleData);
-                        }
+                        // Передаем объект как есть - createField сам извлечет value и _label
+                        html += createField(key, value, null, roleData);
                     }
                 }
 
                 // 5. Номер рахунку (только если не пустое)
                 if ('account_number' in roleData) {
                     const accountValue = roleData.account_number;
-                    if (accountValue !== null && accountValue !== undefined && accountValue !== '') {
+                    const extractedAccount = extractValue(accountValue);
+                    if (extractedAccount !== null && extractedAccount !== undefined && extractedAccount !== '') {
                         processedKeys.add('account_number');
                         html += createField('account_number', accountValue, null, roleData);
                     }
@@ -948,15 +1183,11 @@ function displayEditableData(data) {
                 // Остальные поля (если есть какие-то необработанные, только непустые)
                 for (const [key, value] of Object.entries(roleData)) {
                     if (key === '_label' || processedKeys.has(key)) continue;
-                    // Пропускаем пустые поля
-                    if (value === null || value === undefined || value === '') continue;
-                    if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-                        html += createField(key, JSON.stringify(value, null, 2), null, roleData);
-                    } else if (Array.isArray(value)) {
-                        html += createField(key, JSON.stringify(value, null, 2), null, roleData);
-                    } else {
-                        html += createField(key, value, null, roleData);
-                    }
+                    // Пропускаем пустые поля (но проверяем value внутри объекта)
+                    const extractedValue = extractValue(value);
+                    if (extractedValue === null || extractedValue === undefined || extractedValue === '') continue;
+                    // Передаем объект как есть - createField сам извлечет value и _label
+                    html += createField(key, value, null, roleData);
                 }
                 html += '</div>';
             }
@@ -976,12 +1207,12 @@ function displayEditableData(data) {
             // Если значение - объект с полями label и value, показываем только value с label из объекта
             if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
                 if ('value' in value && 'label' in value) {
-                    // Используем label из объекта, если есть, иначе украинское название
-                    displayLabel = value.label || value._label || key;
+                    // Используем label из объекта (оригинальная метка из документа)
+                    displayLabel = value.label || value._label || null;
                     numericValue = value.value;
                 } else if ('value' in value) {
-                    // Только value, используем _label или украинское название
-                    displayLabel = value._label || key;
+                    // Только value, используем _label (оригинальная метка из документа)
+                    displayLabel = value._label || null;
                     numericValue = value.value;
                 } else {
                     // Обычный объект - показываем как JSON
@@ -992,7 +1223,7 @@ function displayEditableData(data) {
                 html += createField(key, JSON.stringify(value, null, 2), null, data.totals);
                 continue;
             } else {
-                // Простое значение - показываем с украинским названием
+                // Простое значение - используем ключ как метку
                 displayLabel = null;
                 numericValue = value;
             }
@@ -1072,6 +1303,59 @@ function displayEditableData(data) {
 
     // amounts_in_words теперь отображаются внутри totals, блок удален
 
+    // Process references
+    if (data.references) {
+        html += '<div class="editable-group">';
+        // Используем _label из данных, если есть, иначе только иконку
+        const referencesTitle = (typeof data.references === 'object' && data.references._label) ? data.references._label : '';
+        html += `<div class="editable-group-title"><i class="fas fa-link"></i> ${escapeHtml(referencesTitle)}</div>`;
+        for (const [key, value] of Object.entries(data.references)) {
+            if (key.endsWith('_label')) continue;
+            // Передаем объект как есть - createField сам извлечет value и _label
+            const extractedValue = extractValue(value);
+            if (extractedValue !== null && extractedValue !== undefined && extractedValue !== '') {
+                html += createField(key, value, null, data.references);
+            }
+        }
+        html += '</div>';
+    }
+
+    // Process signatures
+    if (data.signatures && Array.isArray(data.signatures) && data.signatures.length > 0) {
+        html += '<div class="editable-group">';
+        // Используем _label из данных, если есть, иначе только иконку
+        const signaturesTitle = (typeof data.signatures === 'object' && data.signatures._label) ? data.signatures._label : '';
+        html += `<div class="editable-group-title"><i class="fas fa-signature"></i> ${escapeHtml(signaturesTitle)}</div>`;
+        data.signatures.forEach((sig, index) => {
+            if (typeof sig === 'object' && sig !== null) {
+                // Обрабатываем каждое поле подписи отдельно
+                for (const [key, value] of Object.entries(sig)) {
+                    if (key === '_label') continue;
+
+                    // Извлекаем значение (рекурсивно)
+                    let extractedVal = extractValue(value);
+                    while (typeof extractedVal === 'object' && extractedVal !== null && !Array.isArray(extractedVal)) {
+                        if ('value' in extractedVal) {
+                            extractedVal = extractedVal.value;
+                        } else {
+                            break;
+                        }
+                    }
+
+                    // Скрываем пустые строковые поля (кроме boolean)
+                    if (typeof extractedVal === 'string' && extractedVal.trim() === '') {
+                        continue;
+                    }
+
+                    const fieldKey = `signature_${index}_${key}`;
+                    // Не используем key как fallback - только extractLabel или null
+                    const fieldLabel = extractLabel(value, key) || null;
+                    html += createField(fieldKey, value, fieldLabel, sig);
+                }
+            }
+        });
+        html += '</div>';
+    }
 
     // Process other_fields - в grid
     if (data.other_fields) {
@@ -1087,17 +1371,25 @@ function displayEditableData(data) {
                     let displayValue = '';
                     let displayLabel = '';
 
-                    // Поддержка структуры {label, value, key}
-                    if ('label' in field && 'value' in field) {
-                        displayLabel = field.label || field.label_raw || `Field ${index + 1}`;
+                    // Поддержка структуры {label, value, key} или {_label, value}
+                    if (('label' in field && 'value' in field) || ('_label' in field && 'value' in field)) {
+                        displayLabel = field._label || field.label || field.label_raw || null;
                         const value = field.value !== null && field.value !== undefined ? field.value : (field.value_raw || '');
+
+                        // Проверяем, что метка и значение не одинаковые
+                        if (displayLabel === value && value !== '') {
+                            // Если одинаковые, возможно значение попало в метку
+                            // Используем type как метку, если есть
+                            displayLabel = field.type || null;
+                        }
+
                         // Объединяем все в одно значение
                         displayValue = value;
                         // Не показываем key отдельно
                     }
                     // Поддержка структуры {label_raw, value_raw, type}
                     else if ('label_raw' in field || 'value_raw' in field) {
-                        displayLabel = field.label_raw || field.type || `Field ${index + 1}`;
+                        displayLabel = field.label_raw || field.type || null;
                         displayValue = field.value_raw !== null && field.value_raw !== undefined ? field.value_raw : '';
                         // Не показываем type отдельно
                     }
@@ -1105,13 +1397,20 @@ function displayEditableData(data) {
                     else {
                         // Собираем все значения в одно
                         const parts = [];
+                        let foundLabel = null;
                         for (const [key, value] of Object.entries(field)) {
-                            if (key !== '_label' && value !== null && value !== undefined) {
-                                parts.push(`${key}: ${value}`);
+                            if (key === '_label') {
+                                foundLabel = value;
+                            } else if (key !== '_label' && value !== null && value !== undefined) {
+                                // Если значение - объект с _label/value, извлекаем value
+                                const extractedVal = extractValue(value);
+                                if (extractedVal !== null && extractedVal !== undefined) {
+                                    parts.push(`${key}: ${extractedVal}`);
+                                }
                             }
                         }
                         displayValue = parts.join('; ');
-                        displayLabel = `Field ${index + 1}`;
+                        displayLabel = foundLabel || null;
                     }
 
                     if (displayLabel) {
@@ -1121,11 +1420,10 @@ function displayEditableData(data) {
             });
         } else if (typeof data.other_fields === 'object' && data.other_fields !== null) {
             for (const [key, value] of Object.entries(data.other_fields)) {
-                if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-                    html += createField(key, JSON.stringify(value, null, 2), null, data.other_fields);
-                } else if (Array.isArray(value)) {
-                    html += createField(key, JSON.stringify(value, null, 2), null, data.other_fields);
-                } else {
+                if (key.endsWith('_label')) continue;
+                // Передаем объект как есть - createField сам извлечет value и _label
+                const extractedValue = extractValue(value);
+                if (extractedValue !== null && extractedValue !== undefined && extractedValue !== '') {
                     html += createField(key, value, null, data.other_fields);
                 }
             }
@@ -1136,7 +1434,7 @@ function displayEditableData(data) {
     // Process additional top-level fields (for simpler invoice structures)
     // references не обрабатываем - секция удалена по запросу пользователя
     // _meta и test_results - техническая информация, не показываем пользователю
-    const processedSections = ['document_info', 'parties', 'references', 'totals', 'amounts_in_words',
+    const processedSections = ['document_info', 'parties', 'references', 'signatures', 'totals', 'amounts_in_words',
                                 'other_fields', 'line_items', 'items', 'column_mapping', 'table_data',
                                 '_meta', 'test_results'];  // Исключаем техническую информацию
     const remainingFields = Object.entries(data).filter(([key]) =>
@@ -1152,13 +1450,15 @@ function displayEditableData(data) {
         html += `<div class="editable-group-title"><i class="fas fa-info-circle"></i> ${escapeHtml(additionalTitle)}</div>`;
         for (const [key, value] of remainingFields) {
             if (key.endsWith('_label')) continue;
-            // Показываем все поля, включая объекты и массивы
-            if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-                html += createField(key, JSON.stringify(value, null, 2), null, data);
-            } else if (Array.isArray(value)) {
+            // Если значение - массив, сериализуем в JSON для отображения
+            if (Array.isArray(value)) {
                 html += createField(key, JSON.stringify(value, null, 2), null, data);
             } else {
-                html += createField(key, value, null, data);
+                // Передаем объект как есть - createField сам извлечет value и _label
+                const extractedValue = extractValue(value);
+                if (extractedValue !== null && extractedValue !== undefined && extractedValue !== '') {
+                    html += createField(key, value, null, data);
+                }
             }
         }
         html += '</div>';
@@ -1301,7 +1601,7 @@ function displayEditableData(data) {
                 };
             }
 
-            // Длинные описательные колонки (товары, описания)
+            // Long descriptive columns (product descriptions)
             if (analysis.avgLength > 35 || analysis.maxLength > 80 || analysis.avgWords > 3) {
                 return {
                     type: 'long-descriptive',
@@ -1394,11 +1694,20 @@ function displayEditableData(data) {
                 const fieldId = `item_${index}_${key}`;
                 const colType = columnTypes[key];
 
-                // Показываем все значения, включая объекты и массивы
+                // Показываем все значения, извлекая из объектов с _label/value структурой
                 let displayValue = '';
                 if (value === null || value === undefined) {
                     displayValue = '';
-                } else if (typeof value === 'object' || Array.isArray(value)) {
+                } else if (typeof value === 'object' && !Array.isArray(value) && value !== null) {
+                    // Проверяем, является ли это объектом с _label/value структурой
+                    if ('value' in value) {
+                        // Извлекаем value из структуры
+                        displayValue = String(value.value !== null && value.value !== undefined ? value.value : '');
+                    } else {
+                        // Это другой объект - показываем как JSON
+                        displayValue = JSON.stringify(value, null, 2);
+                    }
+                } else if (Array.isArray(value)) {
                     displayValue = JSON.stringify(value, null, 2);
                 } else {
                     displayValue = String(value);
@@ -1548,6 +1857,24 @@ function collectEditedData() {
             }
         }
 
+        // Обработка полей signatures (формат: signature_0_role, signature_0_name и т.д.)
+        if (key.startsWith('signature_')) {
+            const parts = key.split('_');
+            if (parts.length >= 3) {
+                const index = parseInt(parts[1]);
+                const fieldName = parts.slice(2).join('_'); // Может быть составным, например "handwritten_date"
+
+                if (!isNaN(index) && editedData.signatures) {
+                    if (!editedData.signatures[index]) {
+                        editedData.signatures[index] = {};
+                    }
+                    // Сохраняем значение
+                    editedData.signatures[index][fieldName] = value;
+                }
+            }
+            return;
+        }
+
         // Обработка объединенных полей other_fields (формат: other_field_0_combined)
         if (key.startsWith('other_field_') && key.endsWith('_combined')) {
             const parts = key.split('_');
@@ -1642,10 +1969,14 @@ function collectEditedData() {
     return editedData;
 }
 
-// Get original value from nested object
+// Get original value from nested object (extracts value from {_label, value} structure if needed)
 function getOriginalValue(obj, key) {
     for (const [k, v] of Object.entries(obj)) {
         if (k === key) {
+            // If value is an object with _label/value structure, extract the value
+            if (typeof v === 'object' && v !== null && !Array.isArray(v) && 'value' in v) {
+                return v.value;
+            }
             return v;
         }
         if (typeof v === 'object' && v !== null && !Array.isArray(v)) {
@@ -1663,10 +1994,35 @@ function updateNestedValue(obj, key, value) {
     // Try to find and update the key in nested objects
     for (const [k, v] of Object.entries(obj)) {
         if (k === key) {
-            obj[k] = value;
+            // If the original value was an object with _label/value structure, preserve it
+            if (typeof v === 'object' && v !== null && !Array.isArray(v) && ('_label' in v || 'value' in v)) {
+                // Preserve _label if it exists
+                const label = v._label || null;
+                obj[k] = { _label: label, value: value };
+            } else {
+                obj[k] = value;
+            }
             return true;
         }
+        // Recursively search in nested objects (document_info, parties, etc.)
         if (typeof v === 'object' && v !== null && !Array.isArray(v)) {
+            // Check if this is a party object (has _label at top level)
+            if ('_label' in v && k in obj && typeof obj[k] === 'object') {
+                // This is a party object, search in its fields
+                for (const [fieldKey, fieldValue] of Object.entries(obj[k])) {
+                    if (fieldKey === key) {
+                        // Found the field in this party
+                        if (typeof fieldValue === 'object' && fieldValue !== null && !Array.isArray(fieldValue) && ('_label' in fieldValue || 'value' in fieldValue)) {
+                            const label = fieldValue._label || null;
+                            obj[k][fieldKey] = { _label: label, value: value };
+                        } else {
+                            obj[k][fieldKey] = value;
+                        }
+                        return true;
+                    }
+                }
+            }
+            // Continue recursive search
             if (updateNestedValue(v, key, value)) {
                 return true;
             }
@@ -1683,7 +2039,7 @@ async function saveAndContinue() {
     }
 
     if (!state.authToken) {
-                window.location.href = '/login.html';
+        showLoginModal();
         return;
     }
 

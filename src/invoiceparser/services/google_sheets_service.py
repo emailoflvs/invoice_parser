@@ -244,7 +244,7 @@ class GoogleSheetsService:
 
             # Форматируем заголовки, если они были добавлены
             if is_empty and header_added:
-                # Находим строку с заголовками (первая строка после секции "Інформація про документ")
+                # Find header row (first row after document info section)
                 header_row = 2  # После секции идет заголовок
                 header_range = f'A{header_row}:B{header_row}'
                 worksheet.format(header_range, {

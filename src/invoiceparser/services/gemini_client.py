@@ -260,7 +260,10 @@ class GeminiClient:
         try:
             # Чтение промпта из файла
             if not prompt_file_path.exists():
-                raise GeminiAPIError("ERROR_E006|Системная ошибка № E006")
+                raise GeminiAPIError(
+                    f"ERROR_E006|Файл промпта не найден: {prompt_file_path}. "
+                    f"Проверьте настройки PROMPT_HEADER_PATH и PROMPT_ITEMS_PATH в конфигурации."
+                )
 
             with open(prompt_file_path, 'r', encoding='utf-8') as f:
                 prompt = f.read().strip()
