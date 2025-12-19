@@ -1126,24 +1126,111 @@ body {
     width: 100%;
     border-collapse: collapse;
     margin-top: 10px;
-    table-layout: auto; /* Автоматическая раскладка для гибкости */
+    table-layout: auto; /* Automatic layout for flexibility */
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    overflow: visible; /* Allow content to be fully visible */
+    /* Allow table to adapt to content and screen width */
+    min-width: 100%;
 }
 
+/* All columns - automatic width, browser calculates based on content */
+/* No static sizes - responsive for all devices */
+
+/* Line number column - fit content exactly, always visible */
+.editable-items-table th.col-line-number,
+.editable-items-table td.col-line-number {
+    width: max-content !important; /* Expand to fit content exactly */
+    text-align: center !important;
+    white-space: nowrap !important;
+}
+
+/* Quantity column - fit content exactly, always visible */
+.editable-items-table th.col-quantity,
+.editable-items-table td.col-quantity {
+    width: max-content !important; /* Expand to fit content exactly */
+    text-align: center !important;
+    white-space: nowrap !important;
+}
+
+/* Numeric columns (prices) - fit content exactly, never wrap, always visible */
+.editable-items-table th.col-numeric,
+.editable-items-table td.col-numeric {
+    width: max-content !important; /* Expand to fit content exactly */
+    text-align: right !important;
+}
+
+.editable-items-table td.col-numeric {
+    white-space: nowrap !important; /* Never wrap prices */
+}
+
+/* Code column - fit content, may wrap if very long */
+.editable-items-table th.col-code,
+.editable-items-table td.col-code {
+    width: max-content !important; /* Expand to fit content */
+    text-align: left !important;
+}
+
+/* Short repetitive column - fit content exactly, always visible */
+.editable-items-table th.col-short-repetitive,
+.editable-items-table td.col-short-repetitive {
+    width: max-content !important; /* Expand to fit content exactly */
+    text-align: center !important;
+    white-space: nowrap !important;
+}
+
+/* Text columns (descriptions, notes, addresses, comments, etc.) */
+/* Take remaining space, content wraps to multiple lines if needed */
+.editable-items-table th.col-text,
+.editable-items-table td.col-text {
+    width: auto !important; /* Take remaining space after max-content columns */
+    max-width: none !important;
+    /* No fixed min-width - browser determines based on content and available space */
+}
+
+
 .editable-items-table th {
-    background: var(--primary-color);
+    background: #7c3aed; /* Темно-фиолетовый цвет как на скриншоте */
     color: white;
     padding: 12px 8px;
     text-align: left;
     font-weight: 600;
     font-size: 0.9rem;
     white-space: nowrap; /* По умолчанию не переносим */
-    overflow: hidden;
-    text-overflow: ellipsis; /* Если не помещается, показываем многоточие */
+    border-right: 1px solid rgba(255, 255, 255, 0.2);
+    box-sizing: border-box;
+    overflow: visible;
+}
+
+/* Price column headers - allow wrap for 2-line headers */
+.editable-items-table th.col-numeric {
+    white-space: normal !important;
+    word-wrap: break-word !important;
+    line-height: 1.3;
+    height: auto;
+}
+
+.editable-items-table th:last-child {
+    border-right: none;
 }
 
 .editable-items-table td {
-    padding: 8px;
+    padding: 10px 8px;
     border-bottom: 1px solid var(--border-color);
+    border-right: 1px solid var(--border-color);
+    background: white;
+    color: var(--text-primary);
+    box-sizing: border-box;
+    vertical-align: top; /* Выравнивание по верху для textarea */
+}
+
+.editable-items-table td:last-child {
+    border-right: none;
+}
+
+.editable-items-table tbody tr:last-child td {
+    border-bottom: none;
 }
 
 /* Динамические типы колонок - стили применяются через inline styles из JavaScript */
@@ -1155,8 +1242,8 @@ body {
 
 /* Специфичные стили для заголовков - перенос только если не помещается */
 .editable-items-table th[class^="col-"] {
-    overflow: hidden;
-    text-overflow: ellipsis;
+    overflow: visible; /* Allow header text to wrap fully */
+    text-overflow: clip; /* Don't use ellipsis - show full text */
 }
 
 /* Для заголовков с длинным текстом разрешаем перенос (определяется динамически) */
@@ -1172,6 +1259,7 @@ body {
 
 .editable-items-table input {
     width: 100%;
+    min-width: 0; /* Allows input to shrink */
     padding: 8px;
     border: 1px solid var(--border-color);
     border-radius: 6px;
@@ -1179,14 +1267,26 @@ body {
     box-sizing: border-box;
 }
 
+/* Line number input - auto width */
+.editable-items-table td.col-line-number input {
+    text-align: center;
+}
+
+/* Для цен - input должен показывать полное значение */
+.editable-items-table td.col-numeric input {
+    width: 100%;
+    min-width: 0; /* Позволяет сжиматься, но min-width ячейки гарантирует видимость */
+}
+
 .editable-items-table input:focus {
     outline: none;
     border-color: var(--primary-color);
 }
 
-/* Textarea для колонки товара - многострочный текст */
-.editable-items-table td.col-product textarea {
+/* Textarea для колонок с длинным текстом - многострочный текст */
+.editable-items-table td textarea {
     width: 100%;
+    min-width: 0; /* Позволяет textarea сжиматься */
     padding: 8px;
     border: 1px solid var(--border-color);
     border-radius: 6px;
@@ -1195,15 +1295,27 @@ body {
     white-space: pre-wrap; /* Сохраняем переносы строк и переносим текст */
     word-wrap: break-word;
     word-break: break-word;
-    min-height: 60px; /* Минимальная высота для многострочного текста */
-    resize: vertical; /* Разрешаем изменение размера по вертикали */
-    font-family: inherit; /* Наследуем шрифт */
+    resize: vertical; /* Allow vertical resizing */
+    font-family: inherit; /* Inherit font */
     line-height: 1.4;
+    /* Automatically adapts to content */
+    overflow-wrap: break-word;
+    height: auto; /* Auto height based on content */
 }
 
 .editable-items-table td.col-product textarea:focus {
     outline: none;
     border-color: var(--primary-color);
+}
+
+/* Code column textarea - auto height based on content */
+.editable-items-table td.col-code textarea {
+    resize: vertical;
+}
+
+/* Product description textarea - auto height based on content */
+.editable-items-table td.col-long-descriptive textarea {
+    resize: vertical;
 }
 
 .save-section {

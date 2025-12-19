@@ -488,11 +488,22 @@ class WebAPI:
             """
             return {
                 "max_file_size_mb": self.config.max_file_size_mb,
-                "column_type_line_number_keys": self.config.column_type_line_number_keys.split(','),
-                "column_type_product_keys": self.config.column_type_product_keys.split(','),
-                "column_type_price_keys": self.config.column_type_price_keys.split(','),
-                "column_type_quantity_keys": self.config.column_type_quantity_keys.split(','),
-                "column_type_code_keys": self.config.column_type_code_keys.split(',')
+                # Column analysis thresholds
+                "column_analysis_very_short_multiplier": self.config.column_analysis_very_short_multiplier,
+                "column_analysis_numeric_ratio_threshold": self.config.column_analysis_numeric_ratio_threshold,
+                "column_analysis_long_text_avg_threshold": self.config.column_analysis_long_text_avg_threshold,
+                "column_analysis_long_text_words_threshold": self.config.column_analysis_long_text_words_threshold,
+                "column_analysis_short_repetitive_ratio": self.config.column_analysis_short_repetitive_ratio,
+                "column_analysis_short_repetitive_avg_threshold": self.config.column_analysis_short_repetitive_avg_threshold,
+                "column_analysis_code_numeric_min": self.config.column_analysis_code_numeric_min,
+                "column_analysis_code_numeric_max": self.config.column_analysis_code_numeric_max,
+                "column_analysis_code_unique_min": self.config.column_analysis_code_unique_min,
+                "column_analysis_code_wrap_multiplier": self.config.column_analysis_code_wrap_multiplier,
+                "column_analysis_universal_short_threshold": self.config.column_analysis_universal_short_threshold,
+                "column_analysis_universal_variation_threshold": self.config.column_analysis_universal_variation_threshold,
+                "column_analysis_textarea_word_multiplier": self.config.column_analysis_textarea_word_multiplier,
+                "column_analysis_code_min_length_multiplier": self.config.column_analysis_code_min_length_multiplier,
+                "column_analysis_words_divisor": self.config.column_analysis_words_divisor
             }
 
         @self.app.get("/health", response_model=HealthResponse)

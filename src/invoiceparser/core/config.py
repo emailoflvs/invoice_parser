@@ -207,26 +207,70 @@ class Config(BaseSettings):
     )  # Название листа для сохранения позиций (items) в Google Sheets
 
     # Column type detection settings (for table columns)
-    column_type_line_number_keys: str = Field(
-        alias="COLUMN_TYPE_LINE_NUMBER_KEYS",
-        default="no,line_number,number"
-    )  # Keys that identify line number column (comma-separated)
-    column_type_product_keys: str = Field(
-        alias="COLUMN_TYPE_PRODUCT_KEYS",
-        default="description,item_name,product_name,name"
-    )  # Keys that identify product description column (comma-separated)
-    column_type_price_keys: str = Field(
-        alias="COLUMN_TYPE_PRICE_KEYS",
-        default="price,amount,sum,total,unit_price,price_no_vat,price_without_vat"
-    )  # Keys that identify price/amount column (comma-separated)
-    column_type_quantity_keys: str = Field(
-        alias="COLUMN_TYPE_QUANTITY_KEYS",
-        default="quantity"
-    )  # Keys that identify quantity column (comma-separated)
-    column_type_code_keys: str = Field(
-        alias="COLUMN_TYPE_CODE_KEYS",
-        default="code,sku,article,ukt_zed"
-    )  # Keys that identify code column (comma-separated)
+    # Column type detection is fully automatic based on content analysis
+    # No predefined keys - works with any document structure and language
+
+    # Column analysis thresholds (all configurable via .env)
+    column_analysis_very_short_multiplier: float = Field(
+        alias="COLUMN_ANALYSIS_VERY_SHORT_MULTIPLIER",
+        default=1.5
+    )  # maxLength <= minLength * this → very short numeric
+    column_analysis_numeric_ratio_threshold: float = Field(
+        alias="COLUMN_ANALYSIS_NUMERIC_RATIO_THRESHOLD",
+        default=0.5
+    )  # numericRatio threshold for numeric detection
+    column_analysis_long_text_avg_threshold: float = Field(
+        alias="COLUMN_ANALYSIS_LONG_TEXT_AVG_THRESHOLD",
+        default=0.5
+    )  # avgLength > (minLength + maxLength) * this → long text
+    column_analysis_long_text_words_threshold: float = Field(
+        alias="COLUMN_ANALYSIS_LONG_TEXT_WORDS_THRESHOLD",
+        default=1.0
+    )  # avgWords > totalValues / uniqueCount * this → long text
+    column_analysis_short_repetitive_ratio: float = Field(
+        alias="COLUMN_ANALYSIS_SHORT_REPETITIVE_RATIO",
+        default=1.0
+    )  # repetitionRatio > uniqueRatio * this → short repetitive
+    column_analysis_short_repetitive_avg_threshold: float = Field(
+        alias="COLUMN_ANALYSIS_SHORT_REPETITIVE_AVG_THRESHOLD",
+        default=0.5
+    )  # avgLength < (minLength + maxLength) * this → short repetitive
+    column_analysis_code_numeric_min: float = Field(
+        alias="COLUMN_ANALYSIS_CODE_NUMERIC_MIN",
+        default=0.2
+    )  # Minimum numericRatio for code detection
+    column_analysis_code_numeric_max: float = Field(
+        alias="COLUMN_ANALYSIS_CODE_NUMERIC_MAX",
+        default=0.8
+    )  # Maximum numericRatio for code detection (mixed alphanumeric)
+    column_analysis_code_unique_min: float = Field(
+        alias="COLUMN_ANALYSIS_CODE_UNIQUE_MIN",
+        default=0.3
+    )  # Minimum uniqueRatio for code detection
+    column_analysis_code_wrap_multiplier: float = Field(
+        alias="COLUMN_ANALYSIS_CODE_WRAP_MULTIPLIER",
+        default=1.5
+    )  # maxLength > avgLength * this → needs wrapping
+    column_analysis_universal_short_threshold: float = Field(
+        alias="COLUMN_ANALYSIS_UNIVERSAL_SHORT_THRESHOLD",
+        default=0.3
+    )  # relativeLength < this → center align
+    column_analysis_universal_variation_threshold: float = Field(
+        alias="COLUMN_ANALYSIS_UNIVERSAL_VARIATION_THRESHOLD",
+        default=0.5
+    )  # lengthVariation < this → uniform length
+    column_analysis_textarea_word_multiplier: float = Field(
+        alias="COLUMN_ANALYSIS_TEXTAREA_WORD_MULTIPLIER",
+        default=15.0
+    )  # fieldValue.length > avgWordLength * this → needs textarea
+    column_analysis_code_min_length_multiplier: float = Field(
+        alias="COLUMN_ANALYSIS_CODE_MIN_LENGTH_MULTIPLIER",
+        default=2.0
+    )  # avgLength >= minLength * this → code detection minimum length
+    column_analysis_words_divisor: float = Field(
+        alias="COLUMN_ANALYSIS_WORDS_DIVISOR",
+        default=2.0
+    )  # totalValues / (uniqueCount * this) → words threshold for wrapping
 
     @classmethod
     def load(cls) -> "Config":

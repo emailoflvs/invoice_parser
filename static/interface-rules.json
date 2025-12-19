@@ -140,8 +140,9 @@
         "label_priority": ["_label", "label", "field_mapping", "key"]
       },
       "column_order": {
-        "priority": ["no", "line_number", "article", "ukt_zed", "description", "item_name", "product_name", "quantity", "unit", "unit_price", "price_no_vat", "price_without_vat", "total_price", "sum_no_vat", "total_without_vat", "amount_excluding_vat"],
-        "then_others": true
+        "priority": [],
+        "then_others": true,
+        "description": "Column order is determined dynamically from column_mapping in parsed data. No hardcoded priority list."
       },
       "hide_columns": {
         "suffixes": ["_label"],

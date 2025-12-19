@@ -44,6 +44,9 @@ class InvoicePostProcessor:
         # Извлекаем основные ключи таблицы
         if "column_mapping" in items_json:
             table_data["column_mapping"] = items_json["column_mapping"]
+            # CRITICAL: Preserve column order - JSON objects may lose key order during serialization
+            # Store the original order as a separate array
+            table_data["column_order"] = list(items_json["column_mapping"].keys())
 
         if "line_items" in items_json:
             table_data["line_items"] = items_json["line_items"]

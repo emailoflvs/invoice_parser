@@ -128,13 +128,13 @@ async function handleLogin(e) {
     const password = elements.password.value.trim();
 
     if (!username || !password) {
-        showLoginMessage('Будь ласка, введіть ім\'я користувача та пароль', true);
+        showLoginMessage('Please enter username and password', true);
         return;
     }
 
     // Disable button
     elements.loginButton.disabled = true;
-    elements.loginButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Вхід...';
+    elements.loginButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Logging in...';
     clearLoginMessage();
 
     try {
@@ -149,7 +149,7 @@ async function handleLogin(e) {
         const data = await response.json();
 
         if (!response.ok) {
-            throw new Error(data.detail || 'Помилка входу');
+            throw new Error(data.detail || 'Login error');
         }
 
         // Save token
@@ -165,7 +165,7 @@ async function handleLogin(e) {
         }
 
         // Show success message
-        showLoginMessage('Успішний вхід! Перенаправлення...', false);
+        showLoginMessage('Login successful! Redirecting...', false);
 
         // Check for redirect parameter
         const urlParams = new URLSearchParams(window.location.search);
@@ -181,9 +181,9 @@ async function handleLogin(e) {
         }, 1000);
 
     } catch (error) {
-        showLoginMessage(error.message || 'Помилка входу. Перевірте ім\'я користувача та пароль', true);
+        showLoginMessage(error.message || 'Login error. Please check your username and password', true);
         elements.loginButton.disabled = false;
-        elements.loginButton.innerHTML = '<i class="fas fa-sign-in-alt"></i> Увійти';
+        elements.loginButton.innerHTML = '<i class="fas fa-sign-in-alt"></i> Log In';
     }
 }
 
@@ -221,12 +221,12 @@ async function handleRegister() {
     const password = elements.registerPassword.value.trim();
 
     if (!username || !password) {
-        showRegisterMessage('Будь ласка, заповніть всі обов\'язкові поля', true);
+        showRegisterMessage('Please fill in all required fields', true);
         return;
     }
 
     elements.saveRegister.disabled = true;
-    elements.saveRegister.textContent = 'Реєстрація...';
+    elements.saveRegister.textContent = 'Registering...';
     clearRegisterMessage();
 
     try {
@@ -245,10 +245,10 @@ async function handleRegister() {
         const data = await response.json();
 
         if (!response.ok) {
-            throw new Error(data.detail || 'Помилка реєстрації');
+            throw new Error(data.detail || 'Registration error');
         }
 
-        showRegisterMessage('Реєстрація успішна! Виконується вхід...', false);
+        showRegisterMessage('Registration successful! Logging in...', false);
 
         // Auto login after registration
         setTimeout(async () => {
@@ -267,7 +267,7 @@ async function handleRegister() {
                     state.authToken = loginData.access_token;
                     localStorage.setItem('authToken', loginData.access_token);
                     hideRegisterModal();
-                    showLoginMessage('Реєстрація та вхід виконано успішно! Перенаправлення...', false);
+                    showLoginMessage('Registration and login successful! Redirecting...', false);
 
                     // Check for redirect parameter
                     const urlParams = new URLSearchParams(window.location.search);
@@ -281,18 +281,18 @@ async function handleRegister() {
                         }
                     }, 1000);
                 } else {
-                    showRegisterMessage('Реєстрація успішна, але вхід не вдався. Спробуйте увійти вручну.', true);
+                    showRegisterMessage('Registration successful, but login failed. Please try logging in manually.', true);
                 }
             } catch (error) {
-                showRegisterMessage('Реєстрація успішна, але вхід не вдався. Спробуйте увійти вручну.', true);
+                showRegisterMessage('Registration successful, but login failed. Please try logging in manually.', true);
             }
         }, 1000);
 
     } catch (error) {
-        showRegisterMessage(error.message || 'Помилка реєстрації', true);
+        showRegisterMessage(error.message || 'Registration error', true);
     } finally {
         elements.saveRegister.disabled = false;
-        elements.saveRegister.textContent = 'Зареєструватися';
+        elements.saveRegister.textContent = 'Register';
     }
 }
 
@@ -324,20 +324,20 @@ async function handleForgotPassword() {
     const input = elements.forgotPasswordInput.value.trim();
 
     if (!input) {
-        showForgotPasswordMessage('Будь ласка, введіть email або ім\'я користувача', true);
+        showForgotPasswordMessage('Please enter email or username', true);
         return;
     }
 
     elements.sendResetPassword.disabled = true;
-    elements.sendResetPassword.textContent = 'Відправка...';
+    elements.sendResetPassword.textContent = 'Sending...';
     clearForgotPasswordMessage();
 
     // TODO: Implement password reset API endpoint
     // For now, just show a message
     setTimeout(() => {
-        showForgotPasswordMessage('Функція відновлення пароля поки не реалізована. Зверніться до адміністратора.', true);
+        showForgotPasswordMessage('Password recovery function is not yet implemented. Please contact administrator.', true);
         elements.sendResetPassword.disabled = false;
-        elements.sendResetPassword.textContent = 'Відправити';
+        elements.sendResetPassword.textContent = 'Send';
     }, 1000);
 }
 

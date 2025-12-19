@@ -7,7 +7,15 @@ const state = {
     editedData: null,
     interfaceRules: null,  // Правила интерфейса из interface-rules.json
     config: {
-        maxFileSizeMB: 50  // Значение по умолчанию, загружается из API
+        maxFileSizeMB: 50,  // Default value, loaded from API
+        columnTypeKeys: {
+            lineNumber: [],
+            product: [],
+            price: [],
+            quantity: [],
+            code: []
+        },
+        columnAnalysis: {} // Loaded from server config - no hardcoded defaults
     },
     loginModalShown: false,  // Флаг, чтобы избежать повторного показа модального окна
     initialized: false  // Флаг, чтобы избежать повторной инициализации
@@ -33,14 +41,70 @@ async function loadInterfaceRules() {
     }
 }
 
-// Загрузка конфигурации с сервера
+// Load configuration from server
 async function loadConfig() {
     try {
         const response = await fetch('/api/config');
         if (response.ok) {
             const config = await response.json();
             state.config.maxFileSizeMB = config.max_file_size_mb || 50;
+            // Load column type detection keys
+            if (config.column_type_line_number_keys) {
+                state.config.columnTypeKeys.lineNumber = config.column_type_line_number_keys;
+            }
+            if (config.column_type_product_keys) {
+                state.config.columnTypeKeys.product = config.column_type_product_keys;
+            }
+            if (config.column_type_price_keys) {
+                state.config.columnTypeKeys.price = config.column_type_price_keys;
+            }
+            if (config.column_type_quantity_keys) {
+                state.config.columnTypeKeys.quantity = config.column_type_quantity_keys;
+            }
+            if (config.column_type_code_keys) {
+                state.config.columnTypeKeys.code = config.column_type_code_keys;
+            }
+            // Load column analysis thresholds
+            if (config.column_analysis_very_short_multiplier !== undefined) {
+                state.config.columnAnalysis = {
+                    veryShortMultiplier: config.column_analysis_very_short_multiplier,
+                    numericRatioThreshold: config.column_analysis_numeric_ratio_threshold,
+                    longTextAvgThreshold: config.column_analysis_long_text_avg_threshold,
+                    longTextWordsThreshold: config.column_analysis_long_text_words_threshold,
+                    shortRepetitiveRatio: config.column_analysis_short_repetitive_ratio,
+                    shortRepetitiveAvgThreshold: config.column_analysis_short_repetitive_avg_threshold,
+                    codeNumericMin: config.column_analysis_code_numeric_min,
+                    codeNumericMax: config.column_analysis_code_numeric_max,
+                    codeUniqueMin: config.column_analysis_code_unique_min,
+                    codeWrapMultiplier: config.column_analysis_code_wrap_multiplier,
+                    universalShortThreshold: config.column_analysis_universal_short_threshold,
+                    universalVariationThreshold: config.column_analysis_universal_variation_threshold,
+                    textareaWordMultiplier: config.column_analysis_textarea_word_multiplier,
+                    codeMinLengthMultiplier: config.column_analysis_code_min_length_multiplier,
+                    wordsDivisor: config.column_analysis_words_divisor
+                };
+            } else {
+                // Fallback defaults if config not loaded (should not happen in production)
+                state.config.columnAnalysis = {
+                    veryShortMultiplier: 1.5,
+                    numericRatioThreshold: 0.5,
+                    longTextAvgThreshold: 0.5,
+                    longTextWordsThreshold: 1.0,
+                    shortRepetitiveRatio: 1.0,
+                    shortRepetitiveAvgThreshold: 0.5,
+                    codeNumericMin: 0.2,
+                    codeNumericMax: 0.8,
+                    codeUniqueMin: 0.3,
+                    codeWrapMultiplier: 1.5,
+                    universalShortThreshold: 0.3,
+                    universalVariationThreshold: 0.5,
+                    textareaWordMultiplier: 15.0,
+                    codeMinLengthMultiplier: 2.0,
+                    wordsDivisor: 2.0
+                };
+            }
             console.log('Config loaded:', state.config);
+            console.log('Column analysis thresholds:', state.config.columnAnalysis);
         } else {
             console.warn('Failed to load config, using defaults');
         }
@@ -98,6 +162,11 @@ async function init() {
     // Инициализируем элементы DOM
     initElements();
 
+    // Load config FIRST - before any other operations
+    console.log('Loading configuration from server...');
+    await loadConfig();
+    console.log('Configuration loaded. Column analysis thresholds:', state.config.columnAnalysis);
+
     // Обновляем токен из localStorage (на случай, если он был сохранен на странице входа)
     state.authToken = localStorage.getItem('authToken') || '';
 
@@ -125,7 +194,20 @@ async function init() {
 
     // Проверяем, есть ли document_id в URL для загрузки документа
     const urlParams = new URLSearchParams(window.location.search);
-    const documentId = urlParams.get('document_id');
+    let documentId = urlParams.get('document_id');
+
+    // If no document_id in URL, try to load from localStorage (auto-reload after page refresh)
+    if (!documentId) {
+        documentId = localStorage.getItem('lastDocumentId');
+        if (documentId) {
+            console.log(`Found saved document_id ${documentId} in localStorage, loading...`);
+            // Update URL to include document_id for better UX
+            const newUrl = new URL(window.location);
+            newUrl.searchParams.set('document_id', documentId);
+            window.history.replaceState({}, '', newUrl);
+        }
+    }
+
     if (documentId) {
         console.log(`Loading document ${documentId} for editing...`);
         await loadDocumentForEditing(parseInt(documentId));
@@ -171,7 +253,7 @@ async function loadDocumentForEditing(documentId) {
         const result = await response.json();
 
         if (result.success && result.data) {
-            setProgress(90, 'Displaying form...');
+            setProgress(90, 'Displaying form...'); // Final step before completion
 
             // Set data for editing
             state.parsedData = {
@@ -182,6 +264,10 @@ async function loadDocumentForEditing(documentId) {
 
             // Set original_filename from data or use default value
             state.originalFilename = result.data.original_filename || `document_${documentId}`;
+
+            // Save document_id to localStorage for auto-reload on page refresh
+            localStorage.setItem('lastDocumentId', String(documentId));
+            console.log(`Saved document_id ${documentId} to localStorage for auto-reload`);
 
             // Show editing form
             hideProgress();
@@ -564,14 +650,14 @@ async function parseDocument(mode = 'detailed') {
             // Обработка различных типов ошибок
             let userMessage = '';
 
-            // Проверяем ошибки авторизации (401, 403)
+            // Check authorization errors (401, 403)
             if (response.status === 401 || response.status === 403) {
-                userMessage = '🔐 Требуется авторизация. Пожалуйста, войдите в систему.';
-                // Показываем форму логина
+                userMessage = '🔐 Authorization required. Please log in.';
+                // Show login form
                 localStorage.removeItem('authToken');
                 state.authToken = '';
                 showLoginModal();
-                // Не показываем ошибку, так как уже показали форму логина
+                // Don't show error, as we already showed login form
                 return;
             } else if (errorInfo.error_code) {
                 // Новый формат с кодами ошибок
@@ -608,6 +694,15 @@ async function parseDocument(mode = 'detailed') {
 
         if (data.success) {
             state.parsedData = data;
+
+            // Save document_id to localStorage if available (for auto-reload on page refresh)
+            // Check in data.data._meta.document_id or data.data.document_id
+            const documentId = data.data?._meta?.document_id || data.data?.document_id;
+            if (documentId) {
+                localStorage.setItem('lastDocumentId', String(documentId));
+                console.log(`Saved document_id ${documentId} to localStorage for auto-reload`);
+            }
+
             displayResults(data);
         } else {
             throw new Error(data.error || '❌ Failed to process document. Please try again.');
@@ -622,9 +717,12 @@ async function parseDocument(mode = 'detailed') {
 function simulateProgress() {
     let progress = 0;
     const interval = setInterval(() => {
-        progress += Math.random() * 15;
-        if (progress > 90) {
-            progress = 90;
+        // Progress slowly grows with small random jumps
+        const maxProgress = 90; // Keep under 90% until actually complete
+        const increment = Math.random() * (maxProgress / 6);
+        progress += increment;
+        if (progress > maxProgress) {
+            progress = maxProgress;
             clearInterval(interval);
         }
         updateProgress(progress);
@@ -805,6 +903,8 @@ function showError(message) {
 function resetApp() {
     state.selectedFile = null;
     state.parsedData = null;
+    // Clear saved document_id when user explicitly resets
+    localStorage.removeItem('lastDocumentId');
     removeFile();
     updateProgress(0);
     showSection('upload');
@@ -1010,11 +1110,17 @@ function displayEditableData(data) {
         const isNameField = key === 'name';
         // Если в ключе есть слово "address" (например, "address", "bank_address", "edit_address_xxx"), используем textarea
         const isAddressField = key.toLowerCase().includes('address');
-        if (isJsonString || isNameField || isAddressField || (typeof fieldValue === 'string' && fieldValue.length > 60)) {
+        // Determine if field needs multiline textarea based on content analysis
+        const avgWordLength = typeof fieldValue === 'string' ? fieldValue.split(/\s+/).filter(w => w.length > 0).length : 0;
+        const textareaMultiplier = state.config.columnAnalysis?.textareaWordMultiplier || 15.0;
+        const needsTextarea = isJsonString || isNameField || isAddressField ||
+                             (typeof fieldValue === 'string' && avgWordLength > 0 && fieldValue.length > avgWordLength * textareaMultiplier);
+
+        if (needsTextarea) {
             return `
                 <div class="editable-field">
                     <label class="editable-label" for="${fieldId}">${escapeHtml(displayLabel || '')}</label>
-                    <textarea id="${fieldId}" class="editable-textarea" data-key="${key}" ${isJsonString ? 'style="min-height: 120px; font-family: monospace; font-size: 0.9rem;"' : ''}>${escapeHtml(fieldValue)}</textarea>
+                    <textarea id="${fieldId}" class="editable-textarea" data-key="${key}" ${isJsonString ? 'style="font-family: monospace; font-size: 0.9rem;"' : ''}>${escapeHtml(fieldValue)}</textarea>
                 </div>
             `;
         } else {
@@ -1232,8 +1338,9 @@ function displayEditableData(data) {
             if (numericValue !== null) {
                 html += createField(key, numericValue, displayLabel, data.totals);
 
-                // Под числовым полем добавляем поле прописью
+                // Под числовым полем добавляем поле прописью (только если найдено и соответствует)
                 let amountInWords = null;
+                let amountInWordsValid = false;
 
                 // Ищем соответствующее значение прописью в amounts_in_words
                 if (data.amounts_in_words) {
@@ -1291,11 +1398,22 @@ function displayEditableData(data) {
                             }
                         }
                     }
+
+                    // Проверяем соответствие числового значения и текстового представления
+                    // Всегда проверяем соответствие, чтобы не показывать неверные данные
+                    if (amountInWords && numericValue !== null) {
+                        amountInWordsValid = validateAmountInWords(numericValue, amountInWords);
+                        if (!amountInWordsValid) {
+                            // Если не соответствует, не показываем текстовое представление
+                            amountInWords = null;
+                        }
+                    }
                 }
 
-                // Всегда показываем поле для ввода прописью, даже если значение не найдено
-                // Используем тот же ключ для сохранения, но с суффиксом _in_words
-                html += createField(`${key}_in_words`, amountInWords || '', '', data.totals);
+                // Показываем поле для ввода прописью только если значение найдено и соответствует числу
+                if (amountInWords && amountInWordsValid) {
+                    html += createField(`${key}_in_words`, amountInWords, '', data.totals);
+                }
             }
         }
         html += '</div>';
@@ -1321,6 +1439,8 @@ function displayEditableData(data) {
     }
 
     // Process signatures
+    // ЗАКОММЕНТИРОВАНО: раздел будет исправлен в другом релизе
+    /*
     if (data.signatures && Array.isArray(data.signatures) && data.signatures.length > 0) {
         html += '<div class="editable-group">';
         // Используем _label из данных, если есть, иначе только иконку
@@ -1347,6 +1467,20 @@ function displayEditableData(data) {
                         continue;
                     }
 
+                    // Для технических полей (is_signed, is_stamped) показываем только если есть _label
+                    // Это мультиязычное решение без хардкода
+                    const technicalFields = ['is_signed', 'is_stamped'];
+                    const isTechnicalField = technicalFields.includes(key);
+
+                    if (isTechnicalField) {
+                        // Показываем техническое поле только если есть _label (мультиязычная метка)
+                        const fieldLabel = extractLabel(value, key);
+                        if (!fieldLabel) {
+                            // Если нет _label, не показываем техническое поле
+                            continue;
+                        }
+                    }
+
                     const fieldKey = `signature_${index}_${key}`;
                     // Не используем key как fallback - только extractLabel или null
                     const fieldLabel = extractLabel(value, key) || null;
@@ -1356,6 +1490,7 @@ function displayEditableData(data) {
         });
         html += '</div>';
     }
+    */
 
     // Process other_fields - в grid
     if (data.other_fields) {
@@ -1471,7 +1606,7 @@ function displayEditableData(data) {
     let items = data.line_items || data.items || [];
     let column_mapping = data.column_mapping || {};
 
-    // Если товары в table_data
+        // If items are in table_data
     if (data.table_data) {
         items = data.table_data.line_items || data.table_data.items || items;
         column_mapping = data.table_data.column_mapping || column_mapping;
@@ -1479,7 +1614,7 @@ function displayEditableData(data) {
 
     if (items.length > 0) {
         html += '<div class="editable-group" style="grid-column: 1 / -1;">';
-        // Используем _label из table_data или данных, если есть, иначе только иконку
+        // Use _label from table_data or data if available, otherwise only icon
         const tableTitle = (data.table_data && data.table_data._label) ? data.table_data._label :
                           (data._label || '');
         html += `<div class="editable-group-title"><i class="fas fa-list"></i> ${escapeHtml(tableTitle)}</div>`;
@@ -1552,89 +1687,149 @@ function displayEditableData(data) {
             };
         };
 
-        // Функция для определения типа и стилей колонки на основе анализа (без хардкода)
-        const determineColumnType = (analysis, label) => {
+        // UNIVERSAL column type determination - works with ANY columns, ANY data
+        // No specific column types - just simple rules based on content analysis
+        // All widths automatic - browser calculates based on content
+        // Fully responsive - works on all devices (desktop, tablet, mobile)
+        const determineColumnType = (analysis, label, key) => {
             if (analysis.isEmpty) {
                 return {
                     type: 'empty',
-                    minWidth: 80,
-                    maxWidth: 120,
+                    width: 'auto',
                     textAlign: 'left',
                     whiteSpace: 'nowrap',
                     useTextarea: false
                 };
             }
 
-            // Колонка номера строки - очень короткие значения (1-3 символа), обычно последовательные числа
-            if (analysis.maxLength <= 3 && analysis.avgLength <= 2 && analysis.numericRatio > 0.9) {
+            // PURE CONTENT-BASED ANALYSIS - NO PREDEFINED KEYS
+            // Works with ANY document structure, ANY language, ANY format
+            // All thresholds MUST come from config - no hardcoded fallbacks
+            const thresholds = state.config.columnAnalysis;
+            if (!thresholds || Object.keys(thresholds).length === 0) {
+                console.error('Column analysis thresholds not loaded from config!');
+                // Return safe defaults (should not happen if config loaded properly)
+                return {
+                    type: 'universal',
+                    width: 'auto',
+                    textAlign: 'left',
+                    whiteSpace: 'normal',
+                    useTextarea: true
+                };
+            }
+
+            // RULE 1: Line numbers
+            // Very short, all numeric, highly unique (1, 2, 3, 4...)
+            // Characteristics: minLength ≈ maxLength, 100% numeric, 100% unique
+            const isLineNumber = analysis.numericRatio === 1.0 && // All values are numbers
+                                analysis.uniqueRatio === 1.0 && // All values are unique (1, 2, 3...)
+                                analysis.maxLength <= 3; // Very short (typically 1-3 digits)
+
+            if (isLineNumber) {
                 return {
                     type: 'line-number',
-                    minWidth: 40,
-                    maxWidth: 50,
+                    width: 'max-content', // Always visible, never truncated
                     textAlign: 'center',
                     whiteSpace: 'nowrap',
                     useTextarea: false
                 };
             }
 
-            // Числовые колонки - высокий процент числовых значений, средняя длина
-            if (analysis.numericRatio > 0.8 && analysis.avgLength < 20) {
+            // RULE 2: Numeric fields (prices, amounts)
+            // High numeric ratio but NOT line numbers
+            const numericThreshold = 1 - thresholds.numericRatioThreshold; // e.g. 0.5 → threshold 0.5 (50%)
+            const isMostlyNumeric = analysis.numericRatio >= numericThreshold && !isLineNumber;
+
+            console.log(`  Rule 2 (Numeric): numericRatio=${analysis.numericRatio}, threshold=${numericThreshold}, isMostlyNumeric=${isMostlyNumeric}`);
+
+            if (isMostlyNumeric) {
                 return {
                     type: 'numeric',
-                    minWidth: Math.max(100, Math.min(analysis.maxLength * 8, 150)),
-                    maxWidth: Math.max(120, Math.min(analysis.maxLength * 10, 200)),
+                    width: 'max-content', // Always visible, never truncated
                     textAlign: 'right',
                     whiteSpace: 'nowrap',
                     useTextarea: false
                 };
             }
 
-            // Очень короткие повторяющиеся значения (единицы измерения, статусы)
-            if (analysis.avgLength < 8 && analysis.repetitionRatio > 0.3 && analysis.avgWords <= 1.5) {
+            // RULE 3: Codes (mixed alphanumeric or pure numeric with sufficient length)
+            // Medium to long length, high uniqueness
+            const codeMinLength = 4; // Minimum 4 characters for codes
+            const isCode = analysis.minLength >= codeMinLength &&
+                          analysis.uniqueRatio > thresholds.codeUniqueMin &&
+                          !isLineNumber;
+
+            console.log(`  Rule 3 (Code): minLen=${analysis.minLength}>=${codeMinLength}, unique=${analysis.uniqueRatio}>${thresholds.codeUniqueMin}, isCode=${isCode}`);
+
+            if (isCode) {
+                const needsWrap = analysis.maxLength > analysis.avgLength * thresholds.codeWrapMultiplier;
+                return {
+                    type: 'code',
+                    width: 'max-content', // Always visible, wraps if needed
+                    textAlign: 'left',
+                    whiteSpace: needsWrap ? 'normal' : 'nowrap',
+                    useTextarea: needsWrap,
+                    wordWrap: needsWrap ? 'break-word' : undefined
+                };
+            }
+
+            // RULE 4: Short repetitive (units, statuses like "шт", "кг", etc.)
+            const isShortRepetitive = analysis.repetitionRatio > analysis.uniqueRatio * thresholds.shortRepetitiveRatio &&
+                                     analysis.avgLength < (analysis.minLength + analysis.maxLength) * thresholds.shortRepetitiveAvgThreshold;
+
+            console.log(`  Rule 4 (Short repetitive): repetition=${analysis.repetitionRatio}>${analysis.uniqueRatio * thresholds.shortRepetitiveRatio}, avgLen=${analysis.avgLength}<${(analysis.minLength + analysis.maxLength) * thresholds.shortRepetitiveAvgThreshold}, isShortRep=${isShortRepetitive}`);
+
+            if (isShortRepetitive) {
                 return {
                     type: 'short-repetitive',
-                    minWidth: Math.max(60, Math.min(analysis.maxLength * 10, 100)),
-                    maxWidth: Math.max(80, Math.min(analysis.maxLength * 12, 120)),
+                    width: 'max-content', // Always visible, never truncated
                     textAlign: 'center',
                     whiteSpace: 'nowrap',
                     useTextarea: false
                 };
             }
 
-            // Long descriptive columns (product descriptions)
-            if (analysis.avgLength > 35 || analysis.maxLength > 80 || analysis.avgWords > 3) {
-                return {
-                    type: 'long-descriptive',
-                    minWidth: 200,
-                    maxWidth: 400,
-                    textAlign: 'left',
-                    whiteSpace: 'normal',
-                    useTextarea: true,
-                    wordWrap: 'break-word'
-                };
+            // RULE 5: DEFAULT - Text columns (descriptions, notes, addresses, comments, etc.)
+            // All remaining columns - any text content that didn't match above rules
+            const relativeLength = analysis.avgLength / (analysis.maxLength || 1);
+            const lengthVariation = (analysis.maxLength - analysis.minLength) / (analysis.maxLength || 1);
+
+            // Determine alignment based on content characteristics
+            let textAlign = 'left'; // Default for text
+            if (relativeLength < thresholds.universalShortThreshold &&
+                lengthVariation < thresholds.universalVariationThreshold) {
+                textAlign = 'center'; // Short uniform values
             }
 
-            // Средние колонки (коды, артикулы, средние тексты)
-            const calculatedMinWidth = Math.max(100, Math.min(analysis.avgLength * 8, 180));
-            const calculatedMaxWidth = Math.max(120, Math.min(analysis.maxLength * 7, 250));
+            // Determine if wrapping is needed
+            const lengthMidpoint = (analysis.minLength + analysis.maxLength) * thresholds.longTextAvgThreshold;
+            const wordsThreshold = analysis.totalValues / Math.max(analysis.uniqueCount, 1) * thresholds.longTextWordsThreshold;
+            const needsWrap = analysis.avgLength > lengthMidpoint ||
+                             analysis.avgWords > wordsThreshold;
 
             return {
-                type: 'medium',
-                minWidth: calculatedMinWidth,
-                maxWidth: calculatedMaxWidth,
-                textAlign: 'left',
-                whiteSpace: 'nowrap',
-                useTextarea: false
+                type: 'text', // Generic text type - browser distributes width
+                width: 'auto', // Browser distributes space among all 'auto' columns
+                textAlign: textAlign,
+                whiteSpace: needsWrap ? 'normal' : 'nowrap',
+                useTextarea: needsWrap,
+                wordWrap: needsWrap ? 'break-word' : undefined
             };
         };
 
-        // Используем порядок колонок СТРОГО из column_mapping (порядок из оригинального документа)
+        // Use column order STRICTLY from column_order or column_mapping (order from original document)
         let allKeys;
-        if (column_mapping && Object.keys(column_mapping).length > 0) {
-            // Используем ТОЛЬКО колонки из column_mapping, в том порядке, в котором они там указаны
+        if (table_data.column_order && Array.isArray(table_data.column_order) && table_data.column_order.length > 0) {
+            // CRITICAL: Use column_order array to preserve exact column order from parsing
+            // JSON objects may lose key order during serialization, so we use explicit array
+            allKeys = table_data.column_order;
+            console.log('Using column_order from table_data:', allKeys);
+        } else if (column_mapping && Object.keys(column_mapping).length > 0) {
+            // Fallback: Use ONLY columns from column_mapping, in the order they are specified
             allKeys = Object.keys(column_mapping);
+            console.warn('column_order not found, falling back to Object.keys(column_mapping):', allKeys);
 
-            // Проверяем, есть ли в данных ключи, которых нет в column_mapping (для отладки)
+            // Check if there are keys in data that are not in column_mapping (for debugging)
             if (firstItem && typeof firstItem === 'object') {
                 const itemKeys = Object.keys(firstItem).filter(key => !key.endsWith('_label') && key !== 'raw');
                 const missingKeys = itemKeys.filter(k => !allKeys.includes(k));
@@ -1644,7 +1839,7 @@ function displayEditableData(data) {
                 }
             }
         } else {
-            // Fallback: используем порядок из firstItem
+            // Fallback: use order from firstItem
             if (firstItem && typeof firstItem === 'object') {
                 allKeys = Object.keys(firstItem).filter(key => !key.endsWith('_label') && key !== 'raw');
             } else {
@@ -1652,59 +1847,79 @@ function displayEditableData(data) {
             }
         }
 
-        // Убираем служебные поля, которые не должны отображаться (например, raw)
+        // Remove service fields that should not be displayed (e.g., raw)
         allKeys = allKeys.filter(k => k !== 'raw');
 
         // Debug: log column mapping and keys for troubleshooting (temporary)
         console.log('table_data.column_mapping:', column_mapping);
         console.log('line_items sample keys:', firstItem ? Object.keys(firstItem) : []);
 
-        // Анализируем все колонки и определяем их типы динамически
+        // Analyze all columns and determine their types dynamically
+        console.log('Starting column analysis...');
+        console.log('Available keys:', allKeys);
+        console.log('Config state:', {
+            columnTypeKeys: state.config.columnTypeKeys,
+            columnAnalysis: state.config.columnAnalysis
+        });
         const columnAnalyses = {};
         const columnTypes = {};
         for (const key of allKeys) {
             const analysis = analyzeColumn(key, items);
             columnAnalyses[key] = analysis;
             const label = (column_mapping && column_mapping[key]) || (firstItem ? getLabel(firstItem, key) : null) || key;
-            columnTypes[key] = determineColumnType(analysis, label);
+            // Pass key (not label) for type detection - multilingual support
+            const colType = determineColumnType(analysis, label, key);
+            columnTypes[key] = colType;
+            console.log(`Column "${key}" (label: "${label}"):`, {
+                analysis: analysis,
+                type: colType.type,
+                width: colType.width,
+                useTextarea: colType.useTextarea
+            });
         }
+
+        // DEBUG: Show column types before rendering
+        console.log('=== COLUMN TYPES FOR RENDERING ===');
+        for (const key of allKeys) {
+            if (!key) continue;
+            const colType = columnTypes[key];
+            console.log(`Key: "${key}" → Type: "${colType.type}" | Width: "${colType.width}" | Textarea: ${colType.useTextarea}`);
+        }
+        console.log('===================================');
 
         html += '<thead><tr>';
         for (const key of allKeys) {
-            if (!key) continue; // Пропускаем пустые ключи
+            if (!key) continue; // Skip empty keys
             const label = (column_mapping && column_mapping[key]) || (firstItem ? getLabel(firstItem, key) : null) || key;
-            const safeLabel = label || key; // Защита от null/undefined
+            const safeLabel = label || key; // Protection from null/undefined
             const colType = columnTypes[key];
 
-            // Определяем стили для заголовка на основе типа колонки
-            // Заголовки переносим только если они не помещаются (определяется через CSS)
-            const headerStyle = `min-width: ${colType.minWidth}px; max-width: ${colType.maxWidth}px; text-align: ${colType.textAlign}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;`;
-            html += `<th class="col-${colType.type}" style="${headerStyle}">${escapeHtml(safeLabel)}</th>`;
+            html += `<th class="col-${colType.type}">${escapeHtml(safeLabel)}</th>`;
         }
         html += '</tr></thead>';
 
         // Table body
         html += '<tbody>';
         items.forEach((item, index) => {
-            if (!item || typeof item !== 'object') return; // Пропускаем некорректные элементы
+            if (!item || typeof item !== 'object') return; // Skip invalid items
             html += '<tr>';
             for (const key of allKeys) {
-                if (!key) continue; // Пропускаем пустые ключи
+                if (!key) continue; // Skip empty keys
                 const value = item[key];
                 const fieldId = `item_${index}_${key}`;
                 const colType = columnTypes[key];
 
-                // Показываем все значения, извлекая из объектов с _label/value структурой
+                // Show all values, extracting from objects with _label/value structure
                 let displayValue = '';
                 if (value === null || value === undefined) {
                     displayValue = '';
                 } else if (typeof value === 'object' && !Array.isArray(value) && value !== null) {
-                    // Проверяем, является ли это объектом с _label/value структурой
+                    // Check if this is an object with _label/value structure
                     if ('value' in value) {
-                        // Извлекаем value из структуры
+                        // Extract value from structure
                         displayValue = String(value.value !== null && value.value !== undefined ? value.value : '');
                     } else {
-                        // Это другой объект - показываем как JSON
+                        // This is another object - show as JSON
                         displayValue = JSON.stringify(value, null, 2);
                     }
                 } else if (Array.isArray(value)) {
@@ -1713,14 +1928,26 @@ function displayEditableData(data) {
                     displayValue = String(value);
                 }
 
-                // Определяем стили для ячейки на основе типа колонки
-                const cellStyle = `min-width: ${colType.minWidth}px; max-width: ${colType.maxWidth}px; text-align: ${colType.textAlign}; white-space: ${colType.whiteSpace};`;
+                // Determine if textarea is needed (automatic decision based on analysis)
+                // Logic is determined by:
+                // 1. Column type analysis (determineColumnType) → sets colType.useTextarea
+                //    - Long text columns → useTextarea: true
+                //    - Codes with wrapping → useTextarea: true
+                //    - Universal columns with wrapping → useTextarea: true
+                // 2. Column wrapping capability → whiteSpace === 'normal'
+                //    - If column allows wrapping, it needs textarea to display properly
+                // 3. Actual content → displayValue.includes('\n')
+                //    - If data contains line breaks, must use textarea
+                const shouldUseTextarea = colType.useTextarea || // From analysis
+                    (colType.whiteSpace === 'normal') || // Column allows wrapping
+                    (displayValue.includes('\n')); // Multi-line content in data
 
-                // Используем textarea для длинных описательных колонок или если значение длинное
-                if (colType.useTextarea || (displayValue.length > 50 && colType.type === 'long-descriptive')) {
-                    html += `<td class="col-${colType.type}" style="${cellStyle}"><textarea id="${fieldId}" class="item-input" data-index="${index}" data-key="${key}" title="${escapeHtml(displayValue)}">${escapeHtml(displayValue)}</textarea></td>`;
+                if (shouldUseTextarea) {
+                    // Textarea without specifying rows - auto-expands based on content
+                    // Browser handles sizing automatically
+                    html += `<td class="col-${colType.type}"><textarea id="${fieldId}" class="item-input" data-index="${index}" data-key="${key}" title="${escapeHtml(displayValue)}">${escapeHtml(displayValue)}</textarea></td>`;
                 } else {
-                    html += `<td class="col-${colType.type}" style="${cellStyle}"><input type="text" id="${fieldId}" class="item-input" data-index="${index}" data-key="${key}" value="${escapeHtml(displayValue)}" title="${escapeHtml(displayValue)}"></td>`;
+                    html += `<td class="col-${colType.type}"><input type="text" id="${fieldId}" class="item-input" data-index="${index}" data-key="${key}" value="${escapeHtml(displayValue)}" title="${escapeHtml(displayValue)}"></td>`;
                 }
             }
             html += '</tr>';
@@ -2115,6 +2342,80 @@ function escapeHtml(text) {
         "'": '&#039;'
     };
     return String(text).replace(/[&<>"']/g, m => map[m]);
+}
+
+// Validate that amount in words corresponds to numeric value
+// Проверяет соответствие числового значения и текстового представления
+// Извлекает копейки из текста и сравнивает с числовым значением
+function validateAmountInWords(numericValue, textValue) {
+    if (!textValue || typeof textValue !== 'string') {
+        return false;
+    }
+
+    try {
+        // Преобразуем числовое значение в число
+        const num = parseFloat(numericValue);
+        if (isNaN(num)) {
+            return false;
+        }
+
+        // Вычисляем копейки из числового значения
+        const numericKopecks = Math.round((num - Math.floor(num)) * 100);
+        const numericMain = Math.floor(num);
+
+        // Извлекаем копейки из текста (ищем паттерны типа "97 копійок", "97 коп", "0.97" и т.д.)
+        // Паттерны для украинского и русского языков
+        const kopecksPatterns = [
+            /(\d+)\s*(?:копійок|копійки|копійка|коп|копейки|копейка|копеек)/i,
+            /(\d+)\s*(?:коп)/i,
+            /\.(\d{2})\b/,  // Десятичная часть (например, .97)
+            /,(\d{2})\b/    // Десятичная часть с запятой (например, ,97)
+        ];
+
+        let extractedKopecks = null;
+        for (const pattern of kopecksPatterns) {
+            const match = textValue.match(pattern);
+            if (match) {
+                extractedKopecks = parseInt(match[1], 10);
+                break;
+            }
+        }
+
+        // Если нашли копейки в тексте, сравниваем с числовым значением
+        if (extractedKopecks !== null) {
+            // Сравниваем копейки с допуском (может быть округление)
+            const kopecksMatch = Math.abs(extractedKopecks - numericKopecks) <= 1;
+
+            // Если копейки не совпадают, не показываем текстовое представление
+            if (!kopecksMatch) {
+                return false;
+            }
+        } else {
+            // Если копейки не найдены в тексте, но числовое значение имеет дробную часть > 0.01,
+            // значит текстовое представление неполное - не показываем
+            if (numericKopecks > 1) {
+                return false;
+            }
+        }
+
+        // Дополнительная проверка: если числовое значение имеет значимую дробную часть,
+        // но в тексте нет упоминания копеек - не показываем
+        // (это означает, что текстовое представление относится к другому числу)
+        if (numericKopecks > 0 && extractedKopecks === null) {
+            // Проверяем, есть ли в тексте упоминание о копейках (может быть "0 копійок")
+            const hasKopecksMention = /коп/i.test(textValue);
+            if (!hasKopecksMention) {
+                // Если копейки есть в числе, но не упомянуты в тексте - несоответствие
+                return false;
+            }
+        }
+
+        // Если все проверки пройдены, считаем валидным
+        return true;
+    } catch (e) {
+        console.warn('Error validating amount in words:', e);
+        return false;
+    }
 }
 
 // Инициализация при загрузке
