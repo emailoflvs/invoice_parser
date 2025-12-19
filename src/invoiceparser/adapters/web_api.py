@@ -6,14 +6,13 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
-from fastapi import FastAPI, UploadFile, File, HTTPException, Header, Depends, Request, Query
-from fastapi.responses import JSONResponse, FileResponse, Response
+from fastapi import (
+    FastAPI, UploadFile, File, HTTPException, Depends, Request, Query
+)
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.types import Message
-from pydantic import BaseModel, Field
-from typing import Optional, List
+from pydantic import BaseModel
 
 from ..core.config import Config
 from ..services.orchestrator import Orchestrator
