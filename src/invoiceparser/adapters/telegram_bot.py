@@ -16,6 +16,7 @@ from telegram.ext import (
 
 from ..core.config import Config
 from ..services.orchestrator import Orchestrator
+from ..exporters.json_exporter import extract_value_from_field
 
 logger = logging.getLogger(__name__)
 
@@ -208,9 +209,12 @@ class TelegramBot:
                 table_data = data.get("table_data", {}) if isinstance(data, dict) else {}
                 totals = data.get("totals", {}) if isinstance(data, dict) else {}
 
-                # Extract document information
-                invoice_number = doc_info.get("document_number") or doc_info.get("invoice_number") or "N/A"
-                date = doc_info.get("document_date") or doc_info.get("date") or "N/A"
+                # Extract document information (с поддержкой структуры {_label, value})
+                invoice_number_raw = doc_info.get("document_number") or doc_info.get("invoice_number")
+                invoice_number = extract_value_from_field(invoice_number_raw) or "N/A"
+
+                date_raw = doc_info.get("document_date") or doc_info.get("date")
+                date = extract_value_from_field(date_raw) or "N/A"
 
                 # Extract supplier information (use first party from parties if available)
                 supplier_name = "N/A"

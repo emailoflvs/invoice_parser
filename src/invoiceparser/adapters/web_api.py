@@ -38,6 +38,8 @@ class ParseResponse(BaseModel):
     data: Optional[dict] = None
     error: Optional[str] = None
     processed_at: str
+    document_id: Optional[int] = None
+    output_file: Optional[str] = None
 
 
 class SaveRequest(BaseModel):
@@ -735,7 +737,9 @@ class WebAPI:
                     return ParseResponse(
                         success=True,
                         data=result["data"].model_dump() if hasattr(result["data"], "model_dump") else result["data"],
-                        processed_at=result["processed_at"]
+                        processed_at=result["processed_at"],
+                        document_id=result.get("document_id"),
+                        output_file=result.get("output_file")
                     )
                 else:
                     return ParseResponse(
@@ -802,7 +806,7 @@ class WebAPI:
                 import json
                 import re
                 from ..utils.datetime_utils import now
-                from ..exporters.json_exporter import transliterate_to_latin
+                from ..exporters.json_exporter import transliterate_to_latin, extract_value_from_field
                 from ..database import get_session
                 from ..database.models import Document, File
                 from sqlalchemy import select
@@ -817,8 +821,9 @@ class WebAPI:
 
                 # Извлекаем номер документа из approved данных
                 doc_info = save_request.data.get("document_info", {}) if isinstance(save_request.data, dict) else {}
-                invoice_number = doc_info.get("document_number") or doc_info.get("invoice_number")
-                invoice_number = str(invoice_number).strip() if invoice_number else None
+                invoice_number_raw = doc_info.get("document_number") or doc_info.get("invoice_number")
+                # Используем функцию для правильного извлечения значения
+                invoice_number = extract_value_from_field(invoice_number_raw)
                 if invoice_number:
                     invoice_number = re.sub(r'[<>:"/\\|?*]', '', invoice_number)
 

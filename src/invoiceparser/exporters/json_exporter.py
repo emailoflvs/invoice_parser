@@ -55,6 +55,34 @@ def transliterate_to_latin(text: str) -> str:
 
     return result_str
 
+
+def extract_value_from_field(field_data: Any) -> Optional[str]:
+    """
+    Извлечение значения из поля данных (поддерживает структуру с _label и value)
+
+    Args:
+        field_data: Данные поля (может быть строкой, числом, или dict с полями _label и value)
+
+    Returns:
+        Извлеченное значение в виде строки или None
+    """
+    if field_data is None:
+        return None
+
+    # Если это словарь с полем value, извлекаем value
+    if isinstance(field_data, dict):
+        if 'value' in field_data:
+            return str(field_data['value']).strip() if field_data['value'] else None
+        # Fallback: если нет value, но есть другие поля, берем первое непустое значение
+        for key, val in field_data.items():
+            if key != '_label' and val:
+                return str(val).strip()
+        return None
+
+    # Иначе приводим к строке
+    return str(field_data).strip() if field_data else None
+
+
 class JSONExporter:
     """Экспортер в JSON формат"""
 
@@ -87,8 +115,9 @@ class JSONExporter:
 
             # Извлекаем номер документа из распарсенных данных
             doc_info = invoice_data.get("document_info", {}) if isinstance(invoice_data, dict) else {}
-            invoice_number = doc_info.get("document_number") or doc_info.get("invoice_number")
-            invoice_number = str(invoice_number).strip() if invoice_number else None
+            invoice_number_raw = doc_info.get("document_number") or doc_info.get("invoice_number")
+            # Используем новую функцию для извлечения значения
+            invoice_number = extract_value_from_field(invoice_number_raw)
             if invoice_number:
                 invoice_number = re.sub(r'[<>:"/\\|?*]', '', invoice_number)
 

@@ -9,6 +9,7 @@ from typing import Dict, Any, Optional, List
 from ..core.config import Config
 from ..core.models import InvoiceData, InvoiceHeader, DocumentItem
 from .invoice_data_transformer import InvoiceDataTransformer
+from ..exporters.json_exporter import extract_value_from_field
 
 logger = logging.getLogger(__name__)
 
@@ -139,10 +140,10 @@ class ApprovedDataExportService:
             else:
                 # Fallback: генерируем имя на основе данных
                 doc_info = approved_data.get('document_info', {}) if isinstance(approved_data, dict) else {}
-                document_number = doc_info.get('document_number') or doc_info.get('invoice_number') or \
-                                approved_data.get('header', {}).get('invoice_number') or \
-                                approved_data.get('header', {}).get('document_number') or \
-                                'document'
+                document_number_raw = doc_info.get('document_number') or doc_info.get('invoice_number') or \
+                                     approved_data.get('header', {}).get('invoice_number') or \
+                                     approved_data.get('header', {}).get('document_number')
+                document_number = extract_value_from_field(document_number_raw) or 'document'
                 original_path = Path(f"{document_number}.xlsx")
 
             # Экспортируем в Excel (передаем raw_data для структурированного экспорта)
