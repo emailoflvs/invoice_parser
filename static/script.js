@@ -1758,11 +1758,13 @@ function displayEditableData(data) {
             }
 
             // RULE 1: Line numbers
-            // Very short, all numeric, highly unique (1, 2, 3, 4...)
-            // Characteristics: minLength ≈ maxLength, 100% numeric, 100% unique
+            // Very short, all numeric, highly unique (1, 2, 3, 4... or 1.0, 2.0, 3.0...)
+            // Characteristics: 100% numeric, 100% unique, short values
+            // Handle both integer (1, 2, 3) and decimal (1.0, 2.0, 3.0) formats
             const isLineNumber = analysis.numericRatio === 1.0 && // All values are numbers
                                 analysis.uniqueRatio === 1.0 && // All values are unique (1, 2, 3...)
-                                analysis.maxLength <= 3; // Very short (typically 1-3 digits)
+                                analysis.maxLength <= 5 && // Short (1-5 chars: "1" to "100.0")
+                                analysis.avgLength <= 4; // Average also short
 
             if (isLineNumber) {
                 return {
@@ -1843,7 +1845,11 @@ function displayEditableData(data) {
             // Determine if wrapping is needed
             const lengthMidpoint = (analysis.minLength + analysis.maxLength) * thresholds.longTextAvgThreshold;
             const wordsThreshold = analysis.totalValues / Math.max(analysis.uniqueCount, 1) * thresholds.longTextWordsThreshold;
-            const needsWrap = analysis.avgLength > lengthMidpoint ||
+
+            // Always use textarea for text columns with average length > 30 chars
+            // This ensures better readability and prevents horizontal overflow
+            const needsWrap = analysis.avgLength > 30 ||
+                             analysis.avgLength > lengthMidpoint ||
                              analysis.avgWords > wordsThreshold;
 
             return {
@@ -1851,47 +1857,111 @@ function displayEditableData(data) {
                 width: 'auto', // Browser distributes space among all 'auto' columns
                 textAlign: textAlign,
                 whiteSpace: needsWrap ? 'normal' : 'nowrap',
-                useTextarea: needsWrap,
+                useTextarea: needsWrap, // Use textarea for better readability
                 wordWrap: needsWrap ? 'break-word' : undefined
             };
         };
 
-        // Use column order STRICTLY from column_order or column_mapping (order from original document)
-        let allKeys;
-        if (data.table_data && data.table_data.column_order && Array.isArray(data.table_data.column_order) && data.table_data.column_order.length > 0) {
-            // CRITICAL: Use column_order array to preserve exact column order from parsing
-            // JSON objects may lose key order during serialization, so we use explicit array
-            allKeys = data.table_data.column_order;
-            console.log('Using column_order from table_data:', allKeys);
-        } else if (column_mapping && Object.keys(column_mapping).length > 0) {
-            // Fallback: Use ONLY columns from column_mapping, in the order they are specified
-            allKeys = Object.keys(column_mapping);
-            console.warn('column_order not found, falling back to Object.keys(column_mapping):', allKeys);
+        // CRITICAL: Use column order STRICTLY from JSON (preserve exact order from document parsing)
+        // Priority:
+        // 1. data.table_data.column_order (explicit array preserving order)
+        // 2. data.column_order (top-level fallback)
+        // 3. Object.keys(column_mapping) (maintain insertion order, modern JS guarantee)
+        // 4. Object.keys(firstItem) (last resort, may not reflect document order)
 
-            // Check if there are keys in data that are not in column_mapping (for debugging)
+        let allKeys;
+        let orderSource = 'unknown';
+
+        // Priority 1: table_data.column_order (preferred)
+        if (data.table_data && data.table_data.column_order && Array.isArray(data.table_data.column_order) && data.table_data.column_order.length > 0) {
+            allKeys = [...data.table_data.column_order]; // Clone array to prevent mutations
+            orderSource = 'table_data.column_order';
+            console.log('✓ Using column order from table_data.column_order (explicit array):', allKeys);
+        }
+        // Priority 2: top-level column_order
+        else if (data.column_order && Array.isArray(data.column_order) && data.column_order.length > 0) {
+            allKeys = [...data.column_order]; // Clone array
+            orderSource = 'data.column_order';
+            console.log('✓ Using column order from data.column_order (explicit array):', allKeys);
+        }
+        // Priority 3: column_mapping keys (modern JS preserves insertion order)
+        else if (column_mapping && Object.keys(column_mapping).length > 0) {
+            allKeys = Object.keys(column_mapping);
+            orderSource = 'Object.keys(column_mapping)';
+            console.warn('⚠ column_order array not found, falling back to Object.keys(column_mapping):', allKeys);
+            console.warn('⚠ Note: Object key order is preserved in modern JavaScript, but explicit column_order is preferred');
+
+            // Validation: Check if there are keys in data that are not in column_mapping
             if (firstItem && typeof firstItem === 'object') {
                 const itemKeys = Object.keys(firstItem).filter(key => !key.endsWith('_label') && key !== 'raw');
                 const missingKeys = itemKeys.filter(k => !allKeys.includes(k));
 
                 if (missingKeys.length > 0) {
-                    console.warn('Keys in items but not in column_mapping (will be ignored):', missingKeys);
+                    console.error('❌ Keys in line_items but not in column_mapping (will be HIDDEN):', missingKeys);
+                    console.error('❌ This may indicate a parsing issue or missing column mapping!');
                 }
             }
-        } else {
-            // Fallback: use order from firstItem
+        }
+        // Priority 4: firstItem keys (last resort)
+        else {
             if (firstItem && typeof firstItem === 'object') {
                 allKeys = Object.keys(firstItem).filter(key => !key.endsWith('_label') && key !== 'raw');
+                orderSource = 'Object.keys(firstItem)';
+                console.error('❌ No column_order or column_mapping found, using Object.keys(firstItem):', allKeys);
+                console.error('❌ This may not reflect the original document column order!');
             } else {
                 allKeys = [];
+                orderSource = 'empty (no data)';
+                console.error('❌ No column data available - cannot render table');
             }
         }
 
         // Remove service fields that should not be displayed (e.g., raw)
-        allKeys = allKeys.filter(k => k !== 'raw');
+        const serviceFields = ['raw', '_meta', '_label'];
+        const beforeFilter = allKeys.length;
+        const filteredOut = allKeys.filter(k => serviceFields.includes(k) || k.startsWith('_'));
+        allKeys = allKeys.filter(k => !serviceFields.includes(k) && !k.startsWith('_'));
+        const afterFilter = allKeys.length;
 
-        // Debug: log column mapping and keys for troubleshooting (temporary)
-        console.log('table_data.column_mapping:', column_mapping);
-        console.log('line_items sample keys:', firstItem ? Object.keys(firstItem) : []);
+        if (beforeFilter !== afterFilter) {
+            console.log(`🚫 Filtered out ${beforeFilter - afterFilter} service field(s):`, filteredOut);
+        }
+
+        // DEBUG: Check if "no" column exists
+        if (allKeys.includes('no')) {
+            console.log('✅ Column "no" found in allKeys');
+        } else {
+            console.warn('⚠️ Column "no" NOT found in allKeys!');
+            console.warn('   Available keys:', allKeys);
+            if (firstItem && typeof firstItem === 'object') {
+                const itemKeys = Object.keys(firstItem);
+                console.warn('   Keys in first item:', itemKeys);
+                if (itemKeys.includes('no')) {
+                    console.error('❌ "no" exists in item but was filtered out!');
+                }
+            }
+        }
+
+        // VALIDATION: Ensure all columns from line_items are mapped
+        if (firstItem && typeof firstItem === 'object') {
+            const itemKeys = Object.keys(firstItem).filter(key => !key.endsWith('_label') && !serviceFields.includes(key) && !key.startsWith('_'));
+            const unmappedKeys = itemKeys.filter(k => !allKeys.includes(k));
+
+            if (unmappedKeys.length > 0) {
+                console.error('❌ CRITICAL: Unmapped columns found in line_items:', unmappedKeys);
+                console.error('❌ These columns exist in data but will NOT be displayed!');
+                console.error('❌ Please check column_mapping or column_order in the JSON');
+            }
+        }
+
+        // Debug: Summary log for troubleshooting
+        console.log('=== TABLE COLUMN ORDER SUMMARY ===');
+        console.log(`Source: ${orderSource}`);
+        console.log(`Total columns: ${allKeys.length}`);
+        console.log(`Column order: [${allKeys.join(', ')}]`);
+        console.log(`Column mapping:`, column_mapping);
+        console.log(`First item keys:`, firstItem ? Object.keys(firstItem) : 'N/A');
+        console.log('===================================');
 
         // Analyze all columns and determine their types dynamically
         console.log('Starting column analysis...');
@@ -1945,33 +2015,58 @@ function displayEditableData(data) {
         html += '<thead><tr>';
         for (const key of allKeys) {
             if (!key) continue; // Skip empty keys
+
+            // Get column label from mapping, fallback to key
             const label = (column_mapping && column_mapping[key]) || (firstItem ? getLabel(firstItem, key) : null) || key;
             const safeLabel = label || key; // Protection from null/undefined
             const colType = columnTypes[key];
             const weight = columnWeights[key];
             const analysis = columnAnalyses[key];
 
-            // Calculate min-width based on weight and content
-            // Use 'ch' units for dynamic sizing (1ch = width of '0' character)
+            // Calculate min-width based on column type and content analysis
+            // Use 'ch' units for dynamic sizing (1ch ≈ width of '0' character in current font)
             let minWidthCh = 0;
+
             if (colType.type === 'line-number') {
-                minWidthCh = Math.max(2, analysis.maxLength + 1);
+                // Line numbers: minimal width (№, N., etc.)
+                minWidthCh = Math.max(3, analysis.maxLength + 1);
             } else if (colType.type === 'short-repetitive') {
-                minWidthCh = Math.max(4, analysis.maxLength + 2);
+                // Units, statuses (шт, кг, etc.): compact width
+                minWidthCh = Math.max(5, analysis.maxLength + 2);
             } else if (colType.type === 'numeric') {
-                minWidthCh = Math.max(6, analysis.maxLength + 2);
+                // Prices, amounts: enough space for numbers + formatting
+                // Consider header label length too
+                const headerLength = safeLabel.length;
+                minWidthCh = Math.max(8, Math.max(analysis.maxLength + 2, headerLength * 0.7));
             } else if (colType.type === 'code') {
-                minWidthCh = Math.max(8, analysis.maxLength * 1.1);
+                // Product codes, IDs: medium width
+                const headerLength = safeLabel.length;
+                minWidthCh = Math.max(10, Math.max(analysis.maxLength * 1.1, headerLength * 0.7));
             } else if (colType.type === 'text') {
-                // Text columns: larger min-width based on average content
-                minWidthCh = Math.max(15, Math.min(50, analysis.avgLength * 0.8));
+                // Descriptions, names: balanced width
+                // Limit max width to prevent one column from dominating
+                const headerLength = safeLabel.length;
+                minWidthCh = Math.max(25, Math.min(45, Math.max(analysis.avgLength * 0.6, headerLength * 0.8)));
             } else {
-                minWidthCh = Math.max(10, analysis.maxLength);
+                // Default: reasonable width
+                const headerLength = safeLabel.length;
+                minWidthCh = Math.max(12, Math.max(analysis.maxLength * 0.9, headerLength * 0.7));
             }
 
-            const style = `min-width: ${minWidthCh}ch;`;
+            // Additional styles for specific column types
+            const additionalStyles = [];
+            if (colType.type === 'numeric') {
+                // Numeric headers can wrap to 2 lines if needed (e.g., "Ціна без\nПДВ")
+                additionalStyles.push('white-space: normal');
+                additionalStyles.push('line-height: 1.3');
+            }
 
-            html += `<th class="col-${colType.type}" style="${style}">${escapeHtml(safeLabel)}</th>`;
+            const style = `min-width: ${minWidthCh}ch; ${additionalStyles.join('; ')}`;
+
+            // Add title attribute for long headers (helpful on hover)
+            const titleAttr = safeLabel.length > 30 ? `title="${escapeHtml(safeLabel)}"` : '';
+
+            html += `<th class="col-${colType.type}" style="${style}" ${titleAttr}>${escapeHtml(safeLabel)}</th>`;
         }
         html += '</tr></thead>';
 
@@ -1994,13 +2089,33 @@ function displayEditableData(data) {
                     // Check if this is an object with _label/value structure
                     if ('value' in value) {
                         // Extract value from structure
-                        displayValue = String(value.value !== null && value.value !== undefined ? value.value : '');
+                        const extractedVal = value.value;
+                        // Format numbers properly to preserve precision
+                        if (typeof extractedVal === 'number') {
+                            // For integers, use as is. For floats, preserve decimals
+                            if (Number.isInteger(extractedVal)) {
+                                displayValue = String(extractedVal);
+                            } else {
+                                // Preserve up to 2 decimal places, but don't add unnecessary zeros
+                                displayValue = extractedVal.toFixed(2).replace(/\.?0+$/, '');
+                            }
+                        } else {
+                            displayValue = String(extractedVal !== null && extractedVal !== undefined ? extractedVal : '');
+                        }
                     } else {
                         // This is another object - show as JSON
                         displayValue = JSON.stringify(value, null, 2);
                     }
                 } else if (Array.isArray(value)) {
                     displayValue = JSON.stringify(value, null, 2);
+                } else if (typeof value === 'number') {
+                    // Format numbers properly to preserve precision
+                    if (Number.isInteger(value)) {
+                        displayValue = String(value);
+                    } else {
+                        // Preserve up to 2 decimal places, but don't add unnecessary zeros
+                        displayValue = value.toFixed(2).replace(/\.?0+$/, '');
+                    }
                 } else {
                     displayValue = String(value);
                 }

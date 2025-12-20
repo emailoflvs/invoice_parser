@@ -404,9 +404,31 @@ body {
     text-align: right;
 }
 
-/* Table */
+/* Table Container */
 .table-container {
     overflow-x: auto;
+    /* Smooth scrolling for better UX */
+    -webkit-overflow-scrolling: touch;
+    /* Add subtle shadow to indicate scrollable content */
+    position: relative;
+}
+
+.table-container::after {
+    /* Shadow gradient on right edge when scrollable */
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 30px;
+    background: linear-gradient(to left, rgba(0,0,0,0.1), transparent);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.table-container:not(.scrolled-to-end)::after {
+    opacity: 1;
 }
 
 .items-table {
@@ -1124,15 +1146,19 @@ body {
 
 .editable-items-table {
     width: 100%;
-    border-collapse: collapse;
+    border-collapse: separate; /* Changed from collapse for border-radius support */
+    border-spacing: 0; /* Remove spacing between cells */
     margin-top: 10px;
-    table-layout: auto; /* Automatic layout for flexibility */
+    table-layout: auto; /* Automatic layout for flexibility - adapts to content */
     background: white;
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    overflow: visible; /* Allow content to be fully visible */
+    overflow: hidden; /* Clip content to border-radius */
     /* Allow table to adapt to content and screen width */
     min-width: 100%;
+    /* Smooth rendering */
+    font-variant-numeric: tabular-nums; /* Align numbers nicely */
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 /* All columns - automatic width, browser calculates based on content */
@@ -1157,19 +1183,42 @@ body {
 /* Numeric columns (prices) - narrow, right-aligned, never wrap */
 .editable-items-table th.col-numeric,
 .editable-items-table td.col-numeric {
-    width: 1%; /* Hint to browser: compress this column */
     text-align: right !important;
+    min-width: max-content; /* Ensure full number is always visible */
 }
 
 .editable-items-table td.col-numeric {
     white-space: nowrap !important; /* Never wrap prices */
+    padding-right: 12px; /* Extra padding for readability */
+}
+
+.editable-items-table td.col-numeric input {
+    text-align: right;
+    font-variant-numeric: tabular-nums; /* Align numbers nicely */
+    font-weight: 500;
+    padding: 8px 6px; /* Reduced horizontal padding for more space */
+    width: 100%; /* Fill cell width */
+    min-width: 0; /* Allow to shrink if needed */
+    box-sizing: border-box;
+    overflow: visible; /* Don't clip text */
+    text-overflow: clip; /* Show full text, don't use ellipsis */
 }
 
 /* Code column - medium width, left-aligned */
 .editable-items-table th.col-code,
 .editable-items-table td.col-code {
-    width: 1%; /* Hint to browser: compress but allow more space than line-number */
     text-align: left !important;
+    min-width: max-content; /* Ensure full code is always visible */
+    white-space: nowrap !important;
+}
+
+.editable-items-table td.col-code input {
+    padding: 8px 6px; /* Reduced horizontal padding */
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    overflow: visible; /* Don't clip text */
+    text-overflow: clip; /* Show full text */
 }
 
 /* Short repetitive column - narrow, centered */
@@ -1185,22 +1234,40 @@ body {
 .editable-items-table th.col-text,
 .editable-items-table td.col-text {
     /* No width property - let browser allocate remaining space */
-    max-width: none !important;
+    max-width: 45ch !important; /* Limit max width to prevent domination */
     /* min-width set dynamically via JavaScript based on content analysis */
+}
+
+.editable-items-table td.col-text textarea {
+    min-height: 38px; /* Compact height for single-line content */
+    max-height: 120px; /* Max height before scrolling */
+    line-height: 1.4;
+    padding: 6px 8px; /* Compact padding */
 }
 
 
 .editable-items-table th {
-    background: #7c3aed; /* Темно-фиолетовый цвет как на скриншоте */
+    background: #7c3aed; /* Purple header matching the UI theme */
     color: white;
-    padding: 12px 8px;
+    padding: 12px 10px;
     text-align: left;
     font-weight: 600;
     font-size: 0.9rem;
     white-space: nowrap; /* По умолчанию не переносим */
-    border-right: 1px solid rgba(255, 255, 255, 0.2);
+    border-right: 1px solid rgba(255, 255, 255, 0.15);
     box-sizing: border-box;
     overflow: visible;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    /* Subtle text shadow for better readability */
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    /* Smooth transitions */
+    transition: background-color 0.2s;
+}
+
+.editable-items-table th:hover {
+    background: #6d28d9; /* Slightly darker on hover */
 }
 
 /* Price column headers - allow wrap for 2-line headers */
@@ -1216,13 +1283,29 @@ body {
 }
 
 .editable-items-table td {
-    padding: 10px 8px;
+    padding: 10px;
     border-bottom: 1px solid var(--border-color);
     border-right: 1px solid var(--border-color);
     background: white;
     color: var(--text-primary);
     box-sizing: border-box;
     vertical-align: top; /* Выравнивание по верху для textarea */
+    /* Smooth transitions for interactive states */
+    transition: background-color 0.15s;
+}
+
+/* Hover effect on rows for better UX */
+.editable-items-table tbody tr:hover td {
+    background: #f8fafc;
+}
+
+/* Zebra striping for better readability (optional, can be removed if not desired) */
+.editable-items-table tbody tr:nth-child(even) td {
+    background: #fafbfc;
+}
+
+.editable-items-table tbody tr:nth-child(even):hover td {
+    background: #f3f4f6;
 }
 
 .editable-items-table td:last-child {
@@ -1259,36 +1342,50 @@ body {
 
 .editable-items-table input {
     width: 100%;
-    min-width: 0; /* Allows input to shrink */
-    padding: 8px;
-    border: 1px solid var(--border-color);
+    min-width: 0; /* Allows input to shrink within cell */
+    padding: 8px 10px;
+    border: 1px solid #e2e8f0;
     border-radius: 6px;
     font-size: 0.95rem;
     box-sizing: border-box;
+    background: white;
+    color: var(--text-primary);
+    font-family: inherit;
+    overflow: visible; /* Don't clip text */
+    text-overflow: clip; /* Show full text, don't use ellipsis */
+    /* Smooth transitions */
+    transition: border-color 0.2s, box-shadow 0.2s;
 }
 
-/* Line number input - auto width */
-.editable-items-table td.col-line-number input {
-    text-align: center;
-}
-
-/* Для цен - input должен показывать полное значение */
-.editable-items-table td.col-numeric input {
-    width: 100%;
-    min-width: 0; /* Позволяет сжиматься, но min-width ячейки гарантирует видимость */
+.editable-items-table input:hover {
+    border-color: #cbd5e1;
 }
 
 .editable-items-table input:focus {
     outline: none;
     border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+/* Line number input - centered */
+.editable-items-table td.col-line-number input {
+    text-align: center;
+    font-weight: 500;
+}
+
+/* Numeric input (prices, amounts) - right-aligned */
+.editable-items-table td.col-numeric input {
+    text-align: right;
+    font-variant-numeric: tabular-nums; /* Align numbers nicely */
+    font-weight: 500;
 }
 
 /* Textarea для колонок с длинным текстом - многострочный текст */
 .editable-items-table td textarea {
     width: 100%;
     min-width: 0; /* Позволяет textarea сжиматься */
-    padding: 8px;
-    border: 1px solid var(--border-color);
+    padding: 8px 10px;
+    border: 1px solid #e2e8f0;
     border-radius: 6px;
     font-size: 0.95rem;
     box-sizing: border-box;
@@ -1297,15 +1394,23 @@ body {
     word-break: break-word;
     resize: vertical; /* Allow vertical resizing */
     font-family: inherit; /* Inherit font */
-    line-height: 1.4;
-    /* Automatically adapts to content */
+    line-height: 1.5;
     overflow-wrap: break-word;
-    height: auto; /* Auto height based on content */
+    min-height: 42px; /* Minimum height for comfortable editing */
+    background: white;
+    color: var(--text-primary);
+    /* Smooth transitions */
+    transition: border-color 0.2s, box-shadow 0.2s;
 }
 
-.editable-items-table td.col-product textarea:focus {
+.editable-items-table td textarea:hover {
+    border-color: #cbd5e1;
+}
+
+.editable-items-table td textarea:focus {
     outline: none;
     border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
 }
 
 /* Code column textarea - auto height based on content */

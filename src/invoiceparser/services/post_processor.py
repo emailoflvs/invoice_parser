@@ -44,9 +44,24 @@ class InvoicePostProcessor:
         # Извлекаем основные ключи таблицы
         if "column_mapping" in items_json:
             table_data["column_mapping"] = items_json["column_mapping"]
-            # CRITICAL: Preserve column order - JSON objects may lose key order during serialization
-            # Store the original order as a separate array
-            table_data["column_order"] = list(items_json["column_mapping"].keys())
+
+            # CRITICAL: Preserve column order from Gemini response
+            # Priority 1: Use explicit column_order array from Gemini (preferred)
+            # Priority 2: Fallback to Object.keys() order (modern JS preserves insertion order)
+            if "column_order" in items_json and isinstance(items_json["column_order"], list) and len(items_json["column_order"]) > 0:
+                # Use explicit order from Gemini, but filter out service fields
+                raw_order = items_json["column_order"]
+                # Filter out "raw" and other service fields
+                table_data["column_order"] = [k for k in raw_order if k not in ['raw', '_meta', '_label'] and not k.startswith('_')]
+                logger.info(f"✓ Using column_order from Gemini (filtered): {table_data['column_order']}")
+                if len(raw_order) != len(table_data["column_order"]):
+                    logger.info(f"  Filtered out service fields: {[k for k in raw_order if k not in table_data['column_order']]}")
+            else:
+                # Fallback: extract order from column_mapping keys, filter service fields
+                raw_keys = list(items_json["column_mapping"].keys())
+                table_data["column_order"] = [k for k in raw_keys if k not in ['raw', '_meta', '_label'] and not k.startswith('_')]
+                logger.warning(f"⚠ column_order not found in Gemini response, using Object.keys(column_mapping) (filtered): {table_data['column_order']}")
+                logger.warning("⚠ This may not preserve the original document column order! Update prompts to include column_order.")
 
         if "line_items" in items_json:
             table_data["line_items"] = items_json["line_items"]
@@ -62,9 +77,11 @@ class InvoicePostProcessor:
         if "totals" in result and isinstance(result["totals"], dict):
             self._normalize_totals(result["totals"])
 
-        # 4. Пост-обработка line_items (safety net для quantity/price)
-        if "line_items" in table_data and isinstance(table_data["line_items"], list):
-            self._normalize_line_items(table_data["line_items"])
+        # 4. НЕ нормализуем line_items - оставляем строками для точного отображения
+        # Конвертация в числа может привести к потере десятичных знаков (4341.66 → 4341.6)
+        # Фронтенд сам обработает отображение чисел
+        # if "line_items" in table_data and isinstance(table_data["line_items"], list):
+        #     self._normalize_line_items(table_data["line_items"])
 
         return result
 

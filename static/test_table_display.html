@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Table Display Test</title>
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; }
+        .test-section h3 { margin-top: 0; }
+        table { border-collapse: collapse; width: 100%; margin: 10px 0; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background: #7c3aed; color: white; }
+        .result { padding: 10px; margin: 10px 0; }
+        .pass { background: #d4edda; color: #155724; }
+        .fail { background: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <h1>Table Display Test</h1>
+
+    <div class="test-section">
+        <h3>Test 1: Number Formatting</h3>
+        <div id="test1-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>Test 2: Column Display</h3>
+        <div id="test2-result"></div>
+    </div>
+
+    <script>
+        // Test 1: Number formatting
+        function formatNumber(value) {
+            if (typeof value === 'number') {
+                if (Number.isInteger(value)) {
+                    return String(value);
+                } else {
+                    return value.toFixed(2).replace(/\.?0+$/, '');
+                }
+            }
+            return String(value);
+        }
+
+        const testNumbers = [
+            { input: 1.0, expected: "1" },
+            { input: 8501510090.0, expected: "8501510090" },
+            { input: 4341.66, expected: "4341.66" },
+            { input: 4341.6, expected: "4341.6" },
+            { input: 8683.32, expected: "8683.32" },
+            { input: 8683.3, expected: "8683.3" }
+        ];
+
+        let test1HTML = '<table><tr><th>Input</th><th>Expected</th><th>Got</th><th>Result</th></tr>';
+        let allPass = true;
+
+        testNumbers.forEach(test => {
+            const got = formatNumber(test.input);
+            const pass = got === test.expected;
+            if (!pass) allPass = false;
+            test1HTML += `<tr>
+                <td>${test.input}</td>
+                <td>${test.expected}</td>
+                <td>${got}</td>
+                <td class="${pass ? 'pass' : 'fail'}">${pass ? '✓' : '✗'}</td>
+            </tr>`;
+        });
+
+        test1HTML += '</table>';
+        test1HTML += `<div class="result ${allPass ? 'pass' : 'fail'}">
+            ${allPass ? '✓ All tests passed' : '✗ Some tests failed'}
+        </div>`;
+
+        document.getElementById('test1-result').innerHTML = test1HTML;
+
+        // Test 2: Column order
+        const testColumnOrder = ['no', 'ukt_zed', 'product', 'quantity', 'price_without_vat', 'amount_without_vat'];
+        const testServiceFields = ['raw', '_meta', '_label'];
+        const filtered = testColumnOrder.filter(k => !testServiceFields.includes(k) && !k.startsWith('_'));
+
+        let test2HTML = '<p>Original order: ' + testColumnOrder.join(', ') + '</p>';
+        test2HTML += '<p>After filtering: ' + filtered.join(', ') + '</p>';
+        test2HTML += '<p class="result ' + (filtered.includes('no') ? 'pass' : 'fail') + '">';
+        test2HTML += filtered.includes('no') ? '✓ Column "no" is present' : '✗ Column "no" is missing';
+        test2HTML += '</p>';
+
+        document.getElementById('test2-result').innerHTML = test2HTML;
+    </script>
+</body>
+</html>
+
