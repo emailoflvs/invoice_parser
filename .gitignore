@@ -36,6 +36,7 @@ env/
 .env
 invoices/*
 !invoices/.gitkeep
+# добавление jsons
 output/*
 !output/.gitkeep
 !output/temp/.gitkeep
