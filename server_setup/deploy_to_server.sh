@@ -61,3 +61,4 @@ echo "5. Проверьте логи: docker compose logs -f"
 
 
 
+

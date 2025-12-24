@@ -92,3 +92,4 @@ docker-compose exec app python scripts/wait_for_db.py
 
 
 
+

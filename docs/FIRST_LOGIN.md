@@ -96,3 +96,4 @@ docker-compose exec app python scripts/create_user.py admin admin123 admin@examp
 
 
 
+
