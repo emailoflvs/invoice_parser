@@ -2083,7 +2083,30 @@ function displayEditableData(data) {
 
                 // Show all values, extracting from objects with _label/value structure
                 let displayValue = '';
-                if (value === null || value === undefined) {
+
+                // SPECIAL CASE: For "no" column, preserve original format from JSON (1.0 → "1.0", not "1")
+                if (key === 'no') {
+                    if (value === null || value === undefined) {
+                        displayValue = '';
+                    } else if (typeof value === 'object' && !Array.isArray(value) && value !== null && 'value' in value) {
+                        // If it's an object with _label/value structure, extract value
+                        const rawValue = value.value;
+                        // For numbers, preserve .0 format using toFixed(1)
+                        if (typeof rawValue === 'number') {
+                            displayValue = rawValue.toFixed(1);
+                        } else {
+                            displayValue = String(rawValue);
+                        }
+                    } else if (typeof value === 'number') {
+                        // For numbers, preserve .0 format (1.0 → "1.0", not "1")
+                        displayValue = value.toFixed(1);
+                    } else {
+                        // For non-numbers, use as string
+                        displayValue = String(value);
+                    }
+                    // DEBUG: Log for "no" column
+                    console.log(`[DEBUG no] key="${key}", value=`, value, `→ displayValue="${displayValue}"`);
+                } else if (value === null || value === undefined) {
                     displayValue = '';
                 } else if (typeof value === 'object' && !Array.isArray(value) && value !== null) {
                     // Check if this is an object with _label/value structure
@@ -2111,9 +2134,10 @@ function displayEditableData(data) {
                 } else if (typeof value === 'number') {
                     // Format numbers properly to preserve precision
                     if (Number.isInteger(value)) {
+                        // Integer values (including 1.0 which is technically an integer)
                         displayValue = String(value);
                     } else {
-                        // Preserve up to 2 decimal places, but don't add unnecessary zeros
+                        // Float values - preserve decimals but remove trailing zeros
                         displayValue = value.toFixed(2).replace(/\.?0+$/, '');
                     }
                 } else {
